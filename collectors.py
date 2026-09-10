@@ -7,9 +7,9 @@ from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
-
-load_dotenv()
+from settings import setting
+from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -57,7 +57,8 @@ def safe_get(url, params=None, headers=None, timeout=10, retries=2, session=None
         except Exception as e:
             last_err = e
             time.sleep(1)
-    raise last_err
+    code = getattr(getattr(last_err, "response", None), "status_code", None)
+    raise RuntimeError(f"HTTP 수집 실패 ({code or 'network'})") from None
 
 
 def _strip_html(raw_html):
@@ -72,69 +73,50 @@ def _strip_html(raw_html):
 # ------------------------------------------------------------------
 # 1. 조달청 (나라장터 OpenAPI) - BidPublicInfoService
 # ------------------------------------------------------------------
-def fetch_g2b(limit=10):
-    service_key = os.getenv("G2B_SERVICE_KEY")
-    if not service_key:
-        print("[SKIP] G2B_SERVICE_KEY가 없어 조달청 수집을 건너뜁니다. .env 파일에 G2B_SERVICE_KEY를 설정해주세요.")
-        return []
-
+def parse_g2b_xml(xml_content, limit=10):
     import xml.etree.ElementTree as ET
-
-    url = "http://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch"
-    today = datetime.now()
-    begin = today.replace(day=1).strftime("%Y%m%d") + "0000"
-    end = today.strftime("%Y%m%d") + "2359"
-
-    params = {
-        "serviceKey": service_key,
-        "pageNo": "1",
-        "numOfRows": str(limit),
-        "inqryDiv": "1",
-        "inqryBgnDt": begin,
-        "inqryEndDt": end,
-        "type": "xml",
-    }
-
-    resp = safe_get(url, params=params)
-    root = ET.fromstring(resp.content)
-
-    err_msg = root.findtext(".//errMsg")
-    if err_msg:
-        print(f"[FAIL] 조달청 API 오류: {err_msg}")
-        return []
-
-    items = root.findall(".//item")
+    root = ET.fromstring(xml_content)
+    code = root.findtext('.//resultCode')
+    if root.findtext('.//errMsg') or code not in ('00', '000', '0'):
+        raise RuntimeError('나라장터 API 응답 오류 — 인증키·활용신청 승인 확인 필요')
     results = []
-    for item in items:
-        def g(*names):
-            for n in names:
-                v = item.findtext(n)
-                if v:
-                    return v.strip()
-            return ""
-
-        title = g("bidNtceNm")
-        if not title:
+    for item in root.findall('.//item')[:limit]:
+        raw = {child.tag: (child.text or '').strip() for child in item}
+        title = raw.get('bidNtceNm', '')
+        number = raw.get('bidNtceNo', '')
+        if not title or not number:
             continue
+        attachments = []
+        for i in range(1, 11):
+            link = raw.get(f'ntceSpecDocUrl{i}', '')
+            if link.startswith('https://'):
+                attachments.append({'name': raw.get(f'ntceSpecFileNm{i}', f'첨부 {i}'), 'url': link})
+        results.append(base_record(
+            source='API', agency='조달청', organization=raw.get('dminsttNm') or raw.get('ntceInsttNm'),
+            organization_type='공공조달', notice_number=number, revision=raw.get('bidNtceOrd', ''),
+            title=title, gubun='입찰공고', dept=raw.get('ntceInsttNm', ''),
+            reg_date=normalize_date(raw.get('bidNtceDt', '')),
+            due_date=normalize_date(raw.get('bidClseDt', '')),
+            budget=raw.get('presmptPrce') or raw.get('asignBdgtAmt', ''),
+            url=raw.get('bidNtceDtlUrl') or raw.get('bidNtceUrl', ''),
+            content='', attachments=attachments, raw_payload=raw,
+        ))
+    return results
 
-        rec = base_record(
-            source="API",
-            agency="조달청",
-            gubun="입찰공고",
-            title=title,
-            dept=g("ntceInsttNm", "dminsttNm"),
-            manager=g("ntceInsttOfclNm"),
-            reg_date=normalize_date(g("bidNtceDt", "bidNtceDate")),
-            due_date=normalize_date(g("bidClseDt", "bidClseDate")),
-            budget=g("presmptPrce", "asignBdgtAmt"),
-            attach="",
-            views="",
-            url=g("bidNtceDtlUrl", "bidNtceUrl") or "https://www.g2b.go.kr",
-            content=title,
-        )
-        results.append(rec)
 
-    return results[:limit]
+def fetch_g2b(limit=10):
+    key = setting('G2B_SERVICE_KEY')
+    if not key:
+        raise RuntimeError('나라장터 서버 환경변수가 없습니다.')
+    from datetime import timedelta
+    now = datetime.now(ZoneInfo('Asia/Seoul'))
+    # First bounded batch; nationwide completeness is not claimed.
+    params = {'serviceKey': key, 'pageNo': '1', 'numOfRows': str(limit), 'inqryDiv': '1',
+              'inqryBgnDt': (now - timedelta(days=7)).strftime('%Y%m%d') + '0000',
+              'inqryEndDt': now.strftime('%Y%m%d') + '2359', 'type': 'xml'}
+    url = 'https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch'
+    resp = safe_get(url, params=params, timeout=20, retries=1)
+    return parse_g2b_xml(resp.content, limit)
 
 
 # ------------------------------------------------------------------
@@ -394,7 +376,7 @@ def _fetch_ai_strategy_menu(session, menu_cd, gubun_nm, limit):
             due_date="", budget="",
             attach="있음" if item.get("att_file") == "Y" else "",
             views=item.get("cnt", ""), url=detail_url,
-            content=_strip_html(item.get("cont", ""))[:300],
+            content=_strip_html(item.get("cont", "")),
         )
         results.append(rec)
 
@@ -491,8 +473,9 @@ def fetch_iris(limit=20, max_pages=3):
 
                 rec = base_record(
                     source="SCRAPE", agency="IRIS", gubun="사업공고",
-                    title=final_title, dept=dept, manager=org,
-                    reg_date=normalize_date(rcve_from), due_date=normalize_date(rcve_to),
+                    title=final_title, dept=dept, manager="", organization=org,
+                    notice_number=f"{ancm_id}:{sorgn_bsns_cd}",
+                    reg_date="", application_start=normalize_date(rcve_from), due_date=normalize_date(rcve_to),
                     budget="", attach="", views="", url=detail_url, content=content,
                 )
                 results.append(rec)
@@ -689,10 +672,64 @@ def fetch_innopolis(limit=20):
 
     return results
 
+def parse_nia_detail(html, url, notice_number):
+    soup = BeautifulSoup(html, 'html.parser')
+    root = soup.select_one('#sub_contentsArea2.detail_type01')
+    body = root.select_one('.con_area') if root else None
+    if root is None or body is None:
+        raise ValueError('NIA 상세 본문 구조 변경 — 저장하지 않음')
+    title_el = root.select_one('.title') or root.select_one('.subject')
+    # The first direct heading of the detail container is the original title.
+    if title_el is None:
+        title_el = root.find(['h3', 'h4', 'h5'])
+    title = title_el.get_text(' ', strip=True) if title_el else ''
+    date_match = re.search(r'\b(20\d{2}\.\d{2}\.\d{2})\b', root.get_text(' ', strip=True))
+    links = {}
+    for a in root.select('a[href]'):
+        link = urljoin(url, a['href'])
+        if '/common/board/Download.do?' in link and link.startswith('https://www.nia.or.kr/'):
+            links[link] = {'name': a.get_text(' ', strip=True), 'url': link}
+    return base_record(source='SCRAPE', agency='NIA', organization='한국지능정보사회진흥원',
+        organization_type='공공기관', title=title, notice_number=notice_number,
+        reg_date=normalize_date(date_match.group(1)) if date_match else '',
+        url=url, content=body.get_text('\n', strip=True), attachments=list(links.values()),
+        raw_html=str(root), gubun='기관 공고')
+
+
+def fetch_nia(limit=10):
+    import urllib.robotparser
+    robot = urllib.robotparser.RobotFileParser()
+    response = safe_get('https://www.nia.or.kr/robots.txt', retries=0)
+    robot.parse(response.text.splitlines())
+    list_url = 'https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=78336'
+    if not robot.can_fetch(HEADERS['User-Agent'], list_url):
+        raise RuntimeError('NIA robots.txt에서 수집을 허용하지 않습니다.')
+    soup = BeautifulSoup(safe_get(list_url).content, 'html.parser')
+    links = soup.select('a[onclick*="doBbsFView"]')
+    if not links:
+        raise ValueError('NIA 목록 구조 확인 필요 — 빈 목록을 정상 수집으로 처리하지 않음')
+    results = []
+    for a in links[:limit]:
+        match = re.search(r"doBbsFView\('([0-9]+)','([0-9]+)','([0-9]+)','([0-9]+)'\)", a['onclick'])
+        if not match:
+            raise ValueError('NIA 공고 식별번호 추출 실패')
+        board, number, _, parent = match.groups()
+        url = f'https://www.nia.or.kr/site/nia_kor/ex/bbs/View.do?cbIdx={board}&bcIdx={number}&parentSeq={parent}'
+        if not robot.can_fetch(HEADERS['User-Agent'], url):
+            raise RuntimeError('NIA 상세 수집이 허용되지 않습니다.')
+        time.sleep(0.5)
+        rec = parse_nia_detail(safe_get(url).content, url, f'{board}:{number}')
+        if not rec['title']:
+            rec['title'] = re.sub(r'\(새 ?글\)|-?첨부파일\s*있음', '', a.get('title', '')).strip()
+        results.append(rec)
+    return results
+
+
 # ------------------------------------------------------------------
 # 콜렉터 레지스트리
 # ------------------------------------------------------------------
 COLLECTORS = {
+    "NIA": fetch_nia,
     "행정안전부": fetch_mois,
     "NIPA": fetch_nipa,
     "KERIS": fetch_keris,
@@ -717,7 +754,7 @@ def run_all_collectors(limit=10):
             all_results[name] = records
         except Exception as e:
             print(f"[FAIL] {name} 수집 실패: {e}")
-            traceback.print_exc()
+            # Do not print request URLs or secrets in tracebacks.
             all_results[name] = []
     return all_results
 

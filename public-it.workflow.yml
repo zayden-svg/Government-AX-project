@@ -1,0 +1,69 @@
+name: Public IT collection and tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, genspark_ai_developer]
+  schedule:
+    # 23:00 UTC = next day 08:00 Asia/Seoul. GitHub can delay scheduled jobs.
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-it-${{ github.event_name == 'schedule' && 'production' || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest test_core test_ui -v
+
+  collect:
+    needs: test
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
+      GEMINI_MODEL: gemini-2.5-flash
+      ENABLED_COLLECTORS: NIA,조달청
+      COLLECTION_LIMIT: '10'
+      MAX_ANALYSES_PER_RUN: '10'
+      MAX_ANALYSES_PER_DAY: '50'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Require persistent shared database and server secrets
+        run: |
+          python - <<'PY'
+          import os, sys
+          required = ['DATABASE_URL', 'GEMINI_API_KEY', 'G2B_SERVICE_KEY']
+          missing = [key for key in required if not os.environ.get(key)]
+          if missing:
+              print('Missing server configuration names:', ', '.join(missing))
+              sys.exit(1)
+          if not os.environ['DATABASE_URL'].startswith(('postgres://', 'postgresql://', 'postgresql+psycopg2://')):
+              print('A persistent PostgreSQL database is required; ephemeral runner SQLite is forbidden.')
+              sys.exit(1)
+          PY
+      - run: pip install -r requirements.txt
+      - name: Collect and analyze into the shared database
+        run: python main.py --trigger github-actions
