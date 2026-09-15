@@ -1,4 +1,3 @@
-import inspect
 import re
 from datetime import datetime, timedelta
 
@@ -6,13 +5,12 @@ import pandas as pd
 import streamlit as st
 
 from ai_utils import is_gemini_ready, generate_summary
+from db2 import get_engine
 
-DB_PATH = "gov_tracker.db"
 TABLE_NAME = "postings"
 
 st.set_page_config(page_title="정부 IT 사업 AI 분석 대시보드", page_icon="📋", layout="wide")
 
-# ------------------ DB 컬럼명 ------------------
 COL_KEY = "uniq_key"
 COL_SOURCE = "source"
 COL_AGENCY = "agency"
@@ -34,42 +32,25 @@ COL_SOLUTION = "recommended_solution"
 COL_STATUS = "status"
 COL_CREATED_AT = "created_at"
 COL_UPDATED_AT = "updated_at"
-COL_CONTENT = "content"  # 존재하지 않을 수도 있어 아래에서 항상 존재 여부를 먼저 확인함
+COL_CONTENT = "content"
+COL_TRACK = "track"
+COL_TRACK_REASON = "track_reason"
+COL_AI_SCORE = "ai_priority_score"
+COL_AI_REASON = "ai_priority_reason"
 
-# ------------------ 트랙(R&D / 사업부) 분류 설정 ------------------
-TRACK_RND = "R&D 과제"
-TRACK_BIZ = "사업부 과제"
-
-AGENCY_DEFAULT_TRACK = {
-    "IRIS": TRACK_RND,
-    "국가AI전략위원회": TRACK_RND,
-    "AIHub": TRACK_RND,
-    "KERIS": TRACK_RND,
-    "NIPA": TRACK_BIZ,
-    "조달청": TRACK_BIZ,
-    "행정안전부": TRACK_BIZ,
-}
-
-RND_KEYWORDS = ["연구개발", "r&d", "기술개발", "지원계획", "수요조사", "지원사업", "실증", "공모"]
-BIZ_KEYWORDS = ["입찰", "용역", "구매", "공사", "제안요청", "나라장터", "낙찰", "계약", "위탁"]
+TRACK_RND = "🔬 R&D 과제"
+TRACK_BIZ = "💼 사업부 과제"
+TRACK_MAP = {"RND": TRACK_RND, "BIZ": TRACK_BIZ}
 
 
-def classify_track(row):
-    text = " ".join(str(row.get(c, "")) for c in [COL_GUBUN, COL_POST_TYPE, COL_TITLE]).lower()
-    if any(k.lower() in text for k in BIZ_KEYWORDS):
-        return TRACK_BIZ
-    if any(k.lower() in text for k in RND_KEYWORDS):
-        return TRACK_RND
-    return AGENCY_DEFAULT_TRACK.get(row.get(COL_AGENCY, ""), TRACK_RND)
+def get_track_label(raw):
+    return TRACK_MAP.get(str(raw).strip().upper(), "미분류")
 
 
-# ------------------ 데이터 로드 ------------------
 @st.cache_data(ttl=300)
 def load_data():
-    import sqlite3
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query(f"SELECT * FROM {TABLE_NAME}", conn)
-    conn.close()
+    engine = get_engine()
+    df = pd.read_sql_query(f"SELECT * FROM {TABLE_NAME}", engine)
     return df
 
 
@@ -79,15 +60,21 @@ if df.empty:
     st.stop()
 
 for c in [COL_GRADE, COL_CATEGORY, COL_STATUS, COL_AGENCY]:
-    df[c] = df[c].fillna("미분류").replace("", "미분류")
+    if c in df.columns:
+        df[c] = df[c].fillna("미분류").replace("", "미분류")
+
+for c in [COL_TRACK, COL_TRACK_REASON, COL_AI_REASON]:
+    if c not in df.columns:
+        df[c] = ""
+    df[c] = df[c].fillna("")
 
 df["_reg_date_parsed"] = pd.to_datetime(df[COL_REG_DATE], errors="coerce")
 df["_due_date_parsed"] = pd.to_datetime(df[COL_DUE_DATE], errors="coerce")
-df["_track"] = df.apply(classify_track, axis=1)
+df["_track"] = df[COL_TRACK].map(get_track_label)
 
-if "ai_priority_score" not in df.columns:
-    df["ai_priority_score"] = None
-df["ai_priority_score"] = pd.to_numeric(df["ai_priority_score"], errors="coerce").fillna(-1).astype(int)
+if COL_AI_SCORE not in df.columns:
+    df[COL_AI_SCORE] = None
+df[COL_AI_SCORE] = pd.to_numeric(df[COL_AI_SCORE], errors="coerce").fillna(-1).astype(int)
 
 today = pd.Timestamp(datetime.now().date())
 last_updated = None
@@ -104,7 +91,6 @@ if "quick_filter" not in st.session_state:
     st.session_state.quick_filter = None
 
 
-# ------------------ AI 정보 블록 / 요약 생성 ------------------
 def build_info_block(row):
     lines = []
 
@@ -115,7 +101,7 @@ def build_info_block(row):
     add("공고 제목", row.get(COL_TITLE))
     add("주관부처 / 수행기관", f"{row.get(COL_DEPT, '')} / {row.get(COL_AGENCY, '')}")
     add("공고 유형", row.get(COL_GUBUN))
-    add("사업 구분(R&D/사업부)", row.get("_track"))
+    add("사업 구분(AI 판단)", row.get("_track"))
     add("등급", row.get(COL_GRADE))
     add("매칭 키워드", row.get(COL_KEYWORDS))
     add("추천 솔루션", row.get(COL_SOLUTION))
@@ -134,14 +120,13 @@ def generate_ai_summary(row):
         return st.session_state.ai_summary_cache[key]
     if not is_gemini_ready():
         return None
-    text, error = generate_summary(build_info_block(row))
+    text_val, error = generate_summary(build_info_block(row))
     if error:
         return f"__ERROR__:{error}"
-    st.session_state.ai_summary_cache[key] = text
-    return text
+    st.session_state.ai_summary_cache[key] = text_val
+    return text_val
 
 
-# ------------------ 재사용 가능한 토글형 카드 버튼 ------------------
 def render_toggle_card(label, count, key, active, colors, on_click=None, args=None, height=100, font_size=24):
     use_key = True
     try:
@@ -260,7 +245,6 @@ def popover_multiselect(label, options, state_key):
     return [opt for opt in options if st.session_state.get(f"{state_key}__{opt}", True)]
 
 
-# ------------------ 사이드바 ------------------
 st.sidebar.title("🔎 필터 / 검색")
 search_keyword = st.sidebar.text_input("🔍 키워드 검색 (제목 / 매칭키워드)", "")
 
@@ -280,11 +264,10 @@ selected_status = popover_multiselect("📌 상태", status_options, "sel_status
 st.sidebar.markdown("---")
 if last_updated:
     st.sidebar.caption(f"🕒 마지막 데이터 갱신: {last_updated.strftime('%Y-%m-%d %H:%M')}")
-st.sidebar.caption("매일 아침 자동 수집 예정 (작업 스케줄러 등록 후 적용)")
+st.sidebar.caption("⏰ 매일 아침 8시 기준 자동 수집 (GitHub Actions 예약 실행)")
 if not is_gemini_ready():
-    st.sidebar.warning("⚠️ Gemini API 키가 설정되지 않았습니다. .env 또는 gemini_api.env 파일을 확인해 주세요.")
+    st.sidebar.warning("⚠️ Gemini API 키가 설정되지 않았습니다. .env 파일을 확인해 주세요.")
 
-# ------------------ 사이드바 필터 적용 ------------------
 filtered = df[
     df[COL_AGENCY].isin(selected_agencies)
     & df[COL_GRADE].isin(selected_grades)
@@ -303,10 +286,9 @@ if search_keyword.strip():
     mask = filtered[COL_TITLE].astype(str).str.contains(kw, case=False, na=False) | filtered[COL_KEYWORDS].astype(str).str.contains(kw, case=False, na=False)
     filtered = filtered[mask]
 
-# ------------------ 제목 + 트랙 토글 ------------------
 st.title("📋 정부 IT 사업 AI 분석 대시보드")
 
-st.markdown("### 🧭 사업 구분 (가장 먼저 확인하세요)")
+st.markdown("### 🧭 사업 구분 — AI가 공고 내용을 직접 읽고 판단했습니다 (키워드 매칭 아님)")
 rnd_in_filtered = (filtered["_track"] == TRACK_RND).sum()
 biz_in_filtered = (filtered["_track"] == TRACK_BIZ).sum()
 total_in_filtered = len(filtered)
@@ -326,22 +308,21 @@ with t1:
                         st.session_state.track_filter is None, PALETTE_TOTAL,
                         on_click=_reset_track, height=90, font_size=22)
 with t2:
-    render_toggle_card("🔬 R&D 과제", rnd_in_filtered, "trk_rnd",
+    render_toggle_card(TRACK_RND, rnd_in_filtered, "trk_rnd",
                         st.session_state.track_filter == TRACK_RND, PALETTE_RND,
                         on_click=_toggle_track, args=(TRACK_RND,), height=90, font_size=22)
 with t3:
-    render_toggle_card("💼 사업부 과제", biz_in_filtered, "trk_biz",
+    render_toggle_card(TRACK_BIZ, biz_in_filtered, "trk_biz",
                         st.session_state.track_filter == TRACK_BIZ, PALETTE_BIZ,
                         on_click=_toggle_track, args=(TRACK_BIZ,), height=90, font_size=22)
 
-st.caption("💡 자동 분류 기준: 제목/공고유형에 '입찰·용역·구매' 등이 있으면 사업부 과제, '연구개발·R&D·지원계획' 등이 있으면 R&D 과제로 분류하고, 애매한 경우 기관 특성으로 판단합니다.")
+st.caption("💡 각 공고를 클릭하면 AI가 왜 R&D/사업부로 구분했는지 판단 근거를 함께 확인할 수 있습니다.")
 
 if st.session_state.track_filter:
     filtered = filtered[filtered["_track"] == st.session_state.track_filter]
 
 filtered = filtered.sort_values(["_track", "_reg_date_parsed"], ascending=[True, False]) if st.session_state.track_filter is None else filtered.sort_values("_reg_date_parsed", ascending=False)
 
-# ------------------ 4개 상단 카드 ------------------
 soon_mask = (
     filtered["_due_date_parsed"].notna()
     & (filtered["_due_date_parsed"] >= today)
@@ -393,12 +374,12 @@ elif st.session_state.quick_filter == "high_grade":
 elif st.session_state.quick_filter == "due_soon":
     display_df = display_df[soon_mask]
 
-display_df = display_df.sort_values(["ai_priority_score", "_reg_date_parsed"], ascending=[False, False])
+display_df = display_df.sort_values([COL_AI_SCORE, "_reg_date_parsed"], ascending=[False, False])
 display_df = display_df.reset_index(drop=True)
 st.markdown("---")
 
 FIELD_LABELS = {
-    "_track": "구분", COL_AGENCY: "기관", COL_SOURCE: "수집소스", COL_GUBUN: "공고유형",
+    "_track": "AI 구분", COL_AGENCY: "기관", COL_SOURCE: "수집소스", COL_GUBUN: "공고유형",
     COL_POST_TYPE: "게시유형", COL_TITLE: "제목", COL_DEPT: "담당부서", COL_MANAGER: "담당자",
     COL_REG_DATE: "등록일", COL_DUE_DATE: "마감일", COL_BUDGET: "예산", COL_ATTACH: "첨부",
     COL_VIEWS: "조회수", COL_GRADE: "등급", COL_CATEGORY: "카테고리", COL_KEYWORDS: "매칭키워드",
@@ -412,7 +393,7 @@ def render_ai_summary_block(row):
     cached = st.session_state.ai_summary_cache.get(cache_key)
 
     if not is_gemini_ready():
-        st.warning("Gemini API 키가 설정되지 않았습니다. .env 또는 gemini_api.env 파일에 GEMINI_API_KEY를 추가한 뒤 앱을 다시 실행해 주세요.")
+        st.warning("Gemini API 키가 설정되지 않았습니다. .env 파일에 GEMINI_API_KEY를 추가한 뒤 앱을 다시 실행해 주세요.")
         return
 
     if cached and not str(cached).startswith("__ERROR__"):
@@ -433,20 +414,23 @@ def render_ai_summary_block(row):
 
 
 def render_detail_body(row):
-    track_emoji = "🔬" if row.get("_track") == TRACK_RND else "💼"
-    score = row.get("ai_priority_score", -1)
+    score = row.get(COL_AI_SCORE, -1)
 
-    st.markdown(f"### {track_emoji} [{row[COL_TITLE]}]({row[COL_URL]})")
+    st.markdown(f"### {row.get('_track', '')} · [{row[COL_TITLE]}]({row[COL_URL]})")
     st.caption("👆 제목을 누르면 원문 공고 페이지로 이동합니다.")
 
     info_col1, info_col2 = st.columns(2)
     with info_col1:
         st.markdown(f"**{row.get('_track', '')}**")
+        if row.get(COL_TRACK_REASON):
+            st.caption(f"🧭 AI 구분 판단근거: {row.get(COL_TRACK_REASON)}")
     with info_col2:
         if score >= 0:
             st.markdown(f"**🎯 자사 연관도: {int(score)}점**")
         else:
             st.markdown("**🎯 자사 연관도: 분석 대기**")
+        if row.get(COL_AI_REASON):
+            st.caption(f"🎯 AI 연관도 판단근거: {row.get(COL_AI_REASON)}")
 
     st.markdown("#### 🤖 AI 핵심 요약")
     render_ai_summary_block(row)
@@ -470,7 +454,6 @@ def render_detail_body(row):
         st.write(f"**{label}:** {value}")
 
 
-# Streamlit 버전에 따라 st.dialog 지원 여부가 다르므로 안전하게 분기
 if hasattr(st, "dialog"):
     @st.dialog("공고 상세 보기", width="large")
     def show_detail_dialog(row):
@@ -481,30 +464,25 @@ else:
             render_detail_body(row)
 
 
-# ------------------ 탭 정의 ------------------
 tab_detail, tab_summary = st.tabs(["📑 상세보기", "⭐ 요약보기"])
-
-rename_map = dict(FIELD_LABELS)
-rename_map[COL_URL] = "원문링크"
 
 with tab_detail:
     st.subheader(f"전체 공고 목록 ({len(display_df)}건)")
-    st.caption("💡 목록에서 '보기'를 누르면 팝업으로 전체 내용과 AI 요약이 표시됩니다. (가로 스크롤 없는 카드형 리스트)")
+    st.caption("💡 목록에서 '보기'를 누르면 팝업으로 전체 내용과 AI 판단근거가 표시됩니다.")
 
     if display_df.empty:
         st.info("조건에 맞는 공고가 없습니다.")
     else:
         for idx, row in display_df.iterrows():
-            track_emoji = "🔬" if row.get("_track") == TRACK_RND else "💼"
             grade_badge = "🔴" if row[COL_GRADE] == "상" else ("🟡" if row[COL_GRADE] == "중" else "")
             due = row[COL_DUE_DATE] if pd.notna(row[COL_DUE_DATE]) else "미정"
-            score = row.get("ai_priority_score", -1)
+            score = row.get(COL_AI_SCORE, -1)
             score_text = f"🎯 연관도 {int(score)}점" if score >= 0 else "🎯 연관도 분석 대기"
 
             with st.container(border=True):
                 col_main, col_btn = st.columns([6, 1])
                 with col_main:
-                    st.markdown(f"**{track_emoji} {grade_badge} {row[COL_TITLE]}**")
+                    st.markdown(f"**{row.get('_track', '')} {grade_badge} {row[COL_TITLE]}**")
                     st.caption(f"{row[COL_AGENCY]} · 마감 {due} · {row[COL_STATUS]} · {score_text}")
                 with col_btn:
                     if st.button("보기", key=f"view_btn_{idx}", use_container_width=True):
@@ -512,16 +490,16 @@ with tab_detail:
 
 with tab_summary:
     st.subheader("⭐ AI 분석 기반 핵심 공고 요약")
-    st.caption("자사 솔루션과의 연관도가 높다고 AI가 판단한 공고를 우선순위 순으로 보여줍니다. 각 공고 아래 줄에 AI 핵심 요약이 함께 표시됩니다.")
+    st.caption("자사 솔루션과의 연관도가 높다고 AI가 판단한 공고를 우선순위 순으로 보여줍니다.")
 
     PRIORITY_THRESHOLD = 60
-    priority_df = display_df[display_df["ai_priority_score"] >= PRIORITY_THRESHOLD].copy()
+    priority_df = display_df[display_df[COL_AI_SCORE] >= PRIORITY_THRESHOLD].copy()
 
     if priority_df.empty:
         priority_df = display_df[display_df[COL_GRADE] == "상"].copy()
-        st.caption("⚠️ 아직 AI 연관도 분석이 완료된 공고가 부족해 임시로 등급 '상' 공고를 표시합니다. python main.py 재실행 시 자동으로 채워집니다.")
+        st.caption("⚠️ 아직 AI 연관도 분석이 완료된 공고가 부족해 임시로 등급 '상' 공고를 표시합니다.")
 
-    priority_df = priority_df.sort_values("ai_priority_score", ascending=False)
+    priority_df = priority_df.sort_values(COL_AI_SCORE, ascending=False)
 
     if st.button("🤖 AI 요약 일괄 생성 / 새로고침"):
         if is_gemini_ready() and not priority_df.empty:
@@ -541,14 +519,15 @@ with tab_summary:
         st.info("표시할 공고가 없습니다.")
     else:
         for _, row in priority_df.iterrows():
-            track_emoji = "🔬" if row.get("_track") == TRACK_RND else "💼"
-            score = row.get("ai_priority_score", -1)
+            score = row.get(COL_AI_SCORE, -1)
             score_text = f"🎯 연관도 {int(score)}점" if score >= 0 else "🎯 연관도 분석 대기"
             due = row[COL_DUE_DATE] if pd.notna(row[COL_DUE_DATE]) else "미정"
 
             with st.container(border=True):
-                st.markdown(f"**{track_emoji} [{row[COL_TITLE]}]({row[COL_URL]})**")
+                st.markdown(f"**{row.get('_track', '')} [{row[COL_TITLE]}]({row[COL_URL]})**")
                 st.caption(f"{row[COL_AGENCY]} · 등급 {row[COL_GRADE]} · 마감 {due} · {score_text}")
+                if row.get(COL_AI_REASON):
+                    st.caption(f"🎯 AI 판단근거: {row.get(COL_AI_REASON)}")
 
                 cache_key = row.get(COL_KEY) or row.get(COL_TITLE)
                 cached = st.session_state.ai_summary_cache.get(cache_key)
@@ -560,4 +539,4 @@ with tab_summary:
                     st.caption("🤖 아직 AI 요약이 생성되지 않았습니다. 위쪽 '일괄 생성' 버튼을 눌러 주세요.")
 
 st.markdown("---")
-st.caption("본 대시보드는 python main.py 실행 시점 기준 데이터를 표시합니다. 새 데이터 수집 후 브라우저 새로고침(F5) 또는 오른쪽 상단 ⟳ 버튼을 눌러 주세요.")
+st.caption("본 대시보드는 매일 아침 8시 자동 수집 데이터를 기준으로 표시합니다. 새로고침(F5) 또는 오른쪽 상단 ⟳ 버튼으로 최신화할 수 있습니다.")
