@@ -1,2 +1,10 @@
+streamlit
+pandas
+openpyxl
+google-generativeai
+python-dotenv
+beautifulsoup4
+requests
+playwright
 sqlalchemy
 psycopg2-binary
