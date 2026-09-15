@@ -1,0 +1,23 @@
+# 절대 업로드하면 안 되는 비밀정보
+.env
+.env.*
+
+# 로컬 SQLite 데이터베이스
+gov_tracker.db
+*.db
+
+# 파이썬 캐시 파일
+__pycache__/
+*.pyc
+
+# 가상환경 폴더
+venv/
+.venv/
+env/
+
+# 실행 결과 엑셀 (매번 새로 생성됨)
+Gov-Tracker_결과.xlsx
+
+# OS 자동 생성 잡파일
+.DS_Store
+Thumbs.db
