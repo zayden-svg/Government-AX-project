@@ -33,12 +33,14 @@ def is_gemini_ready():
 
 
 # ------------------------------------------------------------
-# 자사 솔루션/역량 프로필 - 연관도 판단 기준
+# 자사 솔루션/역량 프로필 - AI 연관도 판단 기준
 # 실제 회사 상황에 맞게 자유롭게 수정해 주세요.
 # ------------------------------------------------------------
 PRODUCT_PROFILE = """
-- 회사 핵심 사업: 웹/앱 대기열·트래픽 관리 솔루션, 온라인 신원확인/인증, AI 기반 이상 트래픽 탐지
-- 관심 기술 분야: AI/빅데이터, 클라우드 인프라, 사이버보안, 공공/금융 시스템 고도화, 재해복구(DR), 통합관제
+- 회사 핵심 사업: 웹/앱 대기열·트래픽 관리 솔루션(NetFUNNEL, 온프렘/SaaS 모두 지원),
+  온라인 신원확인/부정접속 방어 솔루션(봇매니저 SaaS), AI 기반 이상 트래픽 탐지
+- 관심 기술 분야: AI/빅데이터, 클라우드 인프라, 사이버보안, 공공/금융 시스템 고도화,
+  재해복구(DR), 통합관제, 대량접속 제어
 - 관심 고객: 공공기관, 금융기관, 대형 포털/커머스사
 - 관심 사업 형태: SI/SM 용역, 시스템 구축·고도화, R&D 공동연구, AI 솔루션 실증사업
 """
@@ -54,10 +56,13 @@ def _extract_json(text: str):
         return None
 
 
-def build_priority_prompt(info_block: str) -> str:
+# ------------------------------------------------------------
+# 공고 1건당 AI 호출 1회로 "R&D/사업부 구분"과 "연관도 점수"를
+# 동시에 판단 (API 호출 비용 절감을 위해 통합)
+# ------------------------------------------------------------
+def build_analysis_prompt(info_block: str) -> str:
     return f"""당신은 IT 솔루션 기업의 사업개발 담당자를 돕는 어시스턴트입니다.
-아래 [자사 프로필]을 기준으로 [공고 정보]가 자사 사업/영업/R&D 관점에서
-얼마나 연관성이 높은지 0~100 사이의 점수로 평가해 주세요.
+아래 [자사 프로필]을 참고하여 [공고 정보]에 대해 두 가지를 판단하세요.
 
 [자사 프로필]
 {PRODUCT_PROFILE}
@@ -65,29 +70,61 @@ def build_priority_prompt(info_block: str) -> str:
 [공고 정보]
 {info_block}
 
-반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트를 추가하지 마세요.
-{{"score": 0~100 사이 정수, "reason": "왜 그 점수를 주었는지 1문장 이유"}}
+판단할 내용:
+1. track: 이 공고가 "연구개발·기술개발·실증 성격의 R&D 과제"에 가까운지,
+   "입찰·용역·제품구매처럼 매출과 직결되는 사업부 과제"에 가까운지
+   단순 키워드가 아니라 공고의 실제 성격(연구비 지원 방식인지, 조달/구매 계약 방식인지)을
+   근거로 판단하세요. 반드시 "RND" 또는 "BIZ" 중 하나만 답하세요.
+2. track_reason: 왜 그렇게 판단했는지 1문장 이유.
+3. score: 자사 프로필을 기준으로 영업 또는 연구협력 관점의 연관도를 0~100 사이 정수로 평가.
+4. score_reason: 왜 그 점수를 주었는지 1문장 이유.
+
+정보가 부족해서 확신하기 어려우면, score는 낮게 주고 score_reason에 "정보 부족으로 판단 어려움"
+이라고 명시하세요. 절대 근거 없이 추측해서 확정적으로 답하지 마세요.
+
+반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트를 절대 추가하지 마세요.
+{{"track": "RND 또는 BIZ", "track_reason": "...", "score": 0~100 사이 정수, "score_reason": "..."}}
 """
 
 
-def generate_priority_score(info_block: str):
-    """반환: (score:int|None, reason:str, error:str|None)"""
+def analyze_posting(info_block: str):
+    """공고 1건을 AI에게 물어봐서 트랙 구분 + 연관도 점수를 동시에 받아옴.
+    반환값: {"track":..., "track_reason":..., "score":..., "score_reason":...}
+            실패 시 {"error": "..."} 형태로 반환.
+    """
     if not _gemini_ready:
-        return None, "", "Gemini API 키가 설정되지 않았습니다."
+        return {"error": "Gemini API 키가 설정되지 않았습니다."}
     try:
         model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        resp = model.generate_content(build_priority_prompt(info_block))
-        text = (resp.text or "").strip()
-        data = _extract_json(text)
+        resp = model.generate_content(build_analysis_prompt(info_block))
+        text_resp = (resp.text or "").strip()
+        data = _extract_json(text_resp)
         if not data:
-            return None, "", "AI 응답 파싱 실패"
-        score = max(0, min(100, int(data.get("score", 0))))
-        reason = str(data.get("reason", "")).strip()
-        return score, reason, None
+            return {"error": "AI 응답 파싱 실패"}
+
+        track = str(data.get("track", "")).strip().upper()
+        if track not in ("RND", "BIZ"):
+            track = "BIZ"
+
+        try:
+            score = max(0, min(100, int(data.get("score", 0))))
+        except Exception:
+            score = None
+
+        return {
+            "track": track,
+            "track_reason": str(data.get("track_reason", "")).strip(),
+            "score": score,
+            "score_reason": str(data.get("score_reason", "")).strip(),
+        }
     except Exception as e:
-        return None, "", str(e)
+        return {"error": str(e)}
 
 
+# ------------------------------------------------------------
+# 상세보기 팝업에서 사람이 직접 누르면 보여주는 2~3문장 요약
+# (analyze_posting과 별개로, 클릭했을 때만 생성되므로 비용 부담 적음)
+# ------------------------------------------------------------
 def build_summary_prompt(info_block: str) -> str:
     return f"""당신은 정부 R&D/IT 사업 공고를 분석하는 어시스턴트입니다.
 아래 공고 정보를 참고하여 실무자가 5초 안에 핵심만 파악할 수 있도록
