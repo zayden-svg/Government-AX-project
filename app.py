@@ -556,7 +556,7 @@ with main_tab_dash:
                 with st.container(border=True):
                     col_main, col_btn = st.columns([6, 1])
                     with col_main:
-                        st.markdown(f"**{row.get('_track', '')} {grade_badge} {row[COL_TITLE]}**")
+                        st.markdown(f"**{grade_badge} {row[COL_TITLE]}**")
                         st.markdown(render_meta_line(row[COL_AGENCY], due, row[COL_STATUS], score), unsafe_allow_html=True)
                     with col_btn:
                         if st.button("보기", key=f"view_btn_{idx}", use_container_width=True):
