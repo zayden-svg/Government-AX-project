@@ -663,16 +663,7 @@ with main_tab_news:
             f'vertical-align:middle;">{label}</span>'
         )
 
-    def _title_link_html(item, max_width="100%"):
-        color = SOURCE_COLOR.get(item.get("_src"), "#1a1a1a")
-        title = escape(item["title"])
-        return (
-            f'<a href="{escape(item["url"])}" target="_blank" title="{title}" '
-            f'style="color:{color};font-weight:600;font-size:14px;line-height:1.5;'
-            f'text-decoration:none;display:inline-block;max-width:{max_width};'
-            f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;">'
-            f'{title}</a>'
-        )
+     _title_link_html
 
     def _tag(items, src):
         if src == "naver":
