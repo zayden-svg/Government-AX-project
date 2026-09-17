@@ -391,7 +391,7 @@ def render_detail_body(row):
     band = get_score_band(score)
     score_display = "분석대기" if score is None or score < 0 else f"{int(score)}점"
 
-    st.markdown(f"**{grade_badge} {row[COL_TITLE]}**")
+    st.markdown(f"{grade_badge} {row[COL_TITLE]}")
     st.caption("👆 제목을 누르면 원문 공고 페이지로 이동합니다.")
 
     st.markdown(
@@ -556,7 +556,7 @@ with main_tab_dash:
                 with st.container(border=True):
                     col_main, col_btn = st.columns([6, 1])
                     with col_main:
-                        st.markdown(f"**{grade_badge} {row[COL_TITLE]}**")
+                        st.markdown(f"{grade_badge} {row[COL_TITLE]}")
                         st.markdown(render_meta_line(row[COL_AGENCY], due, row[COL_STATUS], score), unsafe_allow_html=True)
                     with col_btn:
                         if st.button("보기", key=f"view_btn_{idx}", use_container_width=True):
@@ -597,7 +597,7 @@ with main_tab_dash:
                 due = row[COL_DUE_DATE] if pd.notna(row[COL_DUE_DATE]) else "미정"
 
                 with st.container(border=True):
-                    st.markdown(f"**[{row[COL_TITLE]}]({row[COL_URL]})**")
+                    st.markdown(f"[{row[COL_TITLE]}]({row[COL_URL]})")
                     st.markdown(
                         f'<span style="color:#6b6b6b;font-size:0.85em;">{row[COL_AGENCY]} · 등급 {row[COL_GRADE]} · 마감 {due}</span>'
                         f'&nbsp;&nbsp;{score_badge_html(score)}',
