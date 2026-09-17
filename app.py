@@ -663,7 +663,17 @@ with main_tab_news:
             f'vertical-align:middle;">{label}</span>'
         )
 
-     _title_link_html
+    def _title_link_html(item, max_width="100%"):
+        color = SOURCE_COLOR.get(item.get("_src"), "#1a1a1a")
+        title = escape(str(item.get("title") or "(제목 없음)"))
+        url = item.get("url") or item.get("link") or "#"
+        return (
+            f'<a href="{escape(url)}" target="_blank" title="{title}" '
+            f'style="color:{color};font-weight:600;font-size:14px;line-height:1.5;'
+            f'text-decoration:none;display:inline-block;max-width:{max_width};'
+            f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;">'
+            f'{title}</a>'
+        )
 
     def _tag(items, src):
         if src == "naver":
@@ -786,88 +796,6 @@ with main_tab_news:
                 f'</div>',
                 unsafe_allow_html=True,
             )
-
-    with main_tab_trend:
-     st.title("📈 오늘의 IT 뉴스 트렌드 키워드")
-    st.caption("매일 아침 자동 수집된 뉴스에서 AI가 핵심 키워드를 추출하고, 판단 근거와 함께 시각화합니다.")
-
-    from trend_store import load_latest_trend, load_trend_history, save_trend_snapshot
-    from ai_utils import extract_trend_keywords
-    import plotly.express as px
-
-    trend_df = load_latest_trend()
-
-    top_bar_col, refresh_col = st.columns([5, 1])
-    with top_bar_col:
-        if not trend_df.empty:
-            st.caption(f"🕒 마지막 분석 일자: {trend_df['snapshot_date'].iloc[0]}")
-        else:
-            st.caption("아직 저장된 트렌드 분석 결과가 없습니다.")
-    with refresh_col:
-        manual_run = st.button("🤖 지금 재분석", use_container_width=True)
-
-    if manual_run:
-        if not is_gemini_ready():
-            st.warning("Gemini API 키가 설정되지 않아 분석할 수 없습니다.")
-        else:
-            with st.spinner("AI가 오늘의 뉴스에서 트렌드 키워드를 추출하는 중..."):
-                titles_for_trend = st.session_state.get("all_titles_for_digest", [])  # ← 변경
-                if not titles_for_trend:
-                    kw_result, kw_err = [], "먼저 'IT 뉴스' 탭에서 키워드를 검색해 뉴스를 수집해 주세요."
-                else:
-                    kw_result, kw_err = extract_trend_keywords(titles_for_trend)
-            if kw_err:
-                st.error(f"분석 실패: {kw_err}")
-            elif kw_result:
-                save_trend_snapshot(kw_result)
-                st.success("트렌드 분석이 완료되어 저장되었습니다.")
-                st.rerun()
-            else:
-                st.info("분석할 뉴스가 부족합니다.")
-
-    trend_df = load_latest_trend()
-
-    if trend_df.empty:
-        st.info("아직 트렌드 데이터가 없습니다. '지금 재분석' 버튼을 눌러 첫 분석을 실행해 주세요.")
-    else:
-        trend_df = trend_df.sort_values("importance", ascending=False)
-
-        st.markdown("### 🔥 중요도 기준 키워드")
-        fig = px.bar(
-            trend_df, x="importance", y="keyword", orientation="h",
-            color="importance", color_continuous_scale="Reds",
-            labels={"importance": "중요도", "keyword": "키워드"}, height=420,
-        )
-        fig.update_layout(yaxis={"categoryorder": "total ascending"}, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.markdown("### 📊 언급 빈도 트리맵")
-        fig2 = px.treemap(
-            trend_df, path=["keyword"], values="count",
-            color="importance", color_continuous_scale="Oranges",
-        )
-        fig2.update_layout(margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig2, use_container_width=True)
-
-        st.markdown("### 🧩 키워드별 근거")
-        for _, row in trend_df.iterrows():
-            with st.expander(f"🔑 {row['keyword']} · 중요도 {row['importance']}점 · {row['count']}건"):
-                st.write(f"**AI 판단 근거:** {row.get('reason', '')}")
-                samples = row.get("sample_titles", [])
-                if samples:
-                    st.caption("관련 뉴스 제목:")
-                    for s in samples:
-                        st.write(f"- {s}")
-
-        history_df = load_trend_history(days=14)
-        if not history_df.empty:
-            st.markdown("### 📅 최근 14일 트렌드 변화")
-            top_keywords = trend_df["keyword"].head(6).tolist()
-            hist_top = history_df[history_df["keyword"].isin(top_keywords)]
-            fig3 = px.line(hist_top, x="snapshot_date", y="importance", color="keyword", markers=True)
-            fig3.update_layout(margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fig3, use_container_width=True)
-
 
     # --- AI 추천 키워드 ---
     @st.cache_data(ttl=86400)
@@ -993,14 +921,13 @@ with main_tab_news:
         google_items, google_err = fetch_google_news_rss(google_q, max_items=10)
         boan_items, boan_err = fetch_boannews(keywords=fk, max_items=10)
 
-        # 네이버는 boolean 연산자(OR/AND)를 지원하지 않아서, 키워드별로 개별 호출 후 합쳐야 함
         naver_items = []
         naver_err = None
         seen_titles = set()
         for kw in fk:
             items, err = fetch_naver_news(kw, display=3)
             if err:
-                naver_err = err  # 마지막 에러만 남김 (필요하면 리스트로 누적 가능)
+                naver_err = err
                 continue
             for it in items:
                 if it["title"] not in seen_titles:
@@ -1009,7 +936,6 @@ with main_tab_news:
         naver_items = naver_items[:10]
 
         return naver_items, google_items, boan_items, naver_err, google_err, boan_err
-
 
     fx_naver, fx_google, fx_boan, fx_naver_err, fx_google_err, fx_boan_err = _cached_fetch_fixed_monitoring(tuple(fixed_keywords))
     fx_items = _tag(fx_google, "google") + _tag(fx_naver, "naver") + _tag(fx_boan, "boan")
@@ -1023,7 +949,6 @@ with main_tab_news:
         "boan": sorted([it for it in fx_items if it["_src"] == "boan"], key=lambda x: -x["_score"]),
     }
 
-    # --- 경쟁사 동향 수집 (AI 호출 없음, 단순 키워드 매칭) ---
     @st.cache_data(ttl=600)
     def _cached_fetch_competitor_news(competitor_keywords_tuple):
         ck = list(competitor_keywords_tuple)
@@ -1047,10 +972,8 @@ with main_tab_news:
 
         return naver_items, google_items, boan_items, naver_err, google_err, boan_err
 
-
     cp_naver, cp_google, cp_boan, cp_naver_err, cp_google_err, cp_boan_err = _cached_fetch_competitor_news(tuple(competitor_keywords))
     cp_items_raw = _tag(cp_google, "google") + _tag(cp_naver, "naver") + _tag(cp_boan, "boan")
-    # 제목에 실제로 경쟁사 키워드가 포함된 것만 남김 (검색 API가 느슨하게 매칭해 올 수 있어서 재검증)
     cp_items = [
         it for it in cp_items_raw
         if any(kw.lower() in it["title"].lower() for kw in competitor_keywords)
@@ -1081,7 +1004,8 @@ with main_tab_news:
         }
 
     all_titles_for_digest = list(dict.fromkeys(all_titles_for_digest))
-    st.session_state["all_titles_for_digest"] = all_titles_for_digest 
+    st.session_state["all_titles_for_digest"] = all_titles_for_digest
+
     # =========================================================
     # 2) 렌더링
     # =========================================================
@@ -1155,3 +1079,89 @@ with main_tab_news:
         if err_msgs:
             st.caption("⚠️ " + " / ".join(err_msgs))
         render_news_table(res["by_src"])
+
+
+# ------------------------------------------------------------
+# 트렌드 분석 대탭 (IT 뉴스 탭 데이터 수집이 끝난 뒤에 위치해야
+# st.session_state["all_titles_for_digest"]가 최신값으로 채워져 있음)
+# ------------------------------------------------------------
+with main_tab_trend:
+    st.title("📈 오늘의 IT 뉴스 트렌드 키워드")
+    st.caption("매일 아침 자동 수집된 뉴스에서 AI가 핵심 키워드를 추출하고, 판단 근거와 함께 시각화합니다.")
+
+    from trend_store import load_latest_trend, load_trend_history, save_trend_snapshot
+    from ai_utils import extract_trend_keywords
+    import plotly.express as px
+
+    trend_df = load_latest_trend()
+
+    top_bar_col, refresh_col = st.columns([5, 1])
+    with top_bar_col:
+        if not trend_df.empty:
+            st.caption(f"🕒 마지막 분석 일자: {trend_df['snapshot_date'].iloc[0]}")
+        else:
+            st.caption("아직 저장된 트렌드 분석 결과가 없습니다.")
+    with refresh_col:
+        manual_run = st.button("🤖 지금 재분석", use_container_width=True)
+
+    if manual_run:
+        if not is_gemini_ready():
+            st.warning("Gemini API 키가 설정되지 않아 분석할 수 없습니다.")
+        else:
+            with st.spinner("AI가 오늘의 뉴스에서 트렌드 키워드를 추출하는 중..."):
+                titles_for_trend = st.session_state.get("all_titles_for_digest", [])
+                if not titles_for_trend:
+                    kw_result, kw_err = [], "먼저 'IT 뉴스' 탭에서 키워드를 검색해 뉴스를 수집해 주세요."
+                else:
+                    kw_result, kw_err = extract_trend_keywords(titles_for_trend)
+            if kw_err:
+                st.error(f"분석 실패: {kw_err}")
+            elif kw_result:
+                save_trend_snapshot(kw_result)
+                st.success("트렌드 분석이 완료되어 저장되었습니다.")
+                st.rerun()
+            else:
+                st.info("분석할 뉴스가 부족합니다.")
+
+    trend_df = load_latest_trend()
+
+    if trend_df.empty:
+        st.info("아직 트렌드 데이터가 없습니다. '지금 재분석' 버튼을 눌러 첫 분석을 실행해 주세요.")
+    else:
+        trend_df = trend_df.sort_values("importance", ascending=False)
+
+        st.markdown("### 🔥 중요도 기준 키워드")
+        fig = px.bar(
+            trend_df, x="importance", y="keyword", orientation="h",
+            color="importance", color_continuous_scale="Reds",
+            labels={"importance": "중요도", "keyword": "키워드"}, height=420,
+        )
+        fig.update_layout(yaxis={"categoryorder": "total ascending"}, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### 📊 언급 빈도 트리맵")
+        fig2 = px.treemap(
+            trend_df, path=["keyword"], values="count",
+            color="importance", color_continuous_scale="Oranges",
+        )
+        fig2.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("### 🧩 키워드별 근거")
+        for _, row in trend_df.iterrows():
+            with st.expander(f"🔑 {row['keyword']} · 중요도 {row['importance']}점 · {row['count']}건"):
+                st.write(f"**AI 판단 근거:** {row.get('reason', '')}")
+                samples = row.get("sample_titles", [])
+                if samples:
+                    st.caption("관련 뉴스 제목:")
+                    for s in samples:
+                        st.write(f"- {s}")
+
+        history_df = load_trend_history(days=14)
+        if not history_df.empty:
+            st.markdown("### 📅 최근 14일 트렌드 변화")
+            top_keywords = trend_df["keyword"].head(6).tolist()
+            hist_top = history_df[history_df["keyword"].isin(top_keywords)]
+            fig3 = px.line(hist_top, x="snapshot_date", y="importance", color="keyword", markers=True)
+            fig3.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+            st.plotly_chart(fig3, use_container_width=True)
