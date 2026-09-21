@@ -11,8 +11,8 @@ from ai_utils import (
 )
 from db2 import get_engine
 from news_utils import (
-    fetch_naver_news, fetch_google_news_rss, fetch_boannews, is_naver_ready,
-    _clean_naver_text,
+    fetch_naver_news, fetch_google_news_rss, fetch_boannews, fetch_etnews_rss,
+    is_naver_ready, _clean_naver_text,
 )
 
 TABLE_NAME = "postings"
@@ -135,7 +135,6 @@ if "recommended_keywords" not in st.session_state:
 if "biz_recommended_keywords" not in st.session_state:
     st.session_state.biz_recommended_keywords = None
 
-# [] 고정 모니터링 키워드 - 경쟁사 제품명은 여기서 제외 (별도 관리)
 DEFAULT_FIXED_KEYWORDS = [
     "AI", "예약시스템", "먹통", "접속량", "폭주", "서버다운", "API",
     "트래픽", "매크로", "암표", "서버장애", "비대면", "에스티씨랩", "넷퍼넬", "NetFUNNEL",
@@ -143,12 +142,10 @@ DEFAULT_FIXED_KEYWORDS = [
 if "fixed_keywords" not in st.session_state:
     st.session_state.fixed_keywords = list(DEFAULT_FIXED_KEYWORDS)
 
-# [경쟁사] 동향 모니터링 키워드 -  연관도 스코어링 풀에는 절대 포함하지 않음
 DEFAULT_COMPETITOR_KEYWORDS = ["DynaPath", "EverSafe"]
 if "competitor_keywords" not in st.session_state:
     st.session_state.competitor_keywords = list(DEFAULT_COMPETITOR_KEYWORDS)
 
-# 사업공고 탭 전용 고정 키워드 (조달 구매내역 실제 사업명 기반 추출)
 BIZ_FIXED_KEYWORDS = [
     "예약시스템", "청약", "수강신청", "채용시스템", "자격·검정시험",
     "원서접수", "홈페이지개편", "대량접속제어", "매크로탐지및차단",
@@ -319,7 +316,6 @@ def popover_multiselect(label, options, state_key, label_map=None):
 st.sidebar.title("🔎 필터 / 검색")
 search_keyword = st.sidebar.text_input("🔍 키워드 검색 (제목 / 매칭키워드)", "")
 
-# [기관 선택] 같은 기관명에 부서가 여러 개면 대표 부서를 괄호로 붙여 구분
 agency_dept_map = df.groupby(COL_AGENCY)[COL_DEPT].apply(
     lambda s: sorted(set(x for x in s if str(x).strip() not in ("", "nan", "None")))
 )
@@ -480,11 +476,10 @@ else:
 
 
 # ------------------------------------------------------------
-# 뉴스 렌더링 공통 헬퍼
-# (사업공고 탭에서도 재사용하기 위해 탭 생성보다 위에 배치)
+# 뉴스 렌더링 공통 헬퍼 (google/naver/boan/etnews 4개 소스 공통 처리)
 # ------------------------------------------------------------
-SOURCE_COLOR = {"naver": "#03c75a", "google": "#4285f4", "boan": "#e53935"}
-SOURCE_BADGE_TEXT = {"naver": "N", "google": "G", "boan": "보안"}
+SOURCE_COLOR = {"naver": "#03c75a", "google": "#4285f4", "boan": "#e53935", "etnews": "#8e24aa"}
+SOURCE_BADGE_TEXT = {"naver": "N", "google": "G", "boan": "보안", "etnews": "전자"}
 
 
 def _badge_html(src):
@@ -543,7 +538,8 @@ def _cached_fetch_keyword_news(keyword):
     naver_items, naver_err = fetch_naver_news(keyword, display=6)
     google_items, google_err = fetch_google_news_rss(keyword, max_items=6)
     boan_items, boan_err = fetch_boannews(keywords=[keyword], max_items=6)
-    return naver_items, google_items, boan_items, naver_err, google_err, boan_err
+    etnews_items, etnews_err = fetch_etnews_rss(keywords=[keyword], max_items=6)
+    return naver_items, google_items, boan_items, etnews_items, naver_err, google_err, boan_err, etnews_err
 
 
 # ------------------------------------------------------------
@@ -611,8 +607,8 @@ with main_tab_dash:
             expanded=True,
         ):
             for kw in st.session_state.biz_keyword_filter:
-                naver_items, google_items, boan_items, n_err, g_err, b_err = _cached_fetch_keyword_news(kw)
-                items = _tag(google_items, "google") + _tag(naver_items, "naver") + _tag(boan_items, "boan")
+                naver_items, google_items, boan_items, etnews_items, n_err, g_err, b_err, e_err = _cached_fetch_keyword_news(kw)
+                items = _tag(google_items, "google") + _tag(naver_items, "naver") + _tag(boan_items, "boan") + _tag(etnews_items, "etnews")
                 items, _ = _score_group(items)
                 st.markdown(f"**🔍 {kw}**")
                 if not items:
@@ -813,23 +809,26 @@ with main_tab_news:
         def cell(item):
             if not item:
                 return '<span style="color:#bbb;">범위 내 기사 부족</span>'
-            return _badge_html(item.get("_src")) + _title_link_html(item, max_width="260px")
+            return _badge_html(item.get("_src")) + _title_link_html(item, max_width="220px")
 
         g_list = items_by_src.get("google", [])
         n_list = items_by_src.get("naver", [])
         b_list = items_by_src.get("boan", [])
-        rows = min(max(len(g_list), len(n_list), len(b_list), 1), max_rows)
+        e_list = items_by_src.get("etnews", [])
+        rows = min(max(len(g_list), len(n_list), len(b_list), len(e_list), 1), max_rows)
 
         rows_html = ""
         for i in range(rows):
             g = g_list[i] if i < len(g_list) else None
             n = n_list[i] if i < len(n_list) else None
             b = b_list[i] if i < len(b_list) else None
+            e = e_list[i] if i < len(e_list) else None
             rows_html += (
                 f'<tr>'
                 f'<td style="padding:8px 12px;border-bottom:1px solid #eee;">{cell(g)}</td>'
                 f'<td style="padding:8px 12px;border-bottom:1px solid #eee;">{cell(n)}</td>'
                 f'<td style="padding:8px 12px;border-bottom:1px solid #eee;">{cell(b)}</td>'
+                f'<td style="padding:8px 12px;border-bottom:1px solid #eee;">{cell(e)}</td>'
                 f'</tr>'
             )
 
@@ -837,9 +836,10 @@ with main_tab_news:
             f"""
             <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
             <thead><tr>
-                <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #4285f4;color:#4285f4;">🟦 Google 뉴스</th>
-                <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #03c75a;color:#03c75a;">🟩 Naver 뉴스</th>
+                <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #4285f4;color:#4285f4;">🟦 Google</th>
+                <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #03c75a;color:#03c75a;">🟩 Naver</th>
                 <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e53935;color:#e53935;">🟥 보안뉴스</th>
+                <th style="text-align:left;padding:8px 12px;border-bottom:2px solid #8e24aa;color:#8e24aa;">🟪 전자신문</th>
             </tr></thead>
             <tbody>{rows_html}</tbody>
             </table>
@@ -993,7 +993,7 @@ with main_tab_news:
 
     st.markdown("---")
 
-    kw_input_col, kw_btn_col = st.columns([5, 1])
+    kw_input_col, kw_btn_col, kw_reset_col = st.columns([5, 1, 1])
     with kw_input_col:
         custom_kw = st.text_input(
             "🔍 검색 키워드 (쉼표로 여러 개 입력 가능,  연관도 분석에 포함됩니다)",
@@ -1002,9 +1002,16 @@ with main_tab_news:
     with kw_btn_col:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         search_clicked = st.button("🔎 검색", type="primary", use_container_width=True)
+    with kw_reset_col:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        reset_clicked = st.button("🧹 초기화", use_container_width=True)
 
     if search_clicked:
         st.session_state.news_selected_keywords = [k.strip() for k in custom_kw.split(",") if k.strip()]
+
+    if reset_clicked:
+        st.session_state.news_selected_keywords = []
+        st.rerun()
 
     keywords = st.session_state.news_selected_keywords
     fixed_keywords = st.session_state.fixed_keywords
@@ -1024,6 +1031,7 @@ with main_tab_news:
         google_q = " OR ".join(fk)
         google_items, google_err = fetch_google_news_rss(google_q, max_items=10)
         boan_items, boan_err = fetch_boannews(keywords=fk, max_items=10)
+        etnews_items, etnews_err = fetch_etnews_rss(keywords=fk, max_items=10)
 
         naver_items = []
         naver_err = None
@@ -1039,10 +1047,10 @@ with main_tab_news:
                     naver_items.append(it)
         naver_items = naver_items[:10]
 
-        return naver_items, google_items, boan_items, naver_err, google_err, boan_err
+        return naver_items, google_items, boan_items, etnews_items, naver_err, google_err, boan_err, etnews_err
 
-    fx_naver, fx_google, fx_boan, fx_naver_err, fx_google_err, fx_boan_err = _cached_fetch_fixed_monitoring(tuple(fixed_keywords))
-    fx_items = _tag(fx_google, "google") + _tag(fx_naver, "naver") + _tag(fx_boan, "boan")
+    fx_naver, fx_google, fx_boan, fx_etnews, fx_naver_err, fx_google_err, fx_boan_err, fx_etnews_err = _cached_fetch_fixed_monitoring(tuple(fixed_keywords))
+    fx_items = _tag(fx_google, "google") + _tag(fx_naver, "naver") + _tag(fx_boan, "boan") + _tag(fx_etnews, "etnews")
     fx_items, fx_score_err = _score_group(fx_items)
     all_titles_for_digest.extend([it["title"] for it in fx_items])
     all_items_pool.extend(fx_items)
@@ -1051,6 +1059,7 @@ with main_tab_news:
         "google": sorted([it for it in fx_items if it["_src"] == "google"], key=lambda x: -x["_score"]),
         "naver": sorted([it for it in fx_items if it["_src"] == "naver"], key=lambda x: -x["_score"]),
         "boan": sorted([it for it in fx_items if it["_src"] == "boan"], key=lambda x: -x["_score"]),
+        "etnews": sorted([it for it in fx_items if it["_src"] == "etnews"], key=lambda x: -x["_score"]),
     }
 
     @st.cache_data(ttl=600)
@@ -1059,6 +1068,7 @@ with main_tab_news:
         google_q = " OR ".join(ck)
         google_items, google_err = fetch_google_news_rss(google_q, max_items=10)
         boan_items, boan_err = fetch_boannews(keywords=ck, max_items=10)
+        etnews_items, etnews_err = fetch_etnews_rss(keywords=ck, max_items=10)
 
         naver_items = []
         naver_err = None
@@ -1074,10 +1084,10 @@ with main_tab_news:
                     naver_items.append(it)
         naver_items = naver_items[:10]
 
-        return naver_items, google_items, boan_items, naver_err, google_err, boan_err
+        return naver_items, google_items, boan_items, etnews_items, naver_err, google_err, boan_err, etnews_err
 
-    cp_naver, cp_google, cp_boan, cp_naver_err, cp_google_err, cp_boan_err = _cached_fetch_competitor_news(tuple(competitor_keywords))
-    cp_items_raw = _tag(cp_google, "google") + _tag(cp_naver, "naver") + _tag(cp_boan, "boan")
+    cp_naver, cp_google, cp_boan, cp_etnews, cp_naver_err, cp_google_err, cp_boan_err, cp_etnews_err = _cached_fetch_competitor_news(tuple(competitor_keywords))
+    cp_items_raw = _tag(cp_google, "google") + _tag(cp_naver, "naver") + _tag(cp_boan, "boan") + _tag(cp_etnews, "etnews")
     cp_items = [
         it for it in cp_items_raw
         if any(kw.lower() in it["title"].lower() for kw in competitor_keywords)
@@ -1085,8 +1095,8 @@ with main_tab_news:
 
     kw_results = {}
     for kw in keywords:
-        naver_items, google_items, boan_items, naver_err, google_err, boan_err = _cached_fetch_keyword_news(kw)
-        items = _tag(google_items, "google") + _tag(naver_items, "naver") + _tag(boan_items, "boan")
+        naver_items, google_items, boan_items, etnews_items, naver_err, google_err, boan_err, etnews_err = _cached_fetch_keyword_news(kw)
+        items = _tag(google_items, "google") + _tag(naver_items, "naver") + _tag(boan_items, "boan") + _tag(etnews_items, "etnews")
         items, score_err = _score_group(items)
         all_titles_for_digest.extend([it["title"] for it in items])
         all_items_pool.extend(items)
@@ -1095,8 +1105,9 @@ with main_tab_news:
                 "google": sorted([it for it in items if it["_src"] == "google"], key=lambda x: -x["_score"]),
                 "naver": sorted([it for it in items if it["_src"] == "naver"], key=lambda x: -x["_score"]),
                 "boan": sorted([it for it in items if it["_src"] == "boan"], key=lambda x: -x["_score"]),
+                "etnews": sorted([it for it in items if it["_src"] == "etnews"], key=lambda x: -x["_score"]),
             },
-            "naver_err": naver_err, "google_err": google_err, "boan_err": boan_err,
+            "naver_err": naver_err, "google_err": google_err, "boan_err": boan_err, "etnews_err": etnews_err,
             "score_err": score_err, "total": len(items),
         }
 
@@ -1135,6 +1146,8 @@ with main_tab_news:
             cp_err_msgs.append(f"네이버: {cp_naver_err}")
         if cp_boan_err:
             cp_err_msgs.append(f"보안뉴스: {cp_boan_err}")
+        if cp_etnews_err:
+            cp_err_msgs.append(f"전자신문: {cp_etnews_err}")
         if cp_err_msgs:
             st.caption("⚠️ " + " / ".join(cp_err_msgs))
         render_competitor_list(cp_items, competitor_keywords, n=15)
@@ -1149,6 +1162,8 @@ with main_tab_news:
         fx_err_msgs.append(f"네이버: {fx_naver_err}")
     if fx_boan_err:
         fx_err_msgs.append(f"보안뉴스: {fx_boan_err}")
+    if fx_etnews_err:
+        fx_err_msgs.append(f"전자신문: {fx_etnews_err}")
     if fx_score_err:
         fx_err_msgs.append(f"AI 관련도 분석: {fx_score_err} (기본 순서로 표시)")
     if fx_err_msgs:
@@ -1168,6 +1183,8 @@ with main_tab_news:
             err_msgs.append(f"네이버: {res['naver_err']}")
         if res["boan_err"]:
             err_msgs.append(f"보안뉴스: {res['boan_err']}")
+        if res["etnews_err"]:
+            err_msgs.append(f"전자신문: {res['etnews_err']}")
         if res["score_err"]:
             err_msgs.append(f"AI 관련도 분석: {res['score_err']} (기본 순서로 표시)")
         if err_msgs:
@@ -1218,6 +1235,9 @@ with main_tab_trend:
 
     trend_df = load_latest_trend()
 
+    if not trend_df.empty and "category" not in trend_df.columns:
+        trend_df["category"] = "일반동향"
+
     if trend_df.empty:
         st.info("아직 트렌드 데이터가 없습니다. '지금 재분석' 버튼을 눌러 첫 분석을 실행해 주세요.")
     else:
@@ -1244,7 +1264,7 @@ with main_tab_trend:
 
         st.markdown("### 🧩 키워드별 근거")
         for _, row in trend_df.iterrows():
-            with st.expander(f"🔑 {row['keyword']} · 중요도 {row['importance']}점 · {row['count']}건"):
+            with st.expander(f"🔑 {row['keyword']} · 중요도 {row['importance']}점 · {row['count']}건 · {row.get('category', '일반동향')}"):
                 st.write(f"**AI 판단 근거:** {row.get('reason', '')}")
                 samples = row.get("sample_titles", [])
                 if samples:
@@ -1263,40 +1283,219 @@ with main_tab_trend:
 
 
 # ------------------------------------------------------------
-# 통합보기 대탭
+# 통합보기 대탭 - "공공 IT 데일리 브리핑" 스타일
 # ------------------------------------------------------------
 with main_tab_integrated:
-    st.title("🔗 키워드 통합보기")
-    today_str = datetime.now().strftime("%Y년 %m월 %d일")
-    new_today = (df["_reg_date_parsed"] == pd.Timestamp(datetime.now().date())).sum()
-    due_soon_today = (
+    from trend_store import load_latest_trend, load_trend_history
+
+    WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
+    now_dt = datetime.now()
+    now_str = f"{now_dt.year}년 {now_dt.month}월 {now_dt.day}일({WEEKDAY_KO[now_dt.weekday()]}) {now_dt.strftime('%H:%M')} 기준"
+
+    header_col1, header_col2 = st.columns([6, 1])
+    with header_col1:
+        st.markdown("## ⚡ 공공 IT 데일리 브리핑")
+    with header_col2:
+        st.caption(now_str)
+        if st.button("🔄 새로고침", key="refresh_briefing", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
+    st.markdown("---")
+
+    # Ⅰ. 오늘의 헤드라인
+    st.markdown("#### Ⅰ. 오늘의 헤드라인")
+
+    today_new_df = df[df["_reg_date_parsed"] == pd.Timestamp(now_dt.date())].sort_values(COL_AI_SCORE, ascending=False)
+    due_soon_df = df[
         df["_due_date_parsed"].notna()
-        & (df["_due_date_parsed"] >= pd.Timestamp(datetime.now().date()))
-        & (df["_due_date_parsed"] <= pd.Timestamp(datetime.now().date()) + timedelta(days=3))
-    ).sum()
-    high_score_today = (df[COL_AI_SCORE] >= 80).sum()
+        & (df["_due_date_parsed"] >= pd.Timestamp(now_dt.date()))
+        & (df["_due_date_parsed"] <= pd.Timestamp(now_dt.date()) + timedelta(days=3))
+    ].sort_values(COL_AI_SCORE, ascending=False)
 
-    st.markdown(
-        f"""
-        <div style="background:linear-gradient(135deg,#1a237e 0%,#283593 100%);
-                    border-radius:14px;padding:22px 26px;margin-bottom:20px;color:#fff;">
-            <div style="font-size:14px;opacity:0.85;">{today_str} 기준 종합 현황</div>
-            <div style="display:flex;gap:32px;margin-top:12px;">
-                <div><div style="font-size:26px;font-weight:800;">{new_today}건</div><div style="font-size:12px;opacity:0.8;">오늘 신규 공고</div></div>
-                <div><div style="font-size:26px;font-weight:800;">{due_soon_today}건</div><div style="font-size:12px;opacity:0.8;">마감 3일 이내</div></div>
-                <div><div style="font-size:26px;font-weight:800;">{high_score_today}건</div><div style="font-size:12px;opacity:0.8;">AI 연관도 80점 이상</div></div>
+    headline_items = []
+    for _, r in today_new_df.head(2).iterrows():
+        headline_items.append(f"🆕 오늘 신규 공고 · **{r[COL_TITLE]}** ({r[COL_AGENCY]})")
+    for _, r in due_soon_df.head(2).iterrows():
+        headline_items.append(f"⏰ 마감 임박 · **{r[COL_TITLE]}** (마감 {r[COL_DUE_DATE]})")
+
+    trend_df_head = load_latest_trend()
+    if not trend_df_head.empty:
+        top_kw_row = trend_df_head.sort_values("importance", ascending=False).iloc[0]
+        headline_items.append(
+            f"📈 오늘의 트렌드 키워드 1위 · **{top_kw_row['keyword']}** ({top_kw_row.get('category', '일반동향')})"
+        )
+
+    if headline_items:
+        for h in headline_items[:4]:
+            st.markdown(f"- {h}")
+    else:
+        st.caption("오늘 표시할 헤드라인이 아직 없습니다.")
+
+    st.markdown("---")
+
+    # Ⅱ. 종합 요약 (AI)
+    st.markdown("#### Ⅱ. 종합 요약")
+
+    summary_col1, summary_col2 = st.columns([6, 1])
+    with summary_col2:
+        gen_digest_clicked = st.button("🤖 AI 요약", key="integrated_ai_digest", use_container_width=True)
+
+    digest_key = "integrated_digest_cache"
+    if gen_digest_clicked:
+        digest_titles = [r[COL_TITLE] for _, r in pd.concat([today_new_df.head(5), due_soon_df.head(5)]).iterrows()]
+        digest_titles = list(dict.fromkeys(digest_titles))
+        if not is_gemini_ready():
+            st.session_state[digest_key] = "__ERROR__:Gemini API 키가 설정되지 않았습니다."
+        elif not digest_titles:
+            st.session_state[digest_key] = "__ERROR__:요약할 공고가 없습니다."
+        else:
+            with st.spinner("AI가 오늘의 현황을 종합하는 중..."):
+                digest_text, digest_err = generate_news_digest(digest_titles)
+            st.session_state[digest_key] = f"__ERROR__:{digest_err}" if digest_err else digest_text
+
+    cached_digest = st.session_state.get(digest_key)
+    if cached_digest and not str(cached_digest).startswith("__ERROR__"):
+        st.markdown(
+            f"""
+            <div style="background:#f3f0fb;border-left:6px solid #7e57c2;border-radius:10px;
+                        padding:14px 18px;">
+                <span style="background:#7e57c2;color:#fff;font-size:11px;font-weight:700;
+                            padding:2px 8px;border-radius:8px;">AI 요약</span>
+                <span style="font-size:11px;color:#888;margin-left:8px;">{now_dt.strftime('%H:%M')} 생성</span>
+                <p style="margin-top:10px;margin-bottom:0;font-size:14px;color:#333;">{cached_digest}</p>
             </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
+    elif cached_digest:
+        st.error(f"요약 생성 실패: {cached_digest.replace('__ERROR__:', '')}")
+    else:
+        st.caption("🤖 'AI 요약' 버튼을 눌러 오늘의 신규/마감임박 공고를 종합 요약할 수 있습니다.")
 
-    st.caption("키워드 하나를 선택하면 관련 사업공고와 IT 뉴스를 한 화면에서 바로 확인할 수 있습니다.")
+    st.markdown("---")
+
+    # Ⅲ. 솔루션 연관 카드
+    st.markdown("#### Ⅲ. 솔루션 연관 카드")
+
+    trend_df_card = load_latest_trend()
+    CATEGORY_INFO = {
+        "넷퍼넬": {"bg": "#e3f2fd", "text": "#0d47a1", "border": "#2196f3", "desc": "트래픽 폭주 · 대기열 · 접속량 제어"},
+        "엠버스터": {"bg": "#fff3e0", "text": "#e65100", "border": "#fb8c00", "desc": "매크로 · 봇 · 부정예약 탐지"},
+        "일반동향": {"bg": "#eceff1", "text": "#37474f", "border": "#90a4ae", "desc": "기타 일반 IT/AI 업계 동향"},
+    }
+
+    card_cols = st.columns(3)
+    for i, (cat, info) in enumerate(CATEGORY_INFO.items()):
+        with card_cols[i]:
+            if not trend_df_card.empty and "category" in trend_df_card.columns:
+                cat_rows = trend_df_card[trend_df_card["category"] == cat].sort_values("importance", ascending=False)
+            else:
+                cat_rows = pd.DataFrame()
+            cat_count = len(cat_rows)
+            top_kws = ", ".join(cat_rows["keyword"].head(3).tolist()) if not cat_rows.empty else "데이터 없음"
+            
+            if not trend_df_card.empty and "category" in trend_df_card.columns:
+                cat_rows = trend_df_card[trend_df_card["category"] == cat].sort_values("importance", ascending=False)
+            else:
+                cat_rows = pd.DataFrame()
+            cat_count = len(cat_rows)
+            top_kws = ", ".join(cat_rows["keyword"].head(3).tolist()) if not cat_rows.empty else "데이터 없음"
+
+            st.markdown(
+                f"""
+                <div style="background:{info['bg']};border:1px solid {info['border']};
+                            border-radius:12px;padding:16px;min-height:150px;">
+                    <div style="font-size:15px;font-weight:800;color:{info['text']};">{cat}</div>
+                    <div style="font-size:12px;color:#666;margin-bottom:10px;">{info['desc']}</div>
+                    <div style="font-size:24px;font-weight:800;color:{info['text']};">{cat_count}개</div>
+                    <div style="font-size:12px;color:#555;margin-top:6px;">오늘의 키워드: {top_kws}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+
+    # Ⅳ. 오늘의 Action Items
+    st.markdown("#### Ⅳ. 오늘의 Action Items")
+
+    action_df = df[
+        (df["_due_date_parsed"].notna()
+         & (df["_due_date_parsed"] >= pd.Timestamp(now_dt.date()))
+         & (df["_due_date_parsed"] <= pd.Timestamp(now_dt.date()) + timedelta(days=3)))
+        | (df[COL_AI_SCORE] >= 80)
+    ].copy()
+    action_df = action_df.sort_values([COL_AI_SCORE, "_due_date_parsed"], ascending=[False, True]).head(8)
+
+    if action_df.empty:
+        st.info("현재 마감 임박이거나 AI 연관도가 매우 높은 공고가 없습니다.")
+    else:
+        for _, r in action_df.iterrows():
+            due_disp = r[COL_DUE_DATE] if pd.notna(r[COL_DUE_DATE]) else "미정"
+            d_day_txt = ""
+            if pd.notna(r["_due_date_parsed"]):
+                d_left = (r["_due_date_parsed"] - pd.Timestamp(now_dt.date())).days
+                if d_left >= 0:
+                    d_day_txt = f"D-{d_left}" if d_left > 0 else "D-DAY"
+            score = r.get(COL_AI_SCORE, -1)
+            st.markdown(
+                f"""
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;
+                            border-bottom:1px solid #eee;">
+                    <span style="background:#fb8c00;color:#fff;font-size:11px;font-weight:700;
+                                padding:2px 8px;border-radius:6px;min-width:48px;text-align:center;">
+                        {d_day_txt or '-'}
+                    </span>
+                    <a href="{escape(str(r[COL_URL]))}" target="_blank" style="flex:1;color:#222;
+                        font-weight:600;font-size:14px;text-decoration:none;">{escape(str(r[COL_TITLE]))}</a>
+                    <span style="font-size:12px;color:#777;">{r[COL_AGENCY]} · 마감 {due_disp}</span>
+                    {score_badge_html(score)}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+
+    # Ⅴ. 최근 7일 트렌드 워치리스트
+    st.markdown("#### Ⅴ. 최근 7일 트렌드 워치리스트")
+
+    hist_df = load_trend_history(days=7)
+    if hist_df.empty:
+        st.info("아직 최근 7일 트렌드 데이터가 없습니다.")
+    else:
+        latest_per_kw = (
+            hist_df.sort_values("snapshot_date")
+            .groupby("keyword", as_index=False)
+            .last()
+            .sort_values("importance", ascending=False)
+            .head(3)
+        )
+        for _, r in latest_per_kw.iterrows():
+            cat = r.get("category", "일반동향")
+            cat_color = CATEGORY_INFO.get(cat, CATEGORY_INFO["일반동향"])["text"]
+            st.markdown(
+                f"""
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;
+                            border-bottom:1px solid #eee;">
+                    <span style="background:{cat_color};color:#fff;font-size:11px;font-weight:700;
+                                padding:2px 8px;border-radius:6px;">{r['snapshot_date']}</span>
+                    <span style="flex:1;font-weight:600;font-size:14px;color:#222;">{r['keyword']}</span>
+                    <span style="font-size:12px;color:#777;">{cat} · 중요도 {r['importance']}점</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+
+    # Ⅵ. 키워드로 직접 찾기 (기존 통합보기 검색 기능 유지)
+    st.markdown("#### Ⅵ. 키워드로 직접 찾기")
 
     if "integrated_keyword" not in st.session_state:
         st.session_state.integrated_keyword = None
 
-    st.markdown("#### 🏷️ 키워드 선택")
     chip_cols = st.columns(5)
     for i, kw in enumerate(BIZ_FIXED_KEYWORDS):
         with chip_cols[i % 5]:
@@ -1342,7 +1541,8 @@ with main_tab_integrated:
             naver_items, naver_err = fetch_naver_news(selected_kw, display=6)
             google_items, google_err = fetch_google_news_rss(selected_kw, max_items=6)
             boan_items, boan_err = fetch_boannews(keywords=[selected_kw], max_items=6)
-            items = _tag(google_items, "google") + _tag(naver_items, "naver") + _tag(boan_items, "boan")
+            etnews_items, etnews_err = fetch_etnews_rss(keywords=[selected_kw], max_items=6)
+            items = _tag(google_items, "google") + _tag(naver_items, "naver") + _tag(boan_items, "boan") + _tag(etnews_items, "etnews")
             items, score_err = _score_group(items)
 
             if not items:

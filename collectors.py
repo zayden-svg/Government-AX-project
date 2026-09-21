@@ -24,11 +24,32 @@ STANDARD_FIELDS = [
     "reg_date", "due_date", "budget", "attach", "views", "url", "content"
 ]
 
+# ------------------ 기관명 한글 정규화 ------------------
+AGENCY_NAME_MAP = {
+    "NIPA": "정보통신산업진흥원",
+    "KERIS": "한국교육학술정보원",
+    "AIHub": "한국지능정보사회진흥원(AIHub)",
+    "IRIS": "범부처통합연구지원시스템(IRIS)",
+    "NTIS": "국가과학기술지식정보서비스(NTIS)",
+    "TIPA": "중소기업기술정보진흥원",
+    "KIAT": "한국산업기술진흥원",
+    "INNOPOLIS": "연구개발특구진흥재단",
+    "KISA": "한국인터넷진흥원",
+}
+
+
+def normalize_agency_name(raw):
+    key = str(raw).strip()
+    return AGENCY_NAME_MAP.get(key, raw)
+
 
 def base_record(**kwargs):
     rec = {f: "" for f in STANDARD_FIELDS}
     rec.update(kwargs)
+    if rec.get("agency"):
+        rec["agency"] = normalize_agency_name(rec["agency"])
     return rec
+
 
 
 def normalize_date(raw):

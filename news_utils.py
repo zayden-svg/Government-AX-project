@@ -1,4 +1,3 @@
-# news_utils.py
 import os
 import re
 import time
@@ -12,17 +11,18 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
 import html
 import re
+
 
 def _clean_naver_text(raw: str) -> str:
     if not raw:
         return ""
-    # <b>, </b> 등 하이라이트 태그 제거
     text = re.sub(r"</?b>", "", raw)
-    # &quot;, &amp;, &lt;, &gt; 등 HTML 엔티티 복원
     text = html.unescape(text)
     return text.strip()
+
 
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "").strip()
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "").strip()
@@ -145,8 +145,46 @@ def fetch_boannews(keywords=None, max_items: int = 15):
 
 
 # ------------------------------------------------------------
-# 4) 다음(Daum) - 공식 "뉴스" 검색 카테고리가 없어서, 웹문서 검색(최신순)으로 근사 대체.
-#    카카오 디벨로�퍼스 확인 결과 뉴스 전용 API는 현재 제공되지 않음.
+# 4) 전자신문 RSS ("오늘의뉴스" 카테고리, 키 불필요) - 로컬에서 주제 키워드로 필터링
+# ------------------------------------------------------------
+_ETNEWS_RSS_URL = "https://rss.etnews.com/Section901.xml"
+
+
+def fetch_etnews_rss(keywords=None, max_items: int = 15):
+    try:
+        resp = requests.get(_ETNEWS_RSS_URL, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        root = ET.fromstring(resp.content)
+        results = []
+        for item in root.findall("./channel/item"):
+            title = item.findtext("title", "")
+            link = item.findtext("link", "")
+            pub_date = item.findtext("pubDate", "")
+            desc = _strip_html(item.findtext("description", ""))
+
+            if keywords:
+                haystack = f"{title} {desc}"
+                if not any(kw in haystack for kw in keywords):
+                    continue
+
+            results.append({
+                "title": title,
+                "summary": desc[:150],
+                "url": link,
+                "pub_date": pub_date,
+                "source": "전자신문",
+                "topic": "IT",
+            })
+            if len(results) >= max_items:
+                break
+        return results, None
+    except Exception as e:
+        return [], str(e)
+
+
+# ------------------------------------------------------------
+# 5) 다음(Daum) - 공식 "뉴스" 검색 카테고리가 없어서, 웹문서 검색(최신순)으로 근사 대체.
+#    카카오 디벨로퍼스 확인 결과 뉴스 전용 API는 현재 제공되지 않음.
 # ------------------------------------------------------------
 def fetch_daum_web(query: str, size: int = 10):
     if not is_daum_ready():
@@ -178,7 +216,7 @@ def fetch_daum_web(query: str, size: int = 10):
 # ------------------------------------------------------------
 # 통합 수집: 여러 주제 x 여러 소스를 합쳐서 하나의 리스트로 반환
 # ------------------------------------------------------------
-def collect_news(topics, use_naver=True, use_google=True, use_boannews=True, use_daum=False, per_topic=8):
+def collect_news(topics, use_naver=True, use_google=True, use_boannews=True, use_etnews=True, use_daum=False, per_topic=8):
     all_results = []
     errors = []
 
@@ -206,6 +244,12 @@ def collect_news(topics, use_naver=True, use_google=True, use_boannews=True, use
         all_results.extend(items)
         if err:
             errors.append(f"보안뉴스: {err}")
+
+    if use_etnews:
+        items, err = fetch_etnews_rss(keywords=topics, max_items=15)
+        all_results.extend(items)
+        if err:
+            errors.append(f"전자신문: {err}")
 
     seen_titles = set()
     deduped = []

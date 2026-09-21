@@ -342,6 +342,7 @@ def generate_news_digest(titles):
     except Exception as e:
         return None, str(e)
 
+
 def build_relevance_batch_prompt(items):
     lines = [f"{i}. [{it.get('source', '')}] {it['title']}" for i, it in enumerate(items)]
     joined = "\n".join(lines)
@@ -386,58 +387,88 @@ def score_news_relevance(items):
     except Exception as e:
         return {}, str(e)
 
-def build_trend_keyword_prompt(titles):
-    joined = "\n".join(f"- {t}" for t in titles)
+
+# ------------------------------------------------------------
+# 트렌드 키워드 추출 + 3분류 (넷퍼넬 / 엠버스터 / 일반동향)
+# ------------------------------------------------------------
+def build_trend_keyword_prompt(titles: list) -> str:
+    joined = "\n".join(f"- {t}" for t in titles[:150])
     return f"""
-다음은 오늘 수집된 IT/공공 뉴스 제목 목록이다.
+당신은 트래픽 제어 솔루션(넷퍼넬)과 매크로 탐지/차단 솔루션(엠버스터)을 판매하는 회사의 시장 분석가입니다.
 
-[분석 대상 제품 프로필]
-{PRODUCT_PROFILE}
-
-[뉴스 제목 목록]
+아래는 오늘 수집된 IT 뉴스 제목 목록입니다:
 {joined}
 
-위 뉴스 제목들을 분석해서, 오늘 가장 두드러지는 핵심 트렌드 키워드를 최대 12개까지 추출해라.
-각 키워드는 실제 뉴스 제목에 등장한 단어/구절이거나 그것을 요약한 표현이어야 한다.
-단순 빈도가 아니라, 위 제품 프로필과의 사업적 연관성(영업 기회, 경쟁 동향, 시장 이슈)도 함께 고려해서 중요도를 매겨라.
+이 뉴스들에서 최대 12개의 핵심 트렌드 키워드를 추출하고, 각 키워드를 아래 기준에 따라
+반드시 하나의 카테고리로 분류하세요. 카테고리 판단은 키워드 자체의 의미뿐 아니라,
+그 키워드가 등장한 뉴스 제목의 맥락까지 함께 고려해서 판단하세요.
 
-각 키워드마다 다음 정보를 JSON 배열로 반환해라:
-- keyword: 키워드(2~10자 내외)
-- count: 이 키워드가 언급된 것으로 보이는 뉴스 건수(추정치)
-- importance: 1~100 사이 중요도 점수 (사업 연관성 + 빈도 종합)
-- reason: 왜 이 키워드가 중요한지 1문장 근거
-- sample_titles: 관련 실제 뉴스 제목 1~3개 (원문 그대로)
+- "넷퍼넬": 동시접속 폭주, 서버 다운/먹통, 트래픽 급증, 대기열/가상 대기실,
+  예약 시스템 오픈(수강신청, 청약, 티켓팅, 선착순 등), 접속량 제어와 관련된 키워드.
+  예: 트래픽, 동시접속, 서버다운, 대기열, 예약시스템, 오픈런, 청약
+- "엠버스터": 매크로, 봇, 자동화 프로그램을 이용한 부정 예약/구매/응모, 어뷰징,
+  선점, 리셀/되팔이와 관련된 키워드.
+  예: 매크로, 봇탐지, 어뷰징, 선점구매, 리셀
+- "일반동향": 위 두 카테고리에 명확히 해당하지 않는 나머지 일반적인 IT/AI/보안 업계 키워드
 
-반드시 JSON 배열만 출력해라. 다른 설명 텍스트는 포함하지 마라.
-예시: [{{"keyword": "서버다운", "count": 4, "importance": 88, "reason": "...", "sample_titles": ["...", "..."]}}]
-"""
+주의: 뉴스 제목 목록에 넷퍼넬/엠버스터 관련 내용이 실제로 없다면 모든 키워드를
+"일반동향"으로 분류하는 것이 맞습니다. 억지로 끼워맞추지 마세요. 반대로 관련 키워드가
+있는데도 "일반동향"으로 뭉뚱그리지 말고, 조금이라도 트래픽 제어/매크로 차단과 관련이
+있으면 반드시 해당 카테고리로 분류하세요.
+
+각 키워드는 다음 필드를 가진 JSON 객체로 응답하세요: keyword(키워드명),
+category("넷퍼넬"/"엠버스터"/"일반동향" 중 하나), count(언급 건수 추정),
+importance(1~100 중요도), reason(분류 판단 근거 1~2문장),
+sample_titles(관련 뉴스 제목 최대 3개 배열).
+
+JSON 배열 형식으로만 응답하고 다른 설명은 붙이지 마세요.
+""".strip()
 
 
-def extract_trend_keywords(titles, top_n=12):
+# AI가 "일반동향"으로 뭉뚱그려도, 명백한 단서 단어가 있으면 규칙 기반으로 재분류하는 안전장치
+NETFUNNEL_HINTS = [
+    "트래픽", "접속", "동시접속", "서버다운", "서버 다운", "먹통", "폭주",
+    "대기열", "대기시간", "예약", "오픈런", "수강신청", "청약", "티켓팅",
+    "선착순", "접속량", "부하",
+]
+MBUSTER_HINTS = [
+    "매크로", "봇탐지", "봇 탐지", "어뷰징", "부정예약", "부정 구매",
+    "자동화 프로그램", "선점", "되팔이", "리셀", "핫딜봇",
+]
+
+
+def _rule_based_category(keyword: str, reason: str):
+    haystack = f"{keyword} {reason}"
+    if any(h in haystack for h in MBUSTER_HINTS):
+        return "엠버스터"
+    if any(h in haystack for h in NETFUNNEL_HINTS):
+        return "넷퍼넬"
+    return None
+
+
+def extract_trend_keywords(titles: list):
     if not titles:
-        return [], None
+        return [], "분석할 뉴스 제목이 없습니다."
     if not is_gemini_ready():
-        return [], "Gemini API 키가 설정되지 않았습니다."
+        return [], "Gemini API가 설정되지 않았습니다."
     try:
-        prompt = build_trend_keyword_prompt(titles[:200])
         model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(prompt, request_options={"timeout": AI_TIMEOUT_SECONDS})
-        data = _extract_json_array(response.text)
-        if not isinstance(data, list):
-            return [], "AI 응답 형식이 올바르지 않습니다."
-        cleaned = []
-        for d in data:
-            try:
-                cleaned.append({
-                    "keyword": str(d["keyword"]).strip(),
-                    "count": int(d.get("count", 0)),
-                    "importance": int(d.get("importance", 0)),
-                    "reason": str(d.get("reason", "")).strip(),
-                    "sample_titles": list(d.get("sample_titles", []))[:3],
-                })
-            except (KeyError, ValueError, TypeError):
-                continue
-        cleaned.sort(key=lambda x: -x["importance"])
-        return cleaned[:top_n], None
+        response = model.generate_content(
+            build_trend_keyword_prompt(titles),
+            request_options={"timeout": AI_TIMEOUT_SECONDS},
+        )
+        parsed = _extract_json_array((response.text or "").strip())
+        if not isinstance(parsed, list):
+            return [], "AI 응답 파싱 실패"
+        for item in parsed:
+            ai_category = str(item.get("category", "")).strip()
+            if ai_category not in ("넷퍼넬", "엠버스터", "일반동향"):
+                ai_category = "일반동향"
+            rule_category = _rule_based_category(
+                str(item.get("keyword", "")), str(item.get("reason", ""))
+            )
+            item["category"] = rule_category or ai_category
+        parsed.sort(key=lambda x: -x.get("importance", 0))
+        return parsed, None
     except Exception as e:
         return [], str(e)
