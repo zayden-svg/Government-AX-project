@@ -265,16 +265,18 @@ def collect_news(topics, use_naver=True, use_google=True, use_boannews=True, use
 import xml.etree.ElementTree as ET
 
 
-def fetch_etnews_rss(limit: int = 15):
-    """전자신문 RSS 피드에서 최신 뉴스 수집"""
+def fetch_etnews_rss(keywords=None, max_items=10):
+    """전자신문 RSS 피드에서 뉴스 수집. keywords가 있으면 제목에 포함된 것만 필터링"""
     url = "https://rss.etnews.com/Section901.xml"
     results = []
+    err = None
+
     try:
         resp = requests.get(url, timeout=10)
         resp.encoding = "utf-8"
         root = ET.fromstring(resp.text)
 
-        for item in root.findall(".//item")[:limit]:
+        for item in root.findall(".//item"):
             title_el = item.find("title")
             link_el = item.find("link")
             pubdate_el = item.find("pubDate")
@@ -288,6 +290,11 @@ def fetch_etnews_rss(limit: int = 15):
             if not title or not link:
                 continue
 
+            # keywords가 지정된 경우, 제목에 해당 키워드가 없으면 건너뜀
+            if keywords:
+                if not any(kw.lower() in title.lower() for kw in keywords):
+                    continue
+
             results.append({
                 "title": title,
                 "link": link,
@@ -295,8 +302,12 @@ def fetch_etnews_rss(limit: int = 15):
                 "pub_date": pub_date,
                 "description": _clean_naver_text(desc) if desc else "",
             })
-    except Exception as e:
-        print(f"[FAIL] ETNews RSS 수집 실패: {e}")
-        return []
 
-    return results
+            if len(results) >= max_items:
+                break
+
+    except Exception as e:
+        err = f"ETNews RSS 수집 실패: {e}"
+        return [], err
+
+    return results, err
