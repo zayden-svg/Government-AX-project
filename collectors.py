@@ -5,6 +5,9 @@ import time
 import traceback
 from datetime import datetime
 
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -45,13 +48,12 @@ def normalize_date(raw):
     return raw
 
 
-def safe_get(url, params=None, headers=None, timeout=10, retries=2, session=None):
-    h = headers or HEADERS
-    req = session.get if session else requests.get
+def safe_get(url, params=None, headers=None, timeout=8, verify=True, retries=2):
     last_err = None
-    for _ in range(retries + 1):
+    h = headers or {"User-Agent": "Mozilla/5.0"}
+    for _ in range(retries):
         try:
-            resp = req(url, params=params, headers=h, timeout=timeout)
+            resp = requests.get(url, params=params, headers=h, timeout=timeout, verify=verify)
             resp.raise_for_status()
             return resp
         except Exception as e:
@@ -689,6 +691,49 @@ def fetch_innopolis(limit=20):
 
     return results
 
+# ------------------ KISA (한국인터넷진흥원) 자체 입찰공고 게시판 ------------------
+def fetch_kisa_bid(limit=20):
+    url = "https://www.kisa.or.kr/403"
+    resp = safe_get(url, verify=False)  # KISA 서버 인증서 체인 문제 → 검증 비활성화
+    soup = BeautifulSoup(resp.text, "html.parser")
+    rows = soup.select("table tbody tr")
+
+    results = []
+    for row in rows[:limit]:
+        cells = row.find_all("td")
+        if len(cells) < 3:
+            continue
+
+        # 제목 셀에서 postSeq 링크 찾기
+        a_tag = row.find("a", href=re.compile(r"postSeq="))
+        if not a_tag:
+            continue
+        title = a_tag.get_text(strip=True)
+        if not title:
+            continue
+
+        href = a_tag.get("href", "")
+        detail_url = href if href.startswith("http") else "https://www.kisa.or.kr" + href
+        m = re.search(r"postSeq=(\d+)", href)
+        post_seq = m.group(1) if m else ""
+
+        # 열 순서: 번호 / 제목 / 등록일 / 조회수 / (첨부파일)
+        reg_date = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+        views = cells[3].get_text(strip=True) if len(cells) > 3 else ""
+
+        rec = base_record(
+            source="SCRAPE", agency="KISA", gubun="입찰공고",
+            title=title, dept="", manager="",
+            reg_date=normalize_date(reg_date), due_date="",
+            budget="", attach="", views=views,
+            url=detail_url, content=title,
+        )
+        rec["dedup_hash"] = build_dedup_hash(title, reg_date)
+        results.append(rec)
+
+    return results
+
+
 # ------------------------------------------------------------------
 # 콜렉터 레지스트리
 # ------------------------------------------------------------------
@@ -704,6 +749,7 @@ COLLECTORS = {
     "TIPA": fetch_tipa,          # 신규
     "KIAT": fetch_kiat,          # 신규
     "INNOPOLIS": fetch_innopolis,  # 신규
+    "KISA": fetch_kisa_bid,
 }
 
 
