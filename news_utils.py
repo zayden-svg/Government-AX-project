@@ -261,3 +261,42 @@ def collect_news(topics, use_naver=True, use_google=True, use_boannews=True, use
         deduped.append(item)
 
     return deduped, errors
+
+import xml.etree.ElementTree as ET
+
+
+def fetch_etnews_rss(limit: int = 15):
+    """전자신문 RSS 피드에서 최신 뉴스 수집"""
+    url = "https://rss.etnews.com/Section901.xml"
+    results = []
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.encoding = "utf-8"
+        root = ET.fromstring(resp.text)
+
+        for item in root.findall(".//item")[:limit]:
+            title_el = item.find("title")
+            link_el = item.find("link")
+            pubdate_el = item.find("pubDate")
+            desc_el = item.find("description")
+
+            title = title_el.text.strip() if title_el is not None and title_el.text else ""
+            link = link_el.text.strip() if link_el is not None and link_el.text else ""
+            pub_date = pubdate_el.text.strip() if pubdate_el is not None and pubdate_el.text else ""
+            desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ""
+
+            if not title or not link:
+                continue
+
+            results.append({
+                "title": title,
+                "link": link,
+                "source": "전자신문",
+                "pub_date": pub_date,
+                "description": _clean_naver_text(desc) if desc else "",
+            })
+    except Exception as e:
+        print(f"[FAIL] ETNews RSS 수집 실패: {e}")
+        return []
+
+    return results
