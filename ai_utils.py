@@ -317,7 +317,9 @@ def generate_product_guide(product_blocks):
     for code, b in product_blocks.items():
         lines = "\n".join(f"  - {x}" for x in b.get("items", [])[:12]) or "  - (관련 항목 없음)"
         blocks_txt.append(f"[{code}] {b.get('name', '')} — {b.get('desc', '')}\n{lines}")
+    from datetime import date as _date
     prompt = f"""너는 에스티씨랩 공공사업팀의 영업 전략 담당이다. 제품별로 오늘 연결된 공고·과제·뉴스를 보고 대응 가이드를 써라.
+오늘 날짜: {_date.today().isoformat()}
 {BRIEFING_RULES}
 
 제품마다:
@@ -327,6 +329,15 @@ def generate_product_guide(product_blocks):
   수요기관 담당 부서 확인, 레퍼런스·제안자료 준비, 마감일 일정 등록 등. 제품 성숙도(NFA 안정화·LT 개발 중)를 고려)
 - none: 관련 항목이 없거나 억지 연결뿐이면 true (그때 issue/impact/actions는 빈 값)
 억지로 끼워 맞추지 마라. 관련성이 약하면 none=true.
+
+[제품별 '직접 연관' 판단 기준 — 아래 근거가 제목·요약에 있을 때만 그 제품의 이슈로 쓴다]
+- NF: 접속 폭주·대기열·동시접속이 생기는 서비스 (수강신청, 예약·예매, 청약, 원서접수, 선착순 신청, 티켓, 지원금 신청 오픈, 대국민 포털 구축·고도화)
+- NFA: API 호출량 제어·외부 연계 API 트래픽·AI 에이전트(챗봇·LLM) 서비스의 요청 폭주 대응
+- BM: 매크로·봇·부정예약·암표·어뷰징·크리덴셜 공격 차단 (일반 악성코드 분석, 백신·보안장비 구매, 보안관제는 해당 없음)
+- LT: 부하·성능·스트레스 테스트, 오픈 전 성능 검증, 대량 접속 장애 원인 점검
+- 'AI'·'보안'·'데이터'라는 단어만 같은 과제(예: 사이버공격 대응 플랫폼, ODA 타당성 조사, 일반 SW 라이선스)는 연결하지 않는다.
+- 마감일이 이미 지난 항목은 쓰지 않는다. 마감이 가까운 순으로 우선한다.
+- 연관 항목이 1~2건뿐이어도 근거가 확실하면 그 항목만 쓴다.
 
 {chr(10).join(blocks_txt)}
 

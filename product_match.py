@@ -12,7 +12,7 @@ PRODUCT_TITLES = {   # 화면 제목 (제품 약어 · 이름 · 한 줄 설명)
     "BM": ("BotManager / MBUSTER", "매크로·봇 탐지 차단 · 부정접속 방어"),
     "LT": ("LoadTester", "웹·앱 부하테스트(성능 검증)"),
 }
-RND_DOMAIN_MIN_SCORE = 40     # R&D는 도메인(AI·데이터·보안 등) 단어만 걸린 경우 연관도 40점 이상만
+RND_DOMAIN_MIN_SCORE = 60     # R&D는 도메인(AI·데이터·보안 등) 단어만 걸린 경우 연관도 60점 이상만 (단어만 같은 과제 제외)
 
 
 def _mask(df, keywords, cols=("title", "matched_keywords")):
