@@ -335,7 +335,8 @@ st.markdown(
     /* IT 뉴스 상단 카드 3개 — 같은 높이 */
     .st-key-mc1_mention_box, .st-key-mc2_kw_box, .st-key-mc3_comp_box {{
         background:{C['surface']}; border:1px solid {C['border']}; border-radius:10px; padding:14px 16px;
-        height: 214px; overflow: hidden; box-sizing: border-box;
+        height: 214px !important; min-height: 214px !important; max-height: 214px !important;
+        overflow: hidden; box-sizing: border-box; justify-content: flex-start !important;
     }}
     .gt-mon-card {{ background:{C['surface']}; border:1px solid {C['border']}; border-radius:10px; padding:14px 16px; height:100%; display:flex; flex-direction:column; gap:6px; overflow:hidden; box-sizing:border-box; }}
     .gt-mon-card-label {{ font-size:10.5px; font-weight:700; letter-spacing:.06em; color:{C['text_muted']}; text-transform:uppercase; white-space:normal; word-break:keep-all; }}
@@ -424,7 +425,7 @@ st.markdown(
         .gt-stat-box {{ flex: 1 1 50%; border-bottom: 1px solid {C['border']}; }}
         .gt-table th, .gt-table td {{ font-size: 11px; padding: 7px 4px; }}
         .gt-guide-row {{ grid-template-columns: 1fr; }}
-        .st-key-mc1_mention_box, .st-key-mc2_kw_box, .st-key-mc3_comp_box {{ height: auto; }}
+        .st-key-mc1_mention_box, .st-key-mc2_kw_box, .st-key-mc3_comp_box {{ height: auto !important; min-height: 0 !important; max-height: none !important; }}
         div[data-testid="stHorizontalBlock"] {{ flex-direction: column !important; }}
         div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ width: 100% !important; flex: 1 1 100% !important; margin-bottom: 6px; }}
         .gt-keep-row div[data-testid="stHorizontalBlock"] {{ flex-direction: row !important; }}
@@ -1289,6 +1290,41 @@ def _render_news_row(it, rank=None, max_width="70%"):
             st.markdown(f"[🔗 새 탭에서 원문 열기]({url})")
 
 
+_KW_STOPWORDS = {
+    "기자", "뉴스", "속보", "단독", "종합", "포토", "영상", "인터뷰", "칼럼", "사설", "기고", "오늘", "올해", "내년", "최근",
+    "관련", "통해", "위해", "대한", "대해", "이후", "이번", "지난", "따른", "따라", "그리고", "하는", "있는", "없는", "된다",
+    "한다", "했다", "나선다", "제시", "추진", "강화", "확대", "개최", "발표", "선정", "지원", "구축", "운영", "사업", "시장",
+    "기업", "정부", "공공", "국내", "글로벌", "세계", "한국", "업계", "전망", "분석", "계획", "필요", "가능", "본격", "주목",
+    "전자신문", "블로터", "머니투데이", "데이터넷", "보안뉴스", "디지털타임스", "아이뉴스24", "지디넷코리아", "zdnet",
+    "연합뉴스", "뉴시스", "뉴스1", "이데일리", "서울경제", "한국경제", "매일경제", "조선비즈", "the", "and", "for",
+}
+_KW_JOSA_RE = re.compile(r"(으로|에서|에게|까지|부터|이며|이고|으로서|로서|에는|과의|와의|은|는|이|가|을|를|의|에|로|와|과|도|만)$")
+
+
+def _title_keyword_counts(items):
+    """뉴스 제목에서 단어별 노출 기사 수 → [(단어, 건수)] 많은 순. 한 기사에 여러 번 나와도 1건으로 센다."""
+    counts = {}
+    for it in items or []:
+        title = str(it.get("title", ""))
+        for _ in range(3):                                                           # '... | GS ITM - 블로터' 언론사·연재 꼬리 제거
+            title = re.sub(r"\s[-|]\s[^-|]{1,20}$", "", title)
+        title = re.sub(r"[\[【<〈(][^\]】>〉)]{1,20}[\]】>〉)]", " ", title)              # [단독]·[공공SW전략] 같은 말머리 제거
+        seen = set()
+        for tok in re.findall(r"[0-9A-Za-z가-힣]+", title):
+            w = _KW_JOSA_RE.sub("", tok) if re.search(r"[가-힣]", tok) else tok
+            if re.fullmatch(r"[A-Za-z]+", w):
+                w = w.upper() if len(w) <= 4 else w
+            if len(w) < 2 or w.isdigit() or w.lower() in _KW_STOPWORDS or w in _KW_STOPWORDS:
+                continue
+            if re.search(r"[가-힣]", w) and w[-1] in "다요죠까":     # '넓힌다'·'막는다' 같은 서술어 제외
+                continue
+            seen.add(w)
+        for w in seen:
+            counts[w] = counts.get(w, 0) + 1
+    ranked = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
+    return [(w, n) for w, n in ranked if n >= 2]
+
+
 def _fetch_news_pool_for_keywords(keywords_list):
     pool = []
     for kw in keywords_list:
@@ -1621,7 +1657,7 @@ with main_tab_news:
     use_stored_news = (not keywords) and isinstance(_stored_pool, list) and len(_stored_pool) > 0
     if use_stored_news:
         all_items_pool = [it for it in _stored_pool if isinstance(it, dict) and it.get("title")]
-        st.caption(f"🕗 아침 자동수집 결과 ({brief_time(K_NEWS_DEFAULT) or '-'} 기준) · 키워드를 고르면 실시간으로 다시 모읍니다.")
+        st.caption(f"🕗 아침 자동수집 결과 ({brief_time(K_NEWS_DEFAULT) or '-'} 기준)")
     else:
         with st.spinner("정보 수집 중..."):
             all_items_pool = _fetch_news_pool_for_keywords(base_query_kws)
@@ -1630,6 +1666,9 @@ with main_tab_news:
     st.session_state["all_items_pool_cache"] = all_items_pool
 
     def _digest_box(txt):
+        # AI가 본문 앞에 '# 오늘의 IT 뉴스 종합 분석' 같은 제목을 붙이면 제목이 두 번 나오고 간격이 벌어짐 → 제거
+        txt = re.sub(r"^\s*(?:#{1,6}[^\n]*\n+|\*\*[^\n]*종합\s*분석[^\n]*\*\*\s*\n+)+", "", str(txt or "")).strip()
+        txt = re.sub(r"(?m)^\s*#{1,6}\s*", "", txt)
         st.markdown(
             f'''<div style="margin:6px 0 4px;">
                 <div style="font-size:15px;font-weight:800;color:{C['text']};margin:0 0 6px;">🤖 오늘의 IT 뉴스 종합분석</div>
@@ -1684,17 +1723,9 @@ with main_tab_news:
     with mc2:
         with st.container(key="mc2_kw_box"):
             st.markdown('<div class="gt-mon-card-label">상위 키워드 TOP 3</div>', unsafe_allow_html=True)
-            # 후보: 선택·기본 키워드 + AI 추천 키워드 + 제품 키워드 → 기사 제목에 실제로 나온 횟수 기준 상위 3개
-            _cands = list(dict.fromkeys(
-                list(base_query_kws) + [r["keyword"] for r in REC_KEYWORDS]
-                + [k for info in PRODUCT_KEYWORDS.values() for k in info["keywords"] if len(k) >= 2]
-            ))
-            kw_hit_counts = {}
-            for kw in _cands:
-                n_hit = sum(1 for it in all_items_pool if kw.lower() in str(it.get("title", "")).lower())
-                if n_hit:
-                    kw_hit_counts[kw] = n_hit
-            top3 = sorted(kw_hit_counts.items(), key=lambda x: -x[1])[:3]
+            # 기사 제목에 실제로 가장 많이 나온 단어 TOP 3 (같은 기사에서 여러 번 나와도 1건) — 언론사명·일반 단어 제외
+            kw_hit_counts = _title_keyword_counts(all_items_pool)
+            top3 = kw_hit_counts[:3]
             if not top3:
                 st.caption("아직 집계된 키워드가 없습니다.")
             else:
