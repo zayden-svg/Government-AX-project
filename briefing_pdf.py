@@ -164,7 +164,9 @@ def build_context(df, track, track_brief=None, product_guide=None, issues_global
     if not sub.empty:
         w = sub[sub["_due"].notna()].copy()
         w["_left"] = (w["_due"].dt.normalize() - pd.Timestamp(today)).dt.days
-        w = w[(w["_left"] >= 0) & (w["_left"] <= 14)].sort_values(["_left", "_score"], ascending=[True, False]).head(8)
+        w = w[(w["_left"] >= 0) & (w["_left"] <= 14)]
+        # 연관도 높은 8건을 고른 뒤 마감 가까운 순으로 (오늘 마감인 무관한 행정 입찰이 목록을 채우지 않도록)
+        w = w.sort_values("_score", ascending=False).head(8).sort_values(["_left", "_score"], ascending=[True, False])
         for r in w.to_dict("records"):
             parts = [owner_org(r.get("agency"), r.get("dept"))]
             if _eok(r.get("budget")):
@@ -233,7 +235,7 @@ section.block{display:flex; flex-direction:column; gap:12px;}
 .prod-tags{display:flex; gap:6px; flex-wrap:wrap;}
 .prod-tag{font-size:11.5px; font-weight:600; padding:2px 7px; border-radius:3px; background:var(--accent-soft); color:var(--accent-ink);}
 .est{font-size:11px; color:var(--ink-faint); border:1px solid var(--line-strong); padding:1px 6px; border-radius:3px; margin-left:4px; white-space:nowrap;}
-.product-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px;}
+.product-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}   /* 제품 4개 → 2×2 */
 .product{background:var(--paper-raised); border:1px solid var(--line); border-radius:8px; padding:14px 15px;
   display:flex; flex-direction:column; gap:9px; break-inside:avoid;}
 .product.quiet{opacity:.6;}
@@ -370,7 +372,7 @@ def render_html(ctx, font_dir=FONT_DIR):
 <section class="block"><div class="block-head"><span class="num">III</span><h2>{p_title}</h2><span class="sub">{p_sub}</span></div>{pipe_html}</section>
 <section class="block"><div class="block-head"><span class="num">IV</span><h2>제품별 대응 가이드</h2></div><div class="product-grid">{prod_html}</div></section>
 <section class="block"><div class="block-head"><span class="num">V</span><h2>오늘의 Action Item</h2></div>{act_html}</section>
-<section class="block"><div class="block-head"><span class="num">VI</span><h2>마감 임박 워치리스트</h2><span class="sub">— 14일 이내 마감</span></div><div class="watch-list">{watch_html}</div></section>
+<section class="block"><div class="block-head"><span class="num">VI</span><h2>마감 임박 워치리스트</h2><span class="sub">— 14일 이내 마감 · 연관도 높은 8건</span></div><div class="watch-list">{watch_html}</div></section>
 <footer>
   <div>공고·과제는 조달청·IRIS·NTIS·기관 게시판 원문에서 수집했으며, 금액·날짜는 원문 표기를 그대로 옮겼습니다. 법·규정 판단은 확인이 필요합니다.</div>
   <div>Gov-Tracker 자동 생성 · 최종 갱신 {now:%Y-%m-%d %H:%M}</div>
@@ -397,7 +399,7 @@ def html_to_pdf(html):
                     prefer_css_page_size=True, print_background=True, display_header_footer=True,
                     header_template="<span></span>",
                     footer_template=('<div style="width:100%;font-size:8px;color:#8B93A1;text-align:center;'
-                                     'font-family:sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>'),
+                                     'font-family:sans-serif;">Gov-Tracker 브리핑 · <span class="pageNumber"></span>쪽</div>'),
                 )
             finally:
                 browser.close()
