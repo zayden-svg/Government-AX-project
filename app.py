@@ -418,9 +418,9 @@ st.markdown(
 
     /* 오른쪽 위 버튼 3개(메일 알림 · PDF · 다크모드) — 크기·테두리·글자 모두 동일한 버튼 모양 */
     .st-key-gt_topbar [data-testid="stHorizontalBlock"] {{ align-items: center !important; }}
-    .st-key-gt_topbar div[data-testid="stPopover"] button,
-    .st-key-gt_topbar .stDownloadButton button,
-    .st-key-gt_topbar .stButton button {{
+    .st-key-gt_topbar div[data-testid="stPopover"] button[data-testid],
+    .st-key-gt_topbar .stDownloadButton button[data-testid],
+    .st-key-gt_topbar .stButton button[data-testid] {{
         width: 100% !important; height: 40px !important; min-height: 40px !important; padding: 0 10px !important;
         display: flex !important; align-items: center !important; justify-content: center !important; gap: 4px !important;
         background: {_SEC_BTN_BG} !important; border: 1px solid {_SEC_BTN_BORDER} !important; border-radius: 8px !important;
@@ -428,21 +428,21 @@ st.markdown(
         text-align: center !important; text-decoration: none !important; white-space: nowrap !important;
         box-shadow: none !important; opacity: 1 !important; transition: border-color .15s ease, color .15s ease;
     }}
-    .st-key-gt_topbar div[data-testid="stPopover"] button *,
-    .st-key-gt_topbar .stDownloadButton button *,
-    .st-key-gt_topbar .stButton button * {{
+    .st-key-gt_topbar div[data-testid="stPopover"] button[data-testid] *,
+    .st-key-gt_topbar .stDownloadButton button[data-testid] *,
+    .st-key-gt_topbar .stButton button[data-testid] * {{
         color: inherit !important; font-size: 13.5px !important; font-weight: 700 !important; margin: 0 !important;
         white-space: nowrap !important; text-decoration: none !important;
     }}
-    .st-key-gt_topbar div[data-testid="stPopover"] button:hover,
-    .st-key-gt_topbar .stDownloadButton button:hover,
-    .st-key-gt_topbar .stButton button:not(:disabled):hover {{
+    .st-key-gt_topbar div[data-testid="stPopover"] button[data-testid]:hover,
+    .st-key-gt_topbar .stDownloadButton button[data-testid]:hover,
+    .st-key-gt_topbar .stButton button[data-testid]:not(:disabled):hover {{
         border-color: {C['accent']} !important; color: {C['accent']} !important; text-decoration: none !important;
     }}
-    .st-key-gt_topbar .stButton button:disabled {{ color: {C['text_muted']} !important; cursor: progress !important; }}
+    .st-key-gt_topbar .stButton button[data-testid]:disabled {{ color: {C['text_muted']} !important; cursor: progress !important; }}
     /* 메일 알림 버튼의 펼침 화살표 숨김 — PDF·다크모드 버튼과 똑같은 모양 */
-    .st-key-gt_topbar div[data-testid="stPopover"] button [data-testid="stIconMaterial"],
-    .st-key-gt_topbar div[data-testid="stPopover"] button svg {{ display: none !important; }}
+    .st-key-gt_topbar div[data-testid="stPopover"] button[data-testid] [data-testid="stIconMaterial"],
+    .st-key-gt_topbar div[data-testid="stPopover"] button[data-testid] svg {{ display: none !important; }}
 
     /* 표 (통합보기 Ⅲ · 낙찰결과) */
     .gt-table {{ width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;
