@@ -4,6 +4,9 @@
 import sys
 
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import common  # noqa: F401  (한국시간 고정)
 from common import read_secret
@@ -18,11 +21,14 @@ OPTIONAL = {
     "SMTP_PASSWORD": "메일 알림 발송",
 }
 SITES = {
-    "조달청 API": "http://apis.data.go.kr/1230000/ad/BidPublicInfoService",
+    "조달청 API": "https://apis.data.go.kr/1230000/ad/BidPublicInfoService",
     "IRIS": "https://www.iris.go.kr",
     "NTIS": "https://www.ntis.go.kr",
     "NIPA": "https://www.nipa.kr",
     "KERIS": "https://www.keris.or.kr",
+    "TIPA": "https://www.tipa.or.kr/s040101",
+    "KIAT(k-pass)": "https://k-pass.kr/notice/ancList.do",
+    "KISA": "https://www.kisa.or.kr/403",
     "행정안전부": "https://www.mois.go.kr",
 }
 
@@ -74,8 +80,9 @@ def main():
     print("\n=== 4) 수집 사이트 접속 (해외 서버 차단 여부 확인) ===")
     for name, url in SITES.items():
         try:
-            r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-            print(f"  ✅ {name}: 응답 {r.status_code}")
+            r = requests.get(url, timeout=15, verify=("kisa" not in url), headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"})
+            print(f"  ✅ {name}: 응답 {r.status_code} ({len(r.text):,}자)")
         except Exception as e:
             print(f"  ⚠️ {name}: 접속 실패 ({type(e).__name__}) — 이 사이트는 이번 실행에서 0건일 수 있음")
 

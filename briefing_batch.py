@@ -17,8 +17,9 @@ from common import (
 )
 from ai_utils import (
     is_ai_ready, recommend_keywords, generate_headline, generate_key_issues,
-    generate_news_digest, simplify_news_titles, match_titles_to_product,
+    generate_news_digest, simplify_news_titles, match_titles_to_product, generate_product_guide,
 )
+from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product, item_line
 from news_pool import build_pool, fetch_keyword_news, SOURCES
 from postings_data import load_active_postings
 from store import save_cache
@@ -34,6 +35,7 @@ K_HEADLINE = "headline"
 K_ISSUES = "issues"
 K_DIGEST = "news_digest"
 K_PRODUCT_AI = "product_ai_match"
+K_PRODUCT_GUIDE = "product_guide"
 K_META = "briefing_meta"
 
 
@@ -127,14 +129,18 @@ def run():
         if not df.empty:
             today = pd.Timestamp(datetime.now().date())
 
-            # 4) 오늘의 헤드라인
+            # 4) 오늘의 헤드라인 — 공고 한 줄 요약(기관·예산·마감·연관도) + 주요 뉴스 제목
+            def _kind(r):
+                return "R&D" if str(r.get("_track")) == "RND" else "사업"
+
             def _headline():
                 new_df = df[df["_created"].dt.date == today.date()].sort_values("_score", ascending=False)
-                soon = df[df["_due"].notna() & (df["_due"] <= today + timedelta(days=3))].sort_values("_score", ascending=False)
-                titles = list(dict.fromkeys(new_df["title"].head(8).tolist() + soon["title"].head(5).tolist()))
-                if len(titles) < 5:   # 신규가 적으면 연관도 상위로 보충 (특정 기관 쏠림 방지)
-                    titles += df.sort_values("_score", ascending=False)["title"].head(12).tolist()
-                obj, err = generate_headline(list(dict.fromkeys(titles))[:25])
+                soon = df[df["_due"].notna() & (df["_due"] <= today + timedelta(days=7))].sort_values("_score", ascending=False)
+                top = df.sort_values("_score", ascending=False)
+                picked = pd.concat([new_df.head(10), soon.head(6), top.head(10)]).drop_duplicates("uniq_key")
+                lines = [item_line(r, _kind(r)) for r in picked.head(24).to_dict("records")]
+                lines += [f"[뉴스] {it.get('title', '')}" for it in sorted(pool_default, key=lambda x: -x.get("_score", -1))[:12]]
+                obj, err = generate_headline(lines)
                 if err or not obj:
                     raise RuntimeError(err or "빈 응답")
                 return obj
@@ -142,13 +148,14 @@ def run():
             if hl:
                 save_cache(K_HEADLINE, hl)
 
-            # 5) 핵심 이슈 카드
+            # 5) 핵심 이슈 카드 — 테마 · 영향도 · 건수 · 사실 요약 · 우리 사업 영향 · 관련 제품
             def _issues():
-                top = df[df["_score"] >= 60].sort_values("_score", ascending=False).head(25)
-                if top.empty:
-                    top = df.sort_values("_score", ascending=False).head(25)
-                txt = "\n".join(f"- {r.title} ({r.agency})" for r in top.itertuples())
-                issues, err = generate_key_issues(txt, n=4)
+                top = df[df["_score"] >= 50].sort_values("_score", ascending=False).head(30)
+                if len(top) < 10:
+                    top = df.sort_values("_score", ascending=False).head(30)
+                lines = [item_line(r, _kind(r)) for r in top.to_dict("records")]
+                lines += [f"[뉴스] {it.get('title', '')}" for it in sorted(pool_default, key=lambda x: -x.get("_score", -1))[:10]]
+                issues, err = generate_key_issues("\n".join(f"- {x}" for x in lines), n=4)
                 if err:
                     raise RuntimeError(err)
                 return [i for i in (issues or []) if isinstance(i, dict)]
@@ -176,7 +183,28 @@ def run():
             if pai is not None:
                 save_cache(K_PRODUCT_AI, pai)
 
-        # 7) 오늘의 뉴스 요약
+            # 7) 제품별 대응 가이드 — 화면과 같은 규칙으로 고른 사업·과제·뉴스를 보고 관련 이슈/영향/할 일 작성
+            def _guide():
+                biz = df[df["_track"] == "BIZ"]
+                rnd = df[df["_track"] == "RND"]
+                news = list(pool_solution) + list(pool_default)
+                blocks = {}
+                for pname in PRODUCT_KEYWORDS:
+                    code = PRODUCT_CODES[pname]
+                    mt = match_product(pname, biz, rnd, news, ai_titles=pai or {})
+                    items = [item_line(r, "사업") for r in mt["biz"].head(5).to_dict("records")]
+                    items += [item_line(r, "R&D") for r in mt["rnd"].head(4).to_dict("records")]
+                    items += [f"[뉴스] {it.get('title', '')}" for it in mt["news"][:4]]
+                    blocks[code] = {"name": PRODUCT_TITLES[code][0], "desc": PRODUCT_TITLES[code][1], "items": items}
+                guide, err = generate_product_guide(blocks)
+                if err:
+                    raise RuntimeError(err)
+                return guide
+            gd = _step("제품별 대응 가이드", _guide, results)
+            if gd:
+                save_cache(K_PRODUCT_GUIDE, gd)
+
+        # 8) 오늘의 뉴스 종합분석
         def _digest():
             titles = [it.get("title", "") for it in sorted(pool_default, key=lambda x: -x.get("_score", -1))[:40]]
             if not titles:

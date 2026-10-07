@@ -12,7 +12,7 @@ from email.utils import formataddr
 from html import escape
 
 import common  # noqa: F401  (한국시간 고정)
-from common import read_secret, match_regions, region_label, NATIONAL_LABEL
+from common import read_secret, match_regions, region_label, NATIONAL_LABEL, owner_org
 from postings_data import load_active_postings
 from procurement_store import load_reorder_candidates
 from store import list_subscribers
@@ -47,7 +47,7 @@ def build_mail_html(sub, new_rows, reorder_rows, dashboard_url):
         [[f'<b style="color:#B42318;">{int(r["_score"])}</b>',
           f'<a href="{escape(r["url"] or dashboard_url)}" style="color:#2D5BFF;text-decoration:none;font-weight:600;">{escape(r["title"])}</a>'
           + (f'<div style="color:#6B7684;font-size:12px;margin-top:3px;">{escape(r["ai_oneline"])}</div>' if r["ai_oneline"] else ""),
-          escape(r["agency"]), escape(region_label(r["_regions"])), escape(r["due_date"] or "미정"),
+          escape(owner_org(r["agency"], r.get("dept"))), escape(region_label(r["_regions"])), escape(r["due_date"] or "미정"),
           _fmt_money(r["budget"])] for r in new_rows]
     ) if new_rows else '<p style="color:#6B7684;font-size:13px;">오늘은 조건에 맞는 신규 공고가 없습니다.</p>'
 

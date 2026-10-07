@@ -239,47 +239,118 @@ def extract_trend_keywords(titles):
 
 
 # ------------------------------------------------------------
-# 5. 오늘의 헤드라인 — govit-briefing 스타일 한 줄 헤드라인 + 부연 2문장
+# 통합보기 분석 공통 원칙 — 공공 IT 데일리 브리핑(공공사업팀 보고서) 형식을 따른다
+#   ① 사실과 추정을 구분: 목록에 있는 사실만 단정, 해석·전망은 문장 끝에 "(추정)"
+#   ② 숫자(예산·건수·날짜)는 목록에 있는 값만 사용 — 계산·창작 금지
+#   ③ 항상 "우리 사업 영향"과 "지금 할 일"로 연결 (제품: NF·NFA·BM·LT)
+#   ④ 공공 영업 특성 반영: 예산 편성 시기, 조달 경로(나라장터·사전규격·수의계약), 청탁금지법 등은 '확인 필요'로 표시
 # ------------------------------------------------------------
-def generate_headline(titles):
-    titles_text = "\n".join(f"- {t}" for t in titles[:40])
-    prompt = f"""너는 공공 IT 시장 리서치 애널리스트다.
-아래 공고/뉴스 제목들만 근거로, 오늘자 브리핑의 헤드라인을 작성해라.
-- headline: 임팩트 있는 한 줄 (예: "AI 예산은 늘고 클라우드는 줄었다 — 10월은 마감 몰빵의 달" 같은 톤), 데이터에 없는 수치는 넣지 마라.
-- subtext: 2문장 이내 부연 설명.
+BRIEFING_RULES = """[작성 원칙]
+- 목록에 있는 사실만 단정한다. 해석·전망 문장은 끝에 "(추정)"을 붙인다.
+- 예산·건수·날짜 숫자는 목록에 적힌 값만 쓴다. 계산하거나 지어내지 않는다.
+- 문장은 짧고 쉽게(초등학생도 이해), 전문용어는 풀어 쓴다.
+- 제품 약어: NF=넷퍼넬(웹 접속 대기열·트래픽 제어), NFA=넷퍼넬API(API 트래픽 제어, 안정화 단계),
+  BM=봇매니저/MB=엠버스터(매크로·봇 차단), LT=로드테스터(부하테스트, 개발 중).
+- 법·규정(청탁금지법, 조달 규정 등) 판단은 단정하지 말고 "확인 필요"로 쓴다."""
 
-[제목 목록]
-{titles_text}
 
-JSON으로만 출력: {{"headline": "...", "subtext": "..."}}
+def generate_headline(items):
+    """items: 문자열 목록(제목) 또는 '제목 · 기관 · 예산 · 마감 · 연관도' 형태의 한 줄 요약 목록"""
+    items_text = "\n".join(f"- {t}" for t in items[:40])
+    prompt = f"""너는 공공 IT 시장 리서치 애널리스트다. 아래 오늘의 공고·과제·뉴스 목록만 근거로 데일리 브리핑 헤드라인을 써라.
+{BRIEFING_RULES}
+
+[출력]
+- headline: 오늘 가장 중요한 흐름 한 줄 (25자 내외)
+- subtext: 왜 중요한지 1~2문장
+- points: 오늘의 핵심 3가지. 각 항목 = 사실 1문장(기관·사업명·예산/마감 등 구체값 포함) + 필요하면 짧은 해석. 50자 내외.
+
+[목록]
+{items_text}
+
+JSON으로만 출력: {{"headline": "...", "subtext": "...", "points": ["...", "...", "..."]}}
 """
     text, err = _call(prompt, json_mode=True)
     if err:
         return None, err
-    return _parse_json(text, None), None
+    obj = _parse_json(text, None)
+    if isinstance(obj, dict):
+        obj["points"] = [str(p).strip() for p in (obj.get("points") or []) if str(p).strip()][:3]
+    return obj, None
 
 
 # ------------------------------------------------------------
-# 6. 오늘의 핵심 이슈 카드 — AI가 직접 클러스터링해서 테마 3~4개 생성
+# 6. 오늘의 핵심 이슈 카드 — 테마별로 묶고 '우리 사업 영향'까지
 # ------------------------------------------------------------
 def generate_key_issues(items_text, n=4):
-    prompt = f"""아래는 오늘 기준 연관도가 높은 공공 IT 공고/뉴스 목록이다.
-이 목록을 분석해서 핵심 이슈 테마 {n}개로 묶어라. 각 테마마다:
-- theme: 테마명 (10자 내외)
-- impact: "매우높음" | "높음" | "보통" | "낮음" 중 하나 (이 테마가 사업 기회에 미치는 영향도)
-- confidence: "High" | "Medium" | "Low" (근거 자료의 신뢰도)
-- summary: 1문장 핵심 요약
-- count: 이 테마에 해당하는 항목 수(목록 기준으로 추정)
+    prompt = f"""아래는 오늘 기준 연관도가 높은 공공 IT 공고·과제·뉴스 목록이다. 핵심 이슈 테마 {n}개로 묶어라.
+{BRIEFING_RULES}
+
+각 테마:
+- theme: 테마명 (10자 내외, 명사형)
+- impact: "매우높음" | "높음" | "보통" | "낮음" (자사 사업 기회 관점의 영향도)
+- confidence: "High" | "Medium" | "Low" (근거 자료의 양·확실성)
+- count: 이 테마에 묶은 목록 항목 수 (실제로 센 값)
+- summary: 무슨 일이 있는지 사실 1문장 (대표 기관·사업명 포함)
+- biz_impact: 우리 사업 영향 1문장 (해석이면 끝에 "(추정)")
+- products: 관련 제품 약어 배열 (예: ["NF","BM"]), 없으면 []
 
 [목록]
 {items_text}
 
 JSON 배열로만 출력.
 """
-    text, err = _call(prompt, json_mode=True)
+    text, err = _call(prompt, json_mode=True, max_tokens=3000)
     if err:
         return [], err
-    return _parse_json(text, []), None
+    res = _parse_json(text, [])
+    return (res if isinstance(res, list) else []), None
+
+
+# ------------------------------------------------------------
+# 6-2. 제품별 대응 가이드 — 관련 이슈 / 우리 사업 영향 / 지금 할 일
+# ------------------------------------------------------------
+def generate_product_guide(product_blocks):
+    """product_blocks: {제품약어: {"name":..., "desc":..., "items":[한 줄 요약...]}}
+    반환: ({제품약어: {"issue":..., "impact":..., "actions":[...], "none": bool}}, 오류)"""
+    blocks_txt = []
+    for code, b in product_blocks.items():
+        lines = "\n".join(f"  - {x}" for x in b.get("items", [])[:12]) or "  - (관련 항목 없음)"
+        blocks_txt.append(f"[{code}] {b.get('name', '')} — {b.get('desc', '')}\n{lines}")
+    prompt = f"""너는 에스티씨랩 공공사업팀의 영업 전략 담당이다. 제품별로 오늘 연결된 공고·과제·뉴스를 보고 대응 가이드를 써라.
+{BRIEFING_RULES}
+
+제품마다:
+- issue: 관련 이슈 — 어떤 공고·과제·뉴스가 걸렸는지 1문장 (사업명·기관 그대로)
+- impact: 우리 사업 영향 1~2문장 (해석이면 끝에 "(추정)")
+- actions: 지금 할 일 1~2개 (담당자가 바로 할 수 있는 구체 행동: 원문·제안요청서 확인, 사전규격 의견 제출,
+  수요기관 담당 부서 확인, 레퍼런스·제안자료 준비, 마감일 일정 등록 등. 제품 성숙도(NFA 안정화·LT 개발 중)를 고려)
+- none: 관련 항목이 없거나 억지 연결뿐이면 true (그때 issue/impact/actions는 빈 값)
+억지로 끼워 맞추지 마라. 관련성이 약하면 none=true.
+
+{chr(10).join(blocks_txt)}
+
+JSON 객체로만 출력: {{"NF": {{"issue": "...", "impact": "...", "actions": ["..."], "none": false}}, ...}}
+"""
+    text, err = _call(prompt, json_mode=True, max_tokens=3000)
+    if err:
+        return {}, err
+    res = _parse_json(text, {})
+    out = {}
+    if isinstance(res, dict):
+        for code, v in res.items():
+            if not isinstance(v, dict):
+                continue
+            acts = v.get("actions") or []
+            if isinstance(acts, str):
+                acts = [acts]
+            out[str(code)] = {
+                "issue": str(v.get("issue") or "").strip(),
+                "impact": str(v.get("impact") or "").strip(),
+                "actions": [str(a).strip() for a in acts if str(a).strip()][:3],
+                "none": bool(v.get("none")) or not str(v.get("issue") or "").strip(),
+            }
+    return out, None
 
 
 # ------------------------------------------------------------
@@ -377,8 +448,8 @@ JSON으로 출력: {{"biz": [{{"text": "...", "related_title": "..."}}, ...], "r
 # ------------------------------------------------------------
 def generate_news_digest(titles):
     titles_text = "\n".join(f"- {t}" for t in titles[:60])
-    prompt = f"""아래 오늘의 IT 뉴스 제목들을 분석해서 3~4문장으로 종합 요약해라.
-제목에 없는 내용은 추측하지 말고, 공공 IT 영업/R&D 관점에서 어떤 의미가 있는지 짚어줘라.
+    prompt = f"""아래 오늘의 IT 뉴스 제목들을 분석해서 3~4문장으로 종합 분석해라.
+제목에 없는 내용은 추측하지 말고, 공공 IT 영업/R&D 관점에서 어떤 의미가 있는지 짚어줘라. 해석 문장은 끝에 "(추정)".
 
 [제목 목록]
 {titles_text}

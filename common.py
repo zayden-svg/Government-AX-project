@@ -132,6 +132,80 @@ def is_mois_noise(agency, title):
 
 
 # ------------------------------------------------------------
+# 같은 공고 판별 (연장·재공고·정정, 기관 게시판 ↔ 조달청 중복을 하나로)
+# ------------------------------------------------------------
+AGENCY_ALIASES = {
+    "NIPA": "정보통신산업진흥원", "KERIS": "한국교육학술정보원", "AIHub": "한국지능정보사회진흥원(AIHub)",
+    "IRIS": "범부처통합연구지원시스템(IRIS)", "NTIS": "국가과학기술지식정보서비스(NTIS)",
+    "TIPA": "중소기업기술정보진흥원", "KIAT": "한국산업기술진흥원", "INNOPOLIS": "연구개발특구진흥재단",
+    "KISA": "한국인터넷진흥원", "IITP": "정보통신기획평가원(IITP)",
+}
+_SERIES_PREFIX_RE = re.compile(r"^\s*(?:[\[\(【<〈［][^\]\)】>〉］]{0,30}[\]\)】>〉］]\s*)+")
+_SERIES_MARKER_RES = [
+    re.compile(r"(재|연장|정정|변경|수정|추가|긴급)\s*(공고|공모|입찰|모집)"),   # '연장 공고' → '공고'까지 함께 제거
+    re.compile(r"(마감|기간|접수|신청)\s*(연장|변경)"),
+    re.compile(r"공고|공모|안내|재입찰|연장|정정"),
+]
+
+
+def full_agency(name):
+    n = str(name or "").strip()
+    return AGENCY_ALIASES.get(n, n)
+
+
+def series_title(title):
+    """'[조달청 긴급입찰 재공고] OO 용역' · 'OO 모집 연장 공고' → 같은 사업이면 같은 글자열"""
+    t = _SERIES_PREFIX_RE.sub("", str(title or ""))
+    for rx in _SERIES_MARKER_RES:
+        t = rx.sub("", t)
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", t).lower()
+
+
+def owner_org(agency, dept=""):
+    """조달청 공고는 실제 발주(수요)기관 기준, 나머지는 게시 기관 기준"""
+    a = full_agency(agency)
+    if a.startswith("조달청") and str(dept or "").strip():
+        return str(dept).strip()
+    return a
+
+
+def family_key(agency, dept, title):
+    org = re.sub(r"[^0-9A-Za-z가-힣]", "", owner_org(agency, dept)).lower()
+    return f"{org}|{series_title(title)}"
+
+
+def posting_key(agency, title, reg_date):
+    """공고 고유번호 — 원문 주소가 바뀌어도(링크 수정) 같은 공고면 같은 번호"""
+    import hashlib
+    compact_title = re.sub(r"\s+", "", str(title or ""))
+    base = f"{full_agency(agency)}|{compact_title}|{str(reg_date or '')[:10]}"
+    return hashlib.md5(base.encode("utf-8")).hexdigest()
+
+
+STALE_DAYS = 45   # 마감일이 끝내 확인되지 않은 공고는 등록 후 45일이 지나면 '마감 추정'으로 숨김
+
+
+def is_closed(due_date, reg_date, period_end="", today=None):
+    """화면에서 숨길 공고인지: 마감일 지남 / (마감일 모름 + 사업종료일 지남) / (마감일 모름 + 등록 45일 경과)"""
+    from datetime import date as _date, timedelta as _td
+    today = today or _date.today()
+
+    def _d(v):
+        try:
+            return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+    due, reg, pend = _d(due_date), _d(reg_date), _d(period_end)
+    if due:
+        return due < today
+    if pend and pend < today:
+        return True
+    if reg and reg < today - _td(days=STALE_DAYS):
+        return True
+    return False
+
+
+# ------------------------------------------------------------
 # 지역 판별 — 기관명·부서명·제목·본문에 들어간 시·도/시·군 이름으로 판단
 #   (오인식이 잦은 단어는 일부러 뺐음: 대전환→대전, 경기 침체→경기, 강진(지진) 등)
 # ------------------------------------------------------------
@@ -188,7 +262,7 @@ def match_regions(row_regions, selected, include_national=True):
 # ------------------------------------------------------------
 # 메일 알림 기본값
 # ------------------------------------------------------------
-ALERT_MIN_SCORE_DEFAULT = 70
+ALERT_MIN_SCORE_DEFAULT = 50     # 70점 이상은 하루 1건 내외라 50점으로 (메일 등록 화면에서 개인별 조정 가능)
 DEFAULT_SUBSCRIBER = "zayden@stclab.com"
 
 

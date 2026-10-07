@@ -12,9 +12,11 @@ import streamlit as st
 from common import (
     PRODUCT_KEYWORDS, INTEGRATED_RND_DOMAINS, PRODUCT_TO_DOMAIN, PROCUREMENT_BOOST_KEYWORDS,
     COMPETITOR_DEFAULT, is_competitor_match, procurement_boost_score, is_mois_noise,
-    detect_regions, region_label, match_regions, ALL_REGIONS, MY_REGIONS_DEFAULT, NATIONAL_LABEL,
+    detect_regions, region_label, ALL_REGIONS, NATIONAL_LABEL,
     DEFAULT_NEWS_KEYWORDS, SOLUTION_NEWS_KEYWORDS, ALERT_MIN_SCORE_DEFAULT, validate_email,
+    is_closed, family_key, owner_org, competitor_variants,
 )
+from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product
 from ai_utils import (
     is_ai_ready, generate_summary, recommend_keywords,
     generate_news_digest, score_news_relevance,
@@ -34,7 +36,7 @@ from store import (
 )
 from briefing_batch import (
     K_NEWS_DEFAULT, K_NEWS_SRC10, K_NEWS_SOLUTION, K_NEWS_SIMPLE, K_REC_KEYWORDS,
-    K_HEADLINE, K_ISSUES, K_DIGEST, K_PRODUCT_AI, K_META,
+    K_HEADLINE, K_ISSUES, K_DIGEST, K_PRODUCT_AI, K_PRODUCT_GUIDE, K_META,
 )
 
 TABLE_NAME = "postings"
@@ -42,66 +44,61 @@ TABLE_NAME = "postings"
 st.set_page_config(page_title="정부 IT 사업 AI 분석 대시보드", page_icon="📋", layout="wide")
 
 # ============================================================
-# 테마 — Streamlit 기본 테마(⋮ 메뉴 → Settings)를 그대로 따른다.
-# 위젯(버튼·입력창·표)은 config.toml의 [theme.light]/[theme.dark]가 자동 처리하고,
-# 직접 그린 HTML 카드만 아래 C 팔레트로 색을 맞춘다. → 다크모드에서 위젯만 흰색으로 남던 문제의 근본 해결
+# 테마 — 화면 오른쪽 위 '🌙 다크모드' 스위치로 전환 (Streamlit 기본 메뉴는 숨김 상태라 직접 제공)
+#   색상: 공공 IT 데일리 브리핑 팔레트 + KRDS 선명한 화면 모드 명암비 기준
+#         (본문 15:1 이상, 제목·라벨 7:1 이상, 버튼·입력칸 윤곽선 4.5:1 이상)
+#   위젯(버튼·입력칸·선택상자·팝오버·탭·표)까지 아래 CSS가 모두 칠하므로 기본 테마와 상관없이 일관됨
 # ============================================================
-def _detect_theme():
+def _system_theme():
     try:
-        th = st.context.theme            # Streamlit 1.46 이상
+        th = st.context.theme            # Streamlit 1.46 이상 — 첫 접속 때 운영체제 설정을 기본값으로
         val = getattr(th, "type", None) or getattr(th, "base", None)
         if val is None and hasattr(th, "get"):
             val = th.get("type") or th.get("base")
-        return "dark" if str(val).lower() == "dark" else "light"
+        return str(val).lower() == "dark"
     except Exception:
-        return "light"
+        return False
 
 
-THEME = _detect_theme()
+if "dark_mode" not in st.session_state:
+    _q = str(st.query_params.get("theme", "")).lower()
+    st.session_state.dark_mode = (_q == "dark") if _q in ("dark", "light") else _system_theme()
+
+
+def _on_theme_change():
+    st.query_params["theme"] = "dark" if st.session_state.dark_mode else "light"   # 새로고침해도 유지
+
+
+THEME = "dark" if st.session_state.dark_mode else "light"
 
 LIGHT = dict(
     bg="#FAFBFD", surface="#FFFFFF", surface2="#F6F8FB", surface3="#EEF3FF",
-    border="#E4E9F0", text="#191F28", text_body="#374151", text_muted="#6B7684",
-    accent="#2D5BFF", accent_soft="#EEF3FF", navy="#191F28", navy_text="#FFFFFF",
-    row_border="#EEEEEE",
+    border="#E4E9F0", border_strong="#C3CAD3", text="#191F28", text_body="#374151", text_muted="#6B7684",
+    accent="#2D5BFF", accent_soft="#EEF3FF", accent_text="#FFFFFF", navy="#191F28", navy_text="#FFFFFF",
+    row_border="#EEEEEE", input_bg="#FFFFFF", highlight="#D92D20",
     danger_bg="#FEE4E2", danger_text="#B42318", danger_border="#D6453D",
     warn_bg="#FEF0C7", warn_text="#93370D", warn_border="#C2410C",
     success_bg="#ECFDF3", success_text="#067647", success_border="#0F9D58",
 )
 DARK = dict(
-    bg="#15171C",
-    surface="#1C1F26",
-    surface2="#242832",
-    surface3="#2E333F",
-    border="#5B6472",
-    text="#D7DCE4",
-    text_body="#F0F2F5",
-    text_muted="#9AA3AE",
-    accent="#5B9BFF",
-    accent_soft="#1E2A44",
-    navy="#0E1116",
-    navy_text="#FFFFFF",
-    row_border="#333945",
-    danger_bg="#2B1113",
-    danger_text="#FF8A80",
-    danger_border="#B4454A",
-    warn_bg="#2B2210",
-    warn_text="#FFCF5C",
-    warn_border="#D98A1F",
-    success_bg="#0F241A",
-    success_text="#6FE2A0",
-    success_border="#2E9E5B",
+    bg="#11151C", surface="#171C25", surface2="#1E2430", surface3="#283041",
+    border="#343C49", border_strong="#7A8494", text="#F5F7FA", text_body="#F1F3F6", text_muted="#B3BAC5",
+    accent="#8DBCDA", accent_soft="#1D2E3A", accent_text="#0B1620", navy="#252D3B", navy_text="#F5F7FA",
+    row_border="#2A313C", input_bg="#1E2430", highlight="#FFD45C",
+    danger_bg="#3A2420", danger_text="#F0907E", danger_border="#DE7A67",
+    warn_bg="#382D1C", warn_text="#E6B270", warn_border="#D9A15E",
+    success_bg="#1E3129", success_text="#8FD0AE", success_border="#82C4A2",
 )
 
-
 C = DARK if THEME == "dark" else LIGHT
+px.defaults.template = "plotly_dark" if THEME == "dark" else "plotly_white"
 
 
 def _tc(light_hex, dark_hex):
     return dark_hex if THEME == "dark" else light_hex
 
 
-tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([7.0, 1.5, 1.3, 1])
+tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([6.6, 1.5, 1.3, 1.4])
 with tcol_pdf:
     pdf_top_slot = st.empty()
     pdf_top_slot.markdown(
@@ -129,7 +126,7 @@ with tcol_mail:
                        else "ℹ️ 아직 등록되지 않은 주소입니다.")
         mail_regions = st.multiselect(
             "받을 지역 (비우면 전체)", ALL_REGIONS,
-            default=(current_sub["regions"] if current_sub else MY_REGIONS_DEFAULT),
+            default=(current_sub["regions"] if current_sub else []),
             key=f"alert_regions_{mail_email or 'new'}",
         )
         mail_national = st.checkbox(
@@ -162,274 +159,159 @@ with tcol_mail:
 
 
 with tcol_dark:
-    st.markdown(
-        f"<div style='text-align:center;font-size:11px;color:{C['text_muted']};padding-top:9px;' "
-        f"title='우측 상단 ⋮ 메뉴 → Settings → Theme에서 라이트/다크 전환'>"
-        f"{'🌙 다크' if THEME == 'dark' else '☀️ 라이트'}</div>",
-        unsafe_allow_html=True,
-    )
+    st.toggle("🌙 다크모드", key="dark_mode", on_change=_on_theme_change,
+              help="화면을 어둡게 바꿉니다. 선택은 주소(URL)에 저장되어 새로고침해도 유지됩니다.")
 
-# 다크모드 전용 CSS (Python 3.11에서도 동작하도록 중첩 f-string을 변수로 분리)
-_DARK_CSS_1 = "" if THEME != "dark" else f"""
-/* [1] elevation 계층: 카드/패널/팝오버가 배경보다 점진적으로 밝아지게 */
-.gt-surface, div[data-testid="stVerticalBlockBorderWrapper"] {{
-    background: {C['surface']} !important;
-    border: 1px solid {C['border']} !important;
-}}
-div[data-testid="stPopover"] > div {{
-    background: {C['surface2']} !important;
-    border: 1px solid {C['border']} !important;
-}}
-
-/* [2] 매직넘버 기준 텍스트 — 헤딩(7:1) / 본문(15:1) 분리 적용 */
-h1, h2, h3, h4,
-[data-testid="stMarkdownContainer"] h1,
-[data-testid="stMarkdownContainer"] h2,
-[data-testid="stMarkdownContainer"] h3,
-[data-testid="stMarkdownContainer"] h4,
-[data-testid="stExpander"] summary p {{
-    color: {C['text']} !important;
-}}
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] span,
-[data-testid="stMarkdownContainer"] li,
-[data-testid="stCaptionContainer"] p,
-[data-testid="stMetricValue"],
-label {{
-    color: {C['text_body']} !important;
-}}
-
-/* [3] 모든 테두리 매직넘버50 기준으로 가시성 확보 (이전엔 거의 안 보였던 부분) */
-div[data-testid="stVerticalBlockBorderWrapper"],
-div[data-testid="stExpander"],
-.gt-surface, .gt-mon-card {{
-    border: 1px solid {C['border']} !important;
-}}
-
-/* [4] 검색창 — 실제 testid 기준 재작성 */
-div[data-testid="stTextInputRootElement"] {{
-    background: #ECEEF1 !important;
-    border: 1.5px solid {C['border']} !important;
-    border-radius: 10px !important;
-}}
-div[data-testid="stTextInputField"] {{
-    color: #000000 !important;
-    background: transparent !important;
-}}
-div[data-testid="stTextInputField"]::placeholder {{
-    color: #5B6472 !important;
-}}
-
-/* 검색 버튼 + 추천 키워드 칩 + AI 추천 키워드 버튼 — secondary 계열 전부 */
-button[data-testid^="stBaseButton-secondary"] {{
-    background: #ECEEF1 !important;
-    border: 1px solid {C['border']} !important;
-}}
-button[data-testid^="stBaseButton-secondary"] p,
-button[data-testid^="stBaseButton-secondary"] span,
-button[data-testid^="stBaseButton-secondary"] div {{
-    color: #000000 !important;
-}}
-
-
-/* [5] 시스템 색상(알림창) — 다크모드 역할 반전: 아이콘/텍스트 밝게, 배경 매우 어둡게 */
-div[data-testid="stAlert"] {{
-    background: {C['surface2']} !important;
-    border: 1px solid {C['border']} !important;
-    border-radius: 10px;
-}}
-div[data-testid="stAlert"] p, div[data-testid="stAlert"] div {{
-    color: {C['text_body']} !important;
-}}
-"""
-_DARK_CSS_2 = "" if THEME != "dark" else f"""
-div[data-testid="stVerticalBlockBorderWrapper"] {{
-    border: 1.5px solid #6B7684 !important;
-}}
-"""
+# ------------------------------------------------------------
+# 화면 CSS — 라이트·다크 모두 같은 규칙에 색 토큰(C)만 바꿔 적용 (위젯까지 전부 덮어 칠함)
+# ------------------------------------------------------------
+_SEC_BTN_BG = C["surface"] if THEME == "light" else C["surface2"]
+_SEC_BTN_TXT = "#111111" if THEME == "light" else C["text"]
+_SEC_BTN_BORDER = "#D7DBE3" if THEME == "light" else C["border_strong"]
 
 st.markdown(
     f"""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
 
+    :root {{ color-scheme: {THEME}; }}
     html, body, .stApp, [class*="css"] {{
         font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Malgun Gothic', sans-serif !important;
-        color: {C['text_body']} !important;
+        color: {C['text_body']};
         font-size: 16px;
     }}
-    .stApp {{ background: {C['bg']} !important; }}
-
-    .block-container {{
-        max-width: 1280px;
-        padding-top: 1rem;
-        padding-bottom: 2.4rem;
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stHeader"] {{
+        background: {C['bg']} !important;
     }}
+    .block-container {{ max-width: 1280px; padding-top: 1rem; padding-bottom: 2.4rem; }}
 
-    h1 {{ font-size: 26px; }}
-    h2 {{ font-size: 22px; }}
-    h3 {{ font-size: 19px; }}
-    h4 {{ font-size: 17px; }}
-    h1, h2, h3, h4,
-    [data-testid="stMarkdownContainer"] h1,
-    [data-testid="stMarkdownContainer"] h2,
-    [data-testid="stMarkdownContainer"] h3,
-    [data-testid="stMarkdownContainer"] h4 {{
+    h1 {{ font-size: 26px; }} h2 {{ font-size: 22px; }} h3 {{ font-size: 19px; }} h4 {{ font-size: 17px; }}
+    h1, h2, h3, h4, h5,
+    [data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2,
+    [data-testid="stMarkdownContainer"] h3, [data-testid="stMarkdownContainer"] h4,
+    [data-testid="stMarkdownContainer"] h5 {{
         letter-spacing: -0.02em; font-weight: 800; line-height: 1.4; color: {C['text']} !important;
     }}
     h4 {{ margin: 16px 0 8px; }}
-
     p, span, div, label {{ font-size: 15.5px; }}
+    /* 직접 그린 카드·표 안의 이름 없는 글자는 부모 글자 크기를 따름 (위 기본 크기 15.5px가 끼어들지 않게) */
+    [class^="gt-"] span:not([class]), [class*=" gt-"] span:not([class]),
+    [class^="gt-"] div:not([class]), [class*=" gt-"] div:not([class]),
+    [class^="gt-"] b, [class^="gt-"] a:not([class]) {{ font-size: inherit; }}
+    [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] span, [data-testid="stText"],
+    [data-testid="stWidgetLabel"] p, label {{ color: {C['text_body']}; }}
+    [data-testid="stMarkdownContainer"] strong {{ color: {C['text']}; }}
+    .stCaption, [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {{
+        font-size: 13.5px !important; color: {C['text_muted']} !important;
+    }}
+    a {{ color: {C['accent']}; }}
+    hr {{ border-color: {C['border']} !important; }}
 
     button:focus, button:focus-visible, button:active,
-    [tabindex]:focus, [tabindex]:focus-visible,
-    a:focus, a:focus-visible,
-    div[data-testid="stButton"] button:focus,
-    div[data-testid="stPopover"] button:focus,
-    div[data-testid="stPopover"] button:focus-visible {{
-        outline: none !important;
-        box-shadow: none !important;
+    [tabindex]:focus, [tabindex]:focus-visible, a:focus, a:focus-visible {{
+        outline: none !important; box-shadow: none !important;
     }}
 
-    /* === 수정 #1: 탭 글씨 — 다크모드에서 opacity 때문에 회색으로 보이던 문제 보정 ===
-           ↓ 비활성 탭도 선명하게 보이게 하려면 아래 opacity 숫자를 0~1 사이로 조절하면 됨 */
+    /* 탭 */
+    div[data-testid="stTabs"] [data-baseweb="tab-list"] {{ border-bottom: 1px solid {C['border']}; }}
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {{ background: {C['accent']} !important; }}
+    div[data-testid="stTabs"] [data-baseweb="tab-border"] {{ background: {C['border']} !important; }}
     button[data-baseweb="tab"] {{
-        font-weight: 700;
-        color: {C['text']} !important;
-        opacity: {_tc('0.55', '0.8')};
-        font-size: 16px;
-        padding: 8px 14px;
-        transition: opacity .15s ease;
+        font-weight: 700; opacity: {_tc('0.6', '0.78')}; font-size: 16px; padding: 8px 14px;
+        background: transparent !important; transition: opacity .15s ease;
     }}
+    button[data-baseweb="tab"] p, button[data-baseweb="tab"] div {{ color: {C['text']} !important; }}
     button[data-baseweb="tab"]:hover {{ opacity: 0.95; }}
-    button[data-baseweb="tab"][aria-selected="true"] {{
-        color: {C['text']} !important;
-        opacity: 1 !important;
-        font-weight: 800 !important;
-    }}
-    div[data-testid="stTabs"] button[data-baseweb="tab"] p,
-    div[data-testid="stTabs"] button[data-baseweb="tab"] div,
-    div[data-testid="stTabs"] button[data-baseweb="tab"] {{
-        color: {_tc(C['text'], '#FFFFFF')} !important;
-    }}
+    button[data-baseweb="tab"][aria-selected="true"] {{ opacity: 1 !important; font-weight: 800 !important; }}
 
-    div[data-testid="stExpander"] {{
-        background: {C['surface']} !important;
-        border: 1px solid {C['border']} !important;
-        border-radius: 10px;
-        margin-bottom: 10px;
-    }}
-    div[data-testid="stExpander"] summary {{
-        background: {C['surface2']} !important;
-        border-radius: 10px 10px 0 0;
-        font-weight: 700;
-        font-size: 16px;
-        padding: 10px 14px !important;
-        color: {C['text']} !important;
-    }}
+    /* 접기/펼치기 */
+    div[data-testid="stExpander"] {{ background: {C['surface']} !important; border: 1px solid {C['border']} !important;
+        border-radius: 10px; margin-bottom: 10px; }}
+    div[data-testid="stExpander"] details {{ border: none !important; background: transparent !important; }}
+    div[data-testid="stExpander"] summary {{ background: {C['surface2']} !important; border-radius: 10px;
+        font-weight: 700; font-size: 16px; padding: 10px 14px !important; color: {C['text']} !important; }}
+    div[data-testid="stExpander"] summary p, div[data-testid="stExpander"] summary span {{ color: {C['text']} !important; }}
+    div[data-testid="stExpander"] summary svg {{ fill: {C['text_muted']} !important; color: {C['text_muted']} !important; }}
+    div[data-testid="stExpander"] details[open] > summary {{ border-bottom: 1px solid {C['border']}; border-radius: 10px 10px 0 0; }}
 
-    div[data-testid="stExpander"][open] summary {{ border-bottom: 1px solid {C['border']}; }}
+    /* 테두리 상자 */
+    div[data-testid="stVerticalBlockBorderWrapper"] {{ background: {C['surface']} !important;
+        border: 1px solid {C['border']} !important; border-radius: 10px !important; }}
+    div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {{ gap: 0.3rem !important; }}
+    div[data-testid="stForm"] {{ background: {C['surface']} !important; border: 1px solid {C['border']} !important; border-radius: 10px; }}
 
-    div[data-testid="stVerticalBlockBorderWrapper"] {{
-        background: {C['surface']} !important;
-        border: 1px solid {C['border']} !important;
-        border-radius: 10px !important;
+    /* 버튼 — 보조(secondary)·주요(primary)·내려받기·링크 버튼 */
+    .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button, .stLinkButton > a {{
+        border-radius: 8px; font-weight: 700; font-size: 13px; padding: 0.35rem 0.8rem; transition: all .15s ease;
     }}
-    div[data-testid="stVerticalBlockBorderWrapper"] p,
-    div[data-testid="stVerticalBlockBorderWrapper"] span,
-    div[data-testid="stVerticalBlockBorderWrapper"] div {{ color: {C['text_body']}; }}
+    .stButton > button[kind="secondary"], .stDownloadButton > button, .stFormSubmitButton > button,
+    .stLinkButton > a, button[data-testid^="stBaseButton-secondary"] {{
+        background: {_SEC_BTN_BG} !important; border: 1px solid {_SEC_BTN_BORDER} !important; color: {_SEC_BTN_TXT} !important;
+    }}
+    .stButton > button[kind="secondary"] p, .stButton > button[kind="secondary"] span, .stButton > button[kind="secondary"] div,
+    .stDownloadButton > button p, .stFormSubmitButton > button p, .stLinkButton > a p,
+    button[data-testid^="stBaseButton-secondary"] p {{ color: {_SEC_BTN_TXT} !important; }}
+    .stButton > button[kind="secondary"]:hover, .stDownloadButton > button:hover, .stFormSubmitButton > button:hover,
+    .stLinkButton > a:hover {{ border-color: {C['accent']} !important; }}
+    .stButton > button[kind="secondary"]:hover p, .stDownloadButton > button:hover p, .stLinkButton > a:hover p {{ color: {C['accent']} !important; }}
+    .stButton > button[kind="primary"], button[data-testid^="stBaseButton-primary"] {{
+        background: {C['accent']} !important; border: 1px solid {C['accent']} !important; color: {C['accent_text']} !important;
+    }}
+    .stButton > button[kind="primary"] p, .stButton > button[kind="primary"] span,
+    button[data-testid^="stBaseButton-primary"] p {{ color: {C['accent_text']} !important; }}
+    .stButton > button:disabled {{ opacity: .45; }}
 
-    div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {{
-        gap: 0.3rem !important;
+    /* 입력칸 */
+    div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="textarea"] {{
+        background: {C['input_bg']} !important; border-color: {_tc('#D7DBE3', C['border_strong'])} !important;
+        border-radius: 8px !important; box-shadow: none !important;
     }}
+    div[data-testid="stTextInput"] div[data-baseweb="input"] {{ border: 1.5px solid {_tc('#D7DBE3', C['border_strong'])} !important; }}
+    div[data-testid="stTextInput"]:focus-within div[data-baseweb="input"] {{
+        border-color: {C['accent']} !important; box-shadow: 0 0 0 2px {C['accent_soft']} !important; }}
+    input, textarea {{ background: transparent !important; color: {C['text']} !important; caret-color: {C['text']}; }}
+    input::placeholder, textarea::placeholder {{ color: {C['text_muted']} !important; opacity: 1 !important; }}
 
-    /* === 수정 #2: 핵심동향 이슈카드 — 팝오버(제목) 바로 아래 간격을 추가로 눌러줌 ===
-           ↓ 간격을 더 좁히거나 넓히려면 margin-bottom 숫자(px)만 바꾸면 됨 */
-    div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="element-container"] {{
-        margin-bottom: 0 !important;
-    }}
-    div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stPopover"] {{
-    margin-bottom: -15px !important;
-    }}
-    div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stPopover"] button {{
-    padding-bottom: 0 !important;
-    line-height: 1.15 !important;
-    }}
+    /* 선택상자·여러개 선택 + 펼쳐지는 목록 */
+    div[data-baseweb="select"] > div {{ background: {C['input_bg']} !important; border-color: {_tc('#D7DBE3', C['border_strong'])} !important; }}
+    div[data-baseweb="select"] span, div[data-baseweb="select"] div {{ color: {C['text']}; }}
+    div[data-baseweb="select"] svg {{ fill: {C['text_muted']}; }}
+    span[data-baseweb="tag"] {{ background: {C['accent_soft']} !important; border: 1px solid {C['accent']}; }}
+    span[data-baseweb="tag"] span {{ color: {C['text']} !important; }}
+    div[data-baseweb="popover"] ul, div[data-baseweb="popover"] [role="listbox"], div[data-baseweb="menu"] {{
+        background: {C['surface2']} !important; border: 1px solid {C['border']}; }}
+    div[data-baseweb="popover"] li, div[data-baseweb="popover"] [role="option"] {{ background: transparent; color: {C['text_body']} !important; }}
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="popover"] [role="option"][aria-selected="true"] {{ background: {C['surface3']} !important; }}
+    div[data-baseweb="tooltip"] div {{ background: {C['navy']} !important; color: {C['navy_text']} !important; }}
 
-    /* === 수정 #3: 버튼(kind=secondary) 전부 흰 배경 + 검정 글씨로 전역 고정 ===
-           토글카드(render_toggle_card)처럼 이미 자체 색상 CSS가 걸린 버튼은
-           선택자가 더 구체적이라 이 규칙에 덮이지 않음 */
-    .stButton > button {{ border-radius: 8px; font-weight: 700; font-size: 13px; padding: 0.35rem 0.8rem; transition: all .15s ease; }}
-    .stButton > button[kind="primary"] {{ background: {C['accent']} !important; border: 1px solid {C['accent']} !important; color: #fff !important; }}
-    .stButton > button[kind="primary"] p,
-    .stButton > button[kind="primary"] span {{ color: #fff !important; }}
-    .stButton > button[kind="secondary"] {{
-        background: #FFFFFF !important;
-        border: 1px solid #D7DBE3 !important;
-        color: #111111 !important;
-    }}
-    .stButton > button[kind="secondary"] p,
-    .stButton > button[kind="secondary"] span,
-    .stButton > button[kind="secondary"] div {{ color: #111111 !important; }}
-    .stButton > button[kind="secondary"]:hover {{ border-color: {C['accent']}; }}
-    .stButton > button[kind="secondary"]:hover p,
-    .stButton > button[kind="secondary"]:hover span {{ color: {C['accent']} !important; }}
+    /* 슬라이더·토글·체크박스 글자 */
+    div[data-testid="stSlider"] [data-testid="stTickBarMin"], div[data-testid="stSlider"] [data-testid="stTickBarMax"],
+    div[data-testid="stSlider"] div[data-testid="stSliderThumbValue"] {{ color: {C['text_muted']} !important; }}
+    div[data-testid="stCheckbox"] label p, div[data-testid="stToggle"] label p {{ color: {C['text_body']} !important; }}
 
-    div[data-testid="stTextInput"] div[data-baseweb="input"],
-    div[data-testid="stTextInput"] div[data-baseweb="base-input"] {{
-        background: {C['surface']} !important;
-        border: 1.5px solid {_tc('#D7DBE3', '#5B636F')} !important;
-        border-radius: 8px !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }}
-    div[data-testid="stTextInput"]:focus-within div[data-baseweb="input"],
-    div[data-testid="stTextInput"]:focus-within div[data-baseweb="base-input"] {{
-        border-color: {C['accent']} !important;
-        box-shadow: 0 0 0 2px {C['accent_soft']} !important;
-    }}
-    div[data-testid="stTextInput"] input {{
-        background: transparent !important;
-        color: {C['text']} !important;
-        outline: none !important;
-        box-shadow: none !important;
-    }}
-    div[data-testid="stTextInput"] input::placeholder,
-    div[data-baseweb="input"] input::placeholder {{
-        color: {C['text_muted']} !important;
-        opacity: 1 !important;
-    }}
-    div[data-testid="stTextArea"] textarea {{
-        background: {C['surface']} !important;
-        color: {C['text']} !important;
-        border: 1px solid {C['border']} !important;
-    }}
+    /* 팝오버(작은 창)·대화상자 */
+    div[data-testid="stPopoverBody"], div[data-baseweb="popover"] > div {{
+        background: {C['surface2']} !important; border: 1px solid {C['border']} !important; color: {C['text_body']}; }}
+    div[role="dialog"] {{ background: {C['surface']} !important; color: {C['text_body']}; border: 1px solid {C['border']}; }}
+    div[role="dialog"] h2, div[role="dialog"] h3, div[role="dialog"] h4 {{ color: {C['text']} !important; }}
 
+    /* 라디오(칩 형태) */
     div[role="radiogroup"] {{ gap: 8px; flex-wrap: wrap; }}
     div[role="radiogroup"] label {{
-        display: flex !important;
-        align-items: center;
-        gap: 6px;
-        background: {C['surface']} !important;
-        border: 1.5px solid {C['border']};
-        border-radius: 999px;
-        padding: 5px 16px;
-        font-size: 13px;
-        color: {C['text_body']} !important;
+        display: flex !important; align-items: center; gap: 6px; background: {C['surface']} !important;
+        border: 1.5px solid {_tc(C['border'], C['border_strong'])}; border-radius: 999px; padding: 5px 16px; font-size: 13px;
         transition: all .15s ease;
     }}
     div[role="radiogroup"] label p {{ margin: 0; color: {C['text_body']} !important; }}
-    div[role="radiogroup"] label:has(input:checked) {{
-        border-color: {C['accent']};
-        background: {C['surface3']} !important;
-        font-weight: 700;
-    }}
+    div[role="radiogroup"] label:has(input:checked) {{ border-color: {C['accent']}; background: {C['surface3']} !important; font-weight: 700; }}
     div[role="radiogroup"] label:has(input:checked) p {{ color: {C['text']} !important; }}
 
-    .stDataFrame [role="columnheader"] {{ background: {C['navy']} !important; color: {C['navy_text']} !important; font-weight: 700 !important; font-size: 14px !important; }}
-    .stDataFrame [role="gridcell"] {{ font-size: 14px !important; color: {C['text_body']} !important; background: {C['surface']} !important; }}
-    .stDataFrame a {{ color: {C['accent']} !important; font-weight: 600; text-decoration: none; }}
-    .stDataFrame a:hover {{ text-decoration: underline; }}
+    /* 알림 상자 */
+    div[data-testid="stAlert"], div[data-testid="stAlertContainer"] {{ border-radius: 10px; font-size: 16px;
+        background: {C['surface2']} !important; border: 1px solid {C['border']} !important; }}
+    div[data-testid="stAlert"] p, div[data-testid="stAlert"] div, div[data-testid="stAlertContainer"] p {{ color: {C['text_body']} !important; }}
+    div[data-testid="stSpinner"] p, div[data-testid="stSpinner"] div {{ color: {C['text_muted']} !important; }}
 
     .news-row {{ padding: 6px 10px; border-radius: 8px; margin-bottom: 2px; transition: background .15s; font-size: 14.5px; }}
     .news-row:hover {{ background: {C['surface2']}; }}
@@ -440,28 +322,9 @@ st.markdown(
     .gt-muted {{ color: {C['text_muted']}; }}
     .gt-text {{ color: {C['text']}; }}
     .gt-body {{ color: {C['text_body']}; }}
+    .gt-hl {{ color: {C['highlight']} !important; font-weight: 800; }}
 
-    .gt-ai-oneline {{
-        display: flex; align-items: flex-start; gap: 6px;
-        background: {C['accent_soft']}; border-left: 3px solid {C['accent']};
-        border-radius: 6px; padding: 5px 9px; margin: 4px 0 6px;
-        font-size: 12.5px; color: {C['accent']}; font-weight: 600; line-height: 1.5;
-    }}
-
-    div[data-testid="stAlert"] {{ border-radius: 10px; font-size: 16px; background: {C['surface2']} !important; border: 1px solid {C['border']} !important; }}
-    div[data-testid="stAlert"] p, div[data-testid="stAlert"] div {{ color: {C['text_body']} !important; }}
-
-    .stCaption, [data-testid="stCaptionContainer"] {{ font-size: 13.5px !important; color: {C['text_muted']} !important; }}
-
-    a {{ color: {C['accent']}; }}
-
-    .gt-report-sheet {{
-        background: {C['surface']};
-        margin: 0 0 14px;
-        padding: 18px 22px;
-        border-radius: 10px;
-        border: 1px solid {C['border']};
-    }}
+    .gt-report-sheet {{ background: {C['surface']}; margin: 0 0 14px; padding: 18px 22px; border-radius: 10px; border: 1px solid {C['border']}; }}
     .gt-report-meta {{ font-size: 11px; color: {C['text_muted']}; font-weight: 700; letter-spacing: .08em; }}
     .gt-stat-grid {{ display:flex; border-top:1px solid {C['border']}; border-bottom:1px solid {C['border']}; margin: 12px 0 0; }}
     .gt-stat-box {{ flex:1; text-align:center; padding:14px 8px; border-right:1px solid {C['border']}; }}
@@ -469,24 +332,21 @@ st.markdown(
     .gt-stat-num {{ font-size:26px; font-weight:800; color:{C['text']}; }}
     .gt-stat-label {{ font-size:11px; color:{C['text_muted']}; margin-top:4px; line-height:1.4; }}
 
-    /* === 수정 #4: mc2/mc3 네이티브 컨테이너 박스 스타일 (st.container(key=...)에 적용) === */
-    .st-key-mc2_kw_box, .st-key-mc3_comp_box {{
-        background:{C['surface']}; border:1px solid {C['border']}; border-radius:10px;
-        padding:14px 16px; height:100%;
+    /* IT 뉴스 상단 카드 3개 — 같은 높이 */
+    .st-key-mc1_mention_box, .st-key-mc2_kw_box, .st-key-mc3_comp_box {{
+        background:{C['surface']}; border:1px solid {C['border']}; border-radius:10px; padding:14px 16px;
+        height: 214px; overflow: hidden; box-sizing: border-box;
     }}
-
     .gt-mon-card {{ background:{C['surface']}; border:1px solid {C['border']}; border-radius:10px; padding:14px 16px; height:100%; display:flex; flex-direction:column; gap:6px; overflow:hidden; box-sizing:border-box; }}
     .gt-mon-card-label {{ font-size:10.5px; font-weight:700; letter-spacing:.06em; color:{C['text_muted']}; text-transform:uppercase; white-space:normal; word-break:keep-all; }}
     .gt-mon-card-value {{ font-size:24px; font-weight:800; color:{C['text']}; margin-top:4px; white-space:normal; word-break:keep-all; }}
     .gt-mon-delta {{ font-size:11px; color:{C['success_text']}; font-weight:700; margin-left:5px; }}
-    .gt-mon-bar-row {{ display:flex; align-items:center; gap:8px; font-size:12px; margin-top:7px; color:{C['text_body']}; flex-wrap:wrap; }}
-    .gt-mon-bar-track {{ flex:1; height:6px; border-radius:4px; background:{C['surface3']}; overflow:hidden; min-width:40px; }}
+    .gt-mon-bar-row {{ display:flex; align-items:center; gap:8px; font-size:12.5px; margin-top:10px; color:{C['text_body']}; }}
+    .gt-mon-bar-track {{ flex:1; height:8px; border-radius:4px; background:{C['surface3']}; overflow:hidden; min-width:40px; }}
     .gt-mon-bar-fill {{ height:100%; border-radius:4px; }}
     .gt-mon-source-row {{ display:flex; align-items:center; gap:8px; font-size:12.5px; padding:3px 0; color:{C['text_body']}; }}
     .gt-mon-dot {{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }}
     .gt-mon-main {{ background:{C['surface']}; border:1px solid {C['border']}; border-radius:10px; overflow:hidden; }}
-    .gt-mon-live {{ display:flex; justify-content:flex-end; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid {C['border']}; font-size:12px; color:{C['text_muted']}; font-weight:700; }}
-    .gt-mon-live-dot {{ width:7px; height:7px; border-radius:50%; background:{C['success_text']}; display:inline-block; margin-right:5px; box-shadow:0 0 0 3px {C['success_bg']}; }}
     .gt-mon-row {{ display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid {C['row_border']}; transition:background .15s; }}
     .gt-mon-row:last-child {{ border-bottom:none; }}
     .gt-mon-row:hover {{ background:{C['surface2']}; }}
@@ -501,32 +361,56 @@ st.markdown(
     .gt-news-card:hover {{ background:{C['surface2']}; }}
     .gt-news-card-title {{ flex:1; font-size:13px; font-weight:600; color:{C['text']}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }}
     .gt-news-card-right {{ display:flex; align-items:center; gap:8px; flex-shrink:0; }}
-    /* === 수정 #5: 뉴스 수집처별 보기 전용 — 로고/뱃지 없이 제목 전체가 줄바꿈되며 보이는 변형 === */
     .gt-news-card-title-wrap {{ white-space:normal !important; line-height:1.45; overflow:visible; text-overflow:unset; word-break:keep-all; }}
 
-    div[data-testid="stPopover"] button {{
-        width: 100%;
-        text-align: left !important;
-        background: transparent !important;
-        border: none !important;
-        padding: 0 !important;
-        font-size: 13.5px !important;
-        font-weight: 800 !important;
-        color: {C['text']} !important;
-        justify-content: flex-start !important;
-        white-space: normal !important;
-        line-height: 1.4 !important;
+    /* 글자형 팝오버 버튼 (카드 안 제목·설정 링크) */
+    div[data-testid="stPopover"] > button, div[data-testid="stPopover"] button[data-testid^="stPopoverButton"] {{
+        width: 100%; text-align: left !important; background: transparent !important; border: none !important;
+        padding: 0 !important; font-size: 13.5px !important; font-weight: 800 !important; color: {C['text']} !important;
+        justify-content: flex-start !important; white-space: normal !important; line-height: 1.4 !important;
     }}
-    div[data-testid="stPopover"] button:hover {{
-        color: {C['accent']} !important;
-        text-decoration: underline;
-    }}
+    div[data-testid="stPopover"] button:hover {{ color: {C['accent']} !important; text-decoration: underline; }}
     div[data-testid="stPopover"] button p {{ color: inherit !important; font-size: inherit !important; font-weight: inherit !important; }}
-
     .gt-popover-item {{ padding:10px 6px; border-bottom:1px solid {C['row_border']}; line-height:1.6; }}
     .gt-popover-item:last-child {{ border-bottom:none; }}
 
-    .gt-guide-card-wrap {{ min-height: 178px; display:flex; flex-direction:column; gap:6px; }}
+    /* 표 (통합보기 Ⅲ · 낙찰결과) */
+    .gt-table {{ width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;
+        border:1px solid {C['border']}; border-radius:10px; overflow:hidden; background:{C['surface']}; }}
+    .gt-table th {{ background:{C['navy']}; color:{C['navy_text']}; font-size:11.5px; font-weight:700;
+        padding:9px 8px; text-align:center; white-space:nowrap; }}
+    .gt-table td {{ font-size:12.5px; color:{C['text_body']}; padding:9px 8px; border-top:1px solid {C['row_border']};
+        text-align:center; vertical-align:middle; word-break:keep-all; overflow-wrap:anywhere; line-height:1.45; }}
+    .gt-table td.l {{ text-align:left; }}
+    .gt-table tr:hover td {{ background:{C['surface2']}; }}
+    .gt-table a {{ color:{C['text']}; font-weight:700; text-decoration:none; }}
+    .gt-table a:hover {{ color:{C['accent']}; text-decoration:underline; }}
+    .gt-sub {{ display:block; font-size:10.5px; color:{C['text_muted']}; font-weight:500; margin-top:2px; }}
+    .gt-pill {{ display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:5px; white-space:nowrap; }}
+
+    /* 핵심동향 이슈 카드 */
+    .gt-issue {{ background:{C['surface']}; border:1px solid {C['border']}; border-top:3px solid var(--pri, {C['border_strong']});
+        border-radius:10px; padding:14px 14px 12px; height:100%; box-sizing:border-box; }}
+    .gt-issue-title {{ font-size:15px; font-weight:800; color:{C['text']}; line-height:1.35; margin:0; }}
+    .gt-issue-meta {{ font-size:12px; color:{C['text_muted']}; font-weight:700; margin-top:3px; }}
+    .gt-issue-desc {{ font-size:12.5px; color:{C['text_body']}; line-height:1.6; margin-top:12px; }}
+    .gt-issue-impact {{ font-size:12px; color:{C['text_muted']}; line-height:1.55; margin-top:8px; }}
+    .gt-prod-tag {{ display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:4px;
+        background:{C['accent_soft']}; color:{_tc(C['accent'], C['accent'])}; margin:6px 4px 0 0; }}
+    .gt-est {{ font-size:10px; font-weight:700; padding:0 5px; border-radius:3px; border:1px solid {C['border_strong']};
+        color:{C['text_muted']}; margin-left:4px; white-space:nowrap; }}
+
+    /* 제품별 대응 가이드 */
+    .gt-guide-row {{ display:grid; grid-template-columns: 96px 1fr; gap:4px 12px; font-size:13px; line-height:1.6;
+        padding:8px 2px 2px; }}
+    .gt-guide-row dt {{ color:{C['text_muted']}; font-weight:700; font-size:12px; padding-top:1px; }}
+    .gt-guide-row dd {{ margin:0; color:{C['text_body']}; }}
+    .gt-guide-none {{ font-size:12.5px; color:{C['text_muted']}; padding:6px 2px 2px; }}
+    .gt-guide-item {{ display:flex; gap:8px; align-items:baseline; padding:6px 2px; border-bottom:1px solid {C['row_border']}; font-size:13px; }}
+    .gt-guide-item:last-child {{ border-bottom:none; }}
+    .gt-guide-item a {{ color:{C['text']}; font-weight:600; text-decoration:none; flex:1; }}
+    .gt-guide-item a:hover {{ color:{C['accent']}; text-decoration:underline; }}
+    .gt-guide-meta {{ font-size:11.5px; color:{C['text_muted']}; white-space:nowrap; }}
 
     @media (max-width: 768px) {{
         .block-container {{ padding-left: 0.8rem; padding-right: 0.8rem; padding-top: 0.6rem; }}
@@ -538,15 +422,13 @@ st.markdown(
         .news-row {{ font-size: 13.5px; }}
         .gt-stat-grid {{ flex-wrap: wrap; }}
         .gt-stat-box {{ flex: 1 1 50%; border-bottom: 1px solid {C['border']}; }}
-
+        .gt-table th, .gt-table td {{ font-size: 11px; padding: 7px 4px; }}
+        .gt-guide-row {{ grid-template-columns: 1fr; }}
+        .st-key-mc1_mention_box, .st-key-mc2_kw_box, .st-key-mc3_comp_box {{ height: auto; }}
         div[data-testid="stHorizontalBlock"] {{ flex-direction: column !important; }}
-        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
-            width: 100% !important; flex: 1 1 100% !important; margin-bottom: 6px;
-        }}
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ width: 100% !important; flex: 1 1 100% !important; margin-bottom: 6px; }}
         .gt-keep-row div[data-testid="stHorizontalBlock"] {{ flex-direction: row !important; }}
-        .gt-keep-row div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
-            width: auto !important; margin-bottom: 0;
-        }}
+        .gt-keep-row div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ width: auto !important; margin-bottom: 0; }}
     }}
     div[data-testid="stHorizontalBlock"] {{ align-items: stretch; }}
     div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ display: flex; }}
@@ -557,24 +439,8 @@ st.markdown(
     div[data-testid="stDecoration"] {{ visibility: hidden; }}
     div[data-testid="stStatusWidget"] {{ visibility: hidden; display: none; }}
     #MainMenu {{ visibility: hidden; }}
-
-    /* ============================================================
-   KRDS 선명한 화면 모드(다크모드) 원칙 반영 패치
-   - 계층 밝기 순서 / 매직넘버 대비 / 흰색 눈부심 방지 / 시스템색 역할 반전
-   ============================================================ */
-
-{_DARK_CSS_1}
-
-{_DARK_CSS_2}
-
-.st-key-gt_issue_cards_row div[data-testid="stHorizontalBlock"] {{
-    gap: 8px !important;
-    column-gap: 8px !important;
-}}
-
-    
-    .gt-opp-link:hover{{ text-decoration:underline !important; }}
-
+    .st-key-gt_issue_cards_row div[data-testid="stHorizontalBlock"] {{ gap: 8px !important; column-gap: 8px !important; }}
+    .gt-opp-link:hover {{ text-decoration:underline !important; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -655,13 +521,12 @@ def format_budget_eok(value):
     if num <= 0:
         return None
     eok = num / 100_000_000
-    if eok >= 0.1:
+    if eok >= 1:
         eok_r = round(eok, 1)
         return f"{int(eok_r)}억" if eok_r == int(eok_r) else f"{eok_r}억"
     man = num / 10_000
     if man >= 1:
-        man_r = round(man, 1)
-        return f"{int(man_r)}만원" if man_r == int(man_r) else f"{man_r}만원"
+        return f"{int(round(man)):,}만원"
     return f"{int(num):,}원"
 
 
@@ -740,7 +605,7 @@ def load_data():
 
 
 BRIEF_KEYS = [K_NEWS_DEFAULT, K_NEWS_SRC10, K_NEWS_SOLUTION, K_NEWS_SIMPLE, K_REC_KEYWORDS,
-              K_HEADLINE, K_ISSUES, K_DIGEST, K_PRODUCT_AI, K_META]
+              K_HEADLINE, K_ISSUES, K_DIGEST, K_PRODUCT_AI, K_PRODUCT_GUIDE, K_META]
 
 
 @st.cache_data(ttl=300)
@@ -777,7 +642,8 @@ for c in [COL_GRADE, COL_CATEGORY, COL_STATUS, COL_AGENCY]:
         df[c] = df[c].fillna("미분류").replace("", "미분류")
 
 for c in [COL_TRACK, COL_TRACK_REASON, COL_AI_REASON, COL_TITLE, COL_DEPT, COL_KEYWORDS, COL_URL,
-          COL_DUE_DATE, COL_REG_DATE, COL_BUDGET, COL_CONTENT, "ai_oneline", "ai_summary"]:
+          COL_DUE_DATE, COL_REG_DATE, COL_BUDGET, COL_CONTENT, "ai_oneline", "ai_summary",
+          "budget_label", "period_end"]:
     if c not in df.columns:
         df[c] = ""
     df[c] = df[c].fillna("")
@@ -792,8 +658,14 @@ df[COL_AI_SCORE] = pd.to_numeric(df[COL_AI_SCORE], errors="coerce").fillna(-1).a
 
 today = pd.Timestamp(datetime.now().date())
 
-# [정리] 마감일이 지난 공고는 화면에서 제외 (마감일 미표기 건은 유지)
-df = df[df["_due_date_parsed"].isna() | (df["_due_date_parsed"] >= today)].copy()
+# [정리] 마감 지난 공고 / 마감일을 끝내 못 찾았고 사업종료일이 지났거나 등록 45일이 지난 공고는 제외
+_today_d = datetime.now().date()
+df = df[[not is_closed(d, r, p, _today_d) for d, r, p in zip(df[COL_DUE_DATE], df[COL_REG_DATE], df["period_end"])]].copy()
+# [정리] 같은 사업의 연장·재공고·정정, 기관 게시판과 조달청에 함께 올라온 공고는 최근 1건만
+_fams = [family_key(a, d, t) for a, d, t in zip(df[COL_AGENCY], df[COL_DEPT], df[COL_TITLE])]
+df["_fam"] = [f if len(f.split("|", 1)[-1]) >= 6 else f"{f}#{i}" for i, f in enumerate(_fams)]
+df = df.sort_values(COL_REG_DATE, ascending=False).drop_duplicates("_fam", keep="first")
+df["_org"] = [owner_org(a, d) for a, d in zip(df[COL_AGENCY], df[COL_DEPT])]   # 표시용 기관 (조달청 건은 실제 발주기관)
 
 # [정리] 행안부 게시판의 일반 보도자료 제외 — 사업·공모 성격 단어가 있는 글만 남김
 df = df[[not is_mois_noise(a, t) for a, t in zip(df[COL_AGENCY], df[COL_TITLE])]].copy()
@@ -801,7 +673,7 @@ if df.empty:
     st.warning("진행 중인 공고가 없습니다. 자동수집(GitHub Actions) 실행 여부를 확인해주세요.")
     st.stop()
 
-# [지역] 기관명·부서·제목·본문으로 시·도 판별 → 담당 지역 필터에 사용
+# [지역] 기관명·부서·제목·본문으로 시·도 판별 → 표의 '지역' 열에 표시
 df["_regions"] = [detect_regions(a, d, t, str(c)[:300]) for a, d, t, c in
                   zip(df[COL_AGENCY], df[COL_DEPT], df[COL_TITLE], df[COL_CONTENT])]
 df["_region_label"] = df["_regions"].map(region_label)
@@ -1000,11 +872,12 @@ def render_toggle_card(label, count, key, active, colors, on_click=None, args=No
 
 
 PALETTE_TOTAL = dict(light_bg=C['surface2'], light_text=C['text'], border=C['border'], active_bg=C['navy'], active_text=C['navy_text'])
-PALETTE_RND = dict(light_bg=C['accent_soft'], light_text=C['accent'], border=C['accent'], active_bg=C['accent'], active_text="#ffffff")
-PALETTE_BIZ = dict(light_bg=C['success_bg'], light_text=C['success_text'], border=C['success_border'], active_bg=C['success_border'], active_text="#ffffff")
-PALETTE_PROGRESS = dict(light_bg=C['accent_soft'], light_text=C['accent'], border=C['accent'], active_bg=C['accent'], active_text="#ffffff")
-PALETTE_HIGH_GRADE = dict(light_bg=C['danger_bg'], light_text=C['danger_text'], border=C['danger_border'], active_bg=C['danger_border'], active_text="#ffffff")
-PALETTE_DUE_SOON = dict(light_bg=C['warn_bg'], light_text=C['warn_text'], border=C['warn_border'], active_bg=C['warn_border'], active_text="#ffffff")
+_ACT_TXT = "#ffffff" if THEME == "light" else "#0B1620"     # 다크모드에선 밝은 배경 위 어두운 글자 (명암비 확보)
+PALETTE_RND = dict(light_bg=C['accent_soft'], light_text=C['accent'], border=C['accent'], active_bg=C['accent'], active_text=_ACT_TXT)
+PALETTE_BIZ = dict(light_bg=C['success_bg'], light_text=C['success_text'], border=C['success_border'], active_bg=C['success_border'], active_text=_ACT_TXT)
+PALETTE_PROGRESS = dict(light_bg=C['accent_soft'], light_text=C['accent'], border=C['accent'], active_bg=C['accent'], active_text=_ACT_TXT)
+PALETTE_HIGH_GRADE = dict(light_bg=C['danger_bg'], light_text=C['danger_text'], border=C['danger_border'], active_bg=C['danger_border'], active_text=_ACT_TXT)
+PALETTE_DUE_SOON = dict(light_bg=C['warn_bg'], light_text=C['warn_text'], border=C['warn_border'], active_bg=C['warn_border'], active_text=_ACT_TXT)
 PALETTE_FILTER_TOTAL = dict(light_bg=C['surface2'], light_text=C['text'], border=C['border'], active_bg=C['navy'], active_text=C['navy_text'])
 
 
@@ -1074,26 +947,6 @@ with chip_box:
             st.button("✖", key="clear_search_chips", help="검색어 지우기", use_container_width=True,
                       on_click=_clear_search)
 
-# ------------------------------------------------------------
-# 📍 지역 필터 — 내 담당 지역(서울·인천·강원·전라·제주)만 바로 보기
-# ------------------------------------------------------------
-if "my_regions" not in st.session_state:
-    st.session_state.my_regions = list(MY_REGIONS_DEFAULT)
-
-rf1, rf2, rf3 = st.columns([2.2, 2.2, 5.6])
-with rf1:
-    region_only = st.toggle("📍 내 담당 지역만 보기", value=False, key="region_only",
-                            help="기관명·부서·제목에 들어간 지역명으로 판별합니다.")
-with rf2:
-    include_national = st.toggle(f"{NATIONAL_LABEL} 공고 포함", value=True, key="region_include_national",
-                                 help="지역이 적혀 있지 않은 공고(중앙부처·전국 공모 등)도 함께 봅니다.")
-with rf3:
-    with st.popover(f"담당 지역: {', '.join(st.session_state.my_regions) or '없음'}", use_container_width=True):
-        picked = st.multiselect("담당 지역 선택", ALL_REGIONS, default=st.session_state.my_regions, key="my_regions_pick")
-        if st.button("적용", key="my_regions_apply"):
-            st.session_state.my_regions = picked
-            st.rerun()
-
 df_all = df   # 필터 전 원본 (전체 건수 비교용)
 search_keyword = str(st.session_state.get("int_top_search") or "").strip()
 if search_keyword:
@@ -1103,18 +956,9 @@ if search_keyword:
           | df[COL_AGENCY].astype(str).str.contains(_pat, case=False, na=False)
           | df[COL_DEPT].astype(str).str.contains(_pat, case=False, na=False))
     df = df[_m].copy()
-if region_only:
-    df = df[[match_regions(r, st.session_state.my_regions, include_national) for r in df["_regions"]]].copy()
-
-if search_keyword or region_only:
-    _parts = []
-    if search_keyword:
-        _parts.append(f"검색어 '{search_keyword}'")
-    if region_only:
-        _parts.append(f"지역 {', '.join(st.session_state.my_regions)}" + (f" + {NATIONAL_LABEL}" if include_national else ""))
-    st.info(f"🔎 {' · '.join(_parts)} 기준으로 {len(df)}건을 보고 있습니다. (전체 {len(df_all)}건)")
+    st.info(f"🔎 검색어 '{search_keyword}' 기준으로 {len(df)}건을 보고 있습니다. (전체 {len(df_all)}건)")
     if df.empty:
-        st.warning("조건에 맞는 공고가 없습니다. 검색어를 지우거나 지역 필터를 꺼 주세요.")
+        st.warning("조건에 맞는 공고가 없습니다. 검색어를 지워 주세요.")
         df = df_all.iloc[0:0].copy()
 
 filtered = df.copy()
@@ -1464,8 +1308,8 @@ def _fetch_news_pool_for_keywords(keywords_list):
 # ------------------------------------------------------------
 # 대탭
 # ------------------------------------------------------------
-main_tab_integrated, main_tab_dash, main_tab_news, main_tab_trend = st.tabs(
-    ["🔗 통합보기", "📋 사업/R&D과제", "📰 IT 뉴스", "🧭 솔루션 분석"]
+main_tab_integrated, main_tab_dash, main_tab_proc, main_tab_news, main_tab_trend = st.tabs(
+    ["🔗 통합보기", "📋 사업/R&D과제", "🏆 낙찰결과", "📰 IT 뉴스", "🧭 솔루션 분석"]
 )
 
 # ------------------------------------------------------------
@@ -1474,7 +1318,7 @@ main_tab_integrated, main_tab_dash, main_tab_news, main_tab_trend = st.tabs(
 with main_tab_dash:
     st.markdown(
         f"""
-        <div style="background:#191F28;border-radius:12px;padding:16px 20px;margin-bottom:8px;">
+        <div style="background:{C['navy']};border-radius:12px;padding:16px 20px;margin-bottom:8px;">
             <div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#9DB4FF;">GOV-TRACKER · 사업/R&D과제</div>
             <div style="font-size:19px;font-weight:800;color:#FFFFFF;margin-top:3px;">정부 IT 사업 AI 분석</div>
             <div style="font-size:12px;color:#C9D4E2;margin-top:4px;">매일 아침 8시 수집된 공고를 AI가 분류·점수화한 전체 현황입니다.</div>
@@ -1680,18 +1524,6 @@ with main_tab_dash:
 
         priority_df = priority_df.sort_values(COL_AI_SCORE, ascending=False)
 
-        refresh_summary = st.button("🔄 새로고침", key="refresh_ai_summary_all")
-        if refresh_summary:
-            if is_ai_ready() and not priority_df.empty:
-                progress = st.progress(0.0, text="AI 요약 생성 중...")
-                total = len(priority_df)
-                for i, (_, r) in enumerate(priority_df.iterrows(), start=1):
-                    generate_ai_summary(r)
-                    progress.progress(i / total, text=f"AI 요약 생성 중... ({i}/{total})")
-                progress.empty()
-            elif not is_ai_ready():
-                st.warning("Claude API 키가 설정되지 않아 요약을 생성할 수 없습니다.")
-
         # 요약은 아침 자동수집 때 미리 만들어 DB에 저장됨 → 화면을 열 때 AI를 다시 부르지 않음
         for _, _r in priority_df.iterrows():
             _sv = _stored(_r, "ai_summary")
@@ -1710,7 +1542,7 @@ with main_tab_dash:
                     budget_txt = format_budget_eok(row.get(COL_BUDGET))
                     budget_part = f" · 예산 {budget_txt}" if budget_txt else ""
                     st.markdown(
-                        f'<span style="color:{C["text_muted"]};font-size:0.82em;">{row[COL_AGENCY]} · 등급 {row[COL_GRADE]} · 마감 {due}{budget_part}</span>'
+                        f'<span style="color:{C["text_muted"]};font-size:0.82em;">{escape(str(row.get("_org") or row[COL_AGENCY]))} · 마감 {due}{budget_part}</span>'
                         f'&nbsp;&nbsp;{score_badge_html(score)}',
                         unsafe_allow_html=True,
                     )
@@ -1719,12 +1551,11 @@ with main_tab_dash:
 
                     cache_key = row.get(COL_KEY) or row.get(COL_TITLE)
                     cached = st.session_state.ai_summary_cache.get(cache_key)
-                    if cached and not str(cached).startswith("__ERROR__"):
-                        st.markdown(f"> {cached}")
-                    elif cached and str(cached).startswith("__ERROR__"):
-                        st.error("요약 생성 중 오류가 발생했습니다. 새로고침 버튼을 눌러 다시 시도해 주세요.")
+                    summary_txt = cached if (cached and not str(cached).startswith("__ERROR__")) else (_stored(row, "ai_oneline") or "")
+                    if summary_txt:
+                        st.markdown(f"> {summary_txt}")
                     else:
-                        st.caption("🤖 아직 요약이 없습니다. 위 '🔄 새로고침'을 누르면 지금 생성합니다.")
+                        st.caption("🤖 다음 아침 자동수집 때 AI 요약이 채워집니다.")
 
     st.markdown("---")
     st.caption("본 대시보드는 매일 아침 8시 자동 수집 데이터를 기준으로 표시합니다. 새로고침(F5) 또는 오른쪽 상단 ⟳ 버튼으로 최신화할 수 있습니다.")
@@ -1735,7 +1566,7 @@ with main_tab_dash:
 with main_tab_news:
     st.markdown(
         f"""
-        <div style="background:#191F28;border-radius:12px;padding:16px 20px;margin-bottom:8px;">
+        <div style="background:{C['navy']};border-radius:12px;padding:16px 20px;margin-bottom:8px;">
             <div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#9DB4FF;">뉴스 및 미디어 모니터링</div>
             <div style="font-size:19px;font-weight:800;color:#FFFFFF;margin-top:3px;">IT 뉴스 브리핑</div>
             <div style="font-size:12px;color:#C9D4E2;margin-top:4px;">Google·네이버·보안뉴스·전자신문 4개 소스를 수집하고, AI 연관도 기준으로 정리했습니다.</div>
@@ -1754,7 +1585,7 @@ with main_tab_news:
                         st.session_state.news_selected_keywords.append(fkw)
                         st.rerun()
 
-    st.markdown("**🤖 AI 추천 키워드** — 누르면 해당 키워드 뉴스를 실시간으로 모아 봅니다.")
+    st.markdown("**🤖 AI 추천 키워드**")
     news_rec = REC_KEYWORDS[:8]
     with st.container(key="rec_kw_chip_row"):
         if news_rec:
@@ -1798,26 +1629,34 @@ with main_tab_news:
     st.session_state["all_titles_for_digest"] = all_titles_for_digest
     st.session_state["all_items_pool_cache"] = all_items_pool
 
+    def _digest_box(txt):
+        st.markdown(
+            f'''<div style="margin:6px 0 4px;">
+                <div style="font-size:15px;font-weight:800;color:{C['text']};margin:0 0 6px;">🤖 오늘의 IT 뉴스 종합분석</div>
+                <div style="background:{C['success_bg']};border:1px solid {C['success_border']};border-radius:10px;
+                            padding:12px 16px;font-size:14px;line-height:1.75;color:{C['text_body']};">{escape(str(txt))}</div>
+            </div>''',
+            unsafe_allow_html=True,
+        )
+
     _stored_digest = brief(K_DIGEST)
     if use_stored_news and _stored_digest:
-        st.markdown("##### 🤖 오늘의 IT 뉴스 AI 요약")
-        st.success(_stored_digest)
+        _digest_box(_stored_digest)
         digest_clicked = False
     else:
-        digest_clicked = st.button("🤖 오늘의 IT 뉴스 AI 요약 생성", use_container_width=False)
+        digest_clicked = st.button("🤖 오늘의 IT 뉴스 종합분석 생성", use_container_width=False)
     if digest_clicked:
         if not is_ai_ready():
-            st.warning("Claude API 키가 설정되지 않아 요약할 수 없습니다.")
+            st.warning("Claude API 키가 설정되지 않아 분석할 수 없습니다.")
         elif not all_titles_for_digest:
-            st.info("요약할 뉴스가 없습니다. 먼저 키워드를 검색해 주세요.")
+            st.info("분석할 뉴스가 없습니다. 먼저 키워드를 검색해 주세요.")
         else:
-            with st.spinner("AI가 오늘의 뉴스를 요약하는 중..."):
+            with st.spinner("AI가 오늘의 뉴스를 분석하는 중..."):
                 digest_text, digest_err = generate_news_digest(all_titles_for_digest)
             if digest_err:
-                st.error(f"요약 생성 실패: {digest_err}")
+                st.error(f"분석 실패: {digest_err}")
             else:
-                st.markdown("##### 🤖 오늘의 IT 뉴스 AI 요약")
-                st.success(digest_text)
+                _digest_box(digest_text)
 
     if not is_naver_ready():
         st.warning("⚠️ NAVER_CLIENT_ID / NAVER_CLIENT_SECRET이 설정되지 않아 네이버 뉴스는 비어서 표시됩니다.")
@@ -1825,52 +1664,57 @@ with main_tab_news:
     st.markdown("---")
 
     mc1, mc2, mc3 = st.columns(3)
-
     total_mentions = len(all_items_pool)
-    with mc1:
-        st.markdown(
-            f"""
-            <div class="gt-mon-card">
-                <div class="gt-mon-card-label">Mentions · 수집 기사</div>
-                <div class="gt-mon-card-value">{total_mentions}건</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # === 수정 #4: mc2를 실제 container(key=...)로 교체 — 기존엔 markdown div가 다른 markdown 호출에서 닫혀 박스가 제대로 안 그려졌음 ===
-    with mc2:
-        kw_box2 = st.container(key="mc2_kw_box")
-        with kw_box2:
-            st.markdown('<div class="gt-mon-card-label">상위 키워드</div>', unsafe_allow_html=True)
-            kw_hit_counts = {}
+    with mc1:     # 3개 카드는 같은 높이(.st-key-mc*_box)로 맞춤
+        with st.container(key="mc1_mention_box"):
+            _src_cnt = {}
             for it in all_items_pool:
-                for kw in base_query_kws:
-                    if kw.lower() in it["title"].lower():
-                        kw_hit_counts[kw] = kw_hit_counts.get(kw, 0) + 1
-            if not kw_hit_counts:
+                _src_cnt[it.get("_src")] = _src_cnt.get(it.get("_src"), 0) + 1
+            _src_rows = "".join(
+                f'<div class="gt-mon-source-row"><span class="gt-mon-dot" style="background:{SOURCE_COLOR.get(k, "#888")};"></span>'
+                f'<span style="flex:1;">{escape(SOURCE_LABEL_KO.get(k, str(k)))}</span><b>{v}건</b></div>'
+                for k, v in sorted(_src_cnt.items(), key=lambda x: -x[1])[:4]
+            )
+            st.markdown(
+                f'''<div class="gt-mon-card-label">Mentions · 수집 기사</div>
+                <div class="gt-mon-card-value" style="margin-bottom:6px;">{total_mentions}건</div>{_src_rows}''',
+                unsafe_allow_html=True,
+            )
+
+    with mc2:
+        with st.container(key="mc2_kw_box"):
+            st.markdown('<div class="gt-mon-card-label">상위 키워드 TOP 3</div>', unsafe_allow_html=True)
+            # 후보: 선택·기본 키워드 + AI 추천 키워드 + 제품 키워드 → 기사 제목에 실제로 나온 횟수 기준 상위 3개
+            _cands = list(dict.fromkeys(
+                list(base_query_kws) + [r["keyword"] for r in REC_KEYWORDS]
+                + [k for info in PRODUCT_KEYWORDS.values() for k in info["keywords"] if len(k) >= 2]
+            ))
+            kw_hit_counts = {}
+            for kw in _cands:
+                n_hit = sum(1 for it in all_items_pool if kw.lower() in str(it.get("title", "")).lower())
+                if n_hit:
+                    kw_hit_counts[kw] = n_hit
+            top3 = sorted(kw_hit_counts.items(), key=lambda x: -x[1])[:3]
+            if not top3:
                 st.caption("아직 집계된 키워드가 없습니다.")
             else:
-                max_hit = max(kw_hit_counts.values())
-                KW_BAR_COLORS = [C['accent'], C['success_text'], C['warn_text'], C['danger_text'], C['text_muted']]
-                for i, (kw, cnt) in enumerate(sorted(kw_hit_counts.items(), key=lambda x: -x[1])):
-                    # === 정확한 비율: 최댓값 기준 pct 계산, 0건은 막대 0px로 비워둠 ===
-                    pct = int(round(cnt / max_hit * 100)) if max_hit else 0
-                    color = KW_BAR_COLORS[i % len(KW_BAR_COLORS)]
-                    st.markdown(
-                        f"""
-                        <div class="gt-mon-bar-row">
-                            <span style="width:62px;flex-shrink:0;font-weight:700;color:{color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{escape(kw)}</span>
-                            <span class="gt-mon-bar-track"><span class="gt-mon-bar-fill" style="width:{max(pct,4)}%;background:{color};"></span></span>
-                            <span style="width:36px;text-align:right;flex-shrink:0;">{cnt}건</span>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
+                KW_BAR_COLORS = [C['accent'], C['success_text'], C['warn_text']]
+                bars = ""
+                for i, (kw, cnt) in enumerate(top3):
+                    # 막대 = 전체 수집 기사 중 이 키워드가 나온 기사 비율 (노출 건수에 비례)
+                    pct = int(round(cnt / total_mentions * 100)) if total_mentions else 0
+                    color = KW_BAR_COLORS[i]
+                    bars += (
+                        f'<div class="gt-mon-bar-row"><span style="width:18px;color:{C["text_muted"]};font-weight:800;">{i + 1}</span>'
+                        f'<span style="width:96px;flex-shrink:0;font-weight:700;color:{color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{escape(kw)}">{escape(kw)}</span>'
+                        f'<span class="gt-mon-bar-track"><span class="gt-mon-bar-fill" style="display:block;width:{pct}%;background:{color};"></span></span>'
+                        f'<span style="width:44px;text-align:right;flex-shrink:0;font-weight:700;">{cnt}건</span></div>'
                     )
+                st.markdown(bars + f'<div style="font-size:11px;color:{C["text_muted"]};margin-top:10px;">막대 = 수집 기사 {total_mentions}건 중 해당 키워드가 나온 비율</div>',
+                            unsafe_allow_html=True)
 
     with mc3:
-        comp_box = st.container(key="mc3_comp_box")
-        with comp_box:
+        with st.container(key="mc3_comp_box"):
             st.markdown('<div class="gt-mon-card-label">경쟁사 동향</div>', unsafe_allow_html=True)
             with st.popover("⚙️ 경쟁사 키워드 관리"):
                 if "competitor_keywords" not in st.session_state:
@@ -1880,14 +1724,12 @@ with main_tab_news:
                     st.session_state.competitor_keywords = [k.strip() for k in comp_kw_text.split(",") if k.strip()]
                     st.rerun()
             competitor_keywords = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
-            # === is_competitor_match가 COMPETITOR_ALIASES로 영/한 자동 치환하므로 키워드 하나만 등록해도 매칭됨 ===
             cp_matches = [it for it in all_items_pool if is_competitor_match(it["title"], competitor_keywords)]
             if cp_matches:
-                for it in sorted(cp_matches, key=lambda x: -x.get("_score", -1))[:4]:
-                    t_raw = _news_pub_dt(it)
+                for it in sorted(cp_matches, key=lambda x: -x.get("_score", -1))[:3]:
                     st.markdown(
                         mon_row_html(SOURCE_BADGE_TEXT.get(it["_src"], it["_src"]), SOURCE_COLOR.get(it["_src"], "#888"),
-                                     it["title"], it.get("url") or it.get("link"), "risk", _relative_time(t_raw)),
+                                     it["title"], it.get("url") or it.get("link"), "risk", _relative_time(_news_pub_dt(it))),
                         unsafe_allow_html=True,
                     )
             else:
@@ -2123,75 +1965,124 @@ with main_tab_trend:
                 """,
                 unsafe_allow_html=True,
             )
-    # ------------------------------------------------------------
-    # [신규] 조달 결과 — 낙찰·계약 (최근 30일, IT 관련만)
-    #   경쟁사 수주 / 자사 솔루션 관련 사업을 한눈에 → 영업 타깃·가격 근거로 활용
-    # ------------------------------------------------------------
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-    st.markdown("#### 🏆 조달 결과 — 낙찰·계약 (최근 30일)")
+
+
+# ------------------------------------------------------------
+# 낙찰결과 대탭 — 조달청 낙찰·계약 결과(최근 30일) + 재발주 예상(향후 6개월)
+#   '자사 관련 보기'를 켜면 경쟁사 수주·자사 제품 관련 건만 남기고, 관련 단어를 강조색으로 표시
+# ------------------------------------------------------------
+_SOL_KWS_SORTED = sorted({k for info in PRODUCT_KEYWORDS.values() for k in info["keywords"] if len(k) >= 2}, key=len, reverse=True)
+
+
+def _highlight(text_val, keywords, on=True):
+    """글자를 안전하게 이스케이프한 뒤 관련 단어만 강조색(.gt-hl)으로 감쌈"""
+    raw = str(text_val or "")
+    if not on or not keywords or not raw:
+        return escape(raw)
+    pat = re.compile("|".join(re.escape(k) for k in keywords if k), re.I)
+    out, pos = [], 0
+    for m in pat.finditer(raw):
+        out.append(escape(raw[pos:m.start()]))
+        out.append(f'<span class="gt-hl">{escape(m.group(0))}</span>')
+        pos = m.end()
+    out.append(escape(raw[pos:]))
+    return "".join(out)
+
+
+def _proc_table(rows_html, head_cells, widths, max_h=520):
+    cols = "".join(f'<col style="width:{w}%">' for w in widths)
+    head = "".join(f"<th>{h}</th>" for h in head_cells)
+    return (f'<div style="max-height:{max_h}px;overflow-y:auto;border-radius:10px;">'
+            f'<table class="gt-table"><colgroup>{cols}</colgroup>'
+            f'<thead style="position:sticky;top:0;z-index:1;"><tr>{head}</tr></thead><tbody>{rows_html}</tbody></table></div>')
+
+
+def _stat_strip(items):
+    boxes = "".join(f'<div class="gt-stat-box"><div class="gt-stat-num" style="color:{c};">{v}</div>'
+                    f'<div class="gt-stat-label">{escape(l)}</div></div>' for l, v, c in items)
+    return f'<div class="gt-report-sheet" style="padding:6px 14px;"><div class="gt-stat-grid" style="margin:0;border:none;">{boxes}</div></div>'
+
+
+with main_tab_proc:
+    st.markdown(
+        f"""
+        <div style="background:{C['navy']};border-radius:12px;padding:16px 20px;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#9DB4FF;">GOV-TRACKER · 낙찰결과</div>
+            <div style="font-size:19px;font-weight:800;color:{C['navy_text']};margin-top:3px;">조달청 낙찰·계약 결과와 재발주 예상</div>
+            <div style="font-size:12px;color:#C9D4E2;margin-top:4px;">누가 어떤 사업을 얼마에 따냈는지, 그 사업이 언제 다시 나올지 보여줍니다.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    proc_mine = st.toggle("🎯 자사 관련 보기", value=False, key="proc_mine",
+                          help="경쟁사 수주 건과 자사 제품(대기열·예약·매크로·부하테스트 등) 관련 사업만 남기고, 관련 단어를 강조합니다.")
+    _comp_kws = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
+    _comp_variants = competitor_variants(_comp_kws)
     res_df = _cached_procurement_results()
     if res_df.empty:
         st.info("아직 수집된 낙찰·계약 결과가 없습니다. (조달청 낙찰·계약 API 활용신청 승인 후 다음 자동수집부터 표시)")
     else:
-        _comp_kws = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
-        _sol_kws = [k.lower() for info in PRODUCT_KEYWORDS.values() for k in info["keywords"]]
         res_df = res_df.fillna("")
         res_df["_comp"] = res_df["company"].map(lambda c: is_competitor_match(c, _comp_kws))
-        res_df["_sol"] = res_df["title"].map(lambda t: any(k in str(t).lower() for k in _sol_kws))
+        res_df["_sol"] = res_df["title"].map(lambda t: any(k.lower() in str(t).lower() for k in _SOL_KWS_SORTED))
+        st.markdown(_stat_strip([
+            ("낙찰 (30일)", f"{(res_df['kind'] == '낙찰').sum()}건", C['text']),
+            ("계약 (30일)", f"{(res_df['kind'] == '계약').sum()}건", C['text']),
+            ("경쟁사 수주", f"{int(res_df['_comp'].sum())}건", C['danger_text']),
+            ("자사 제품 관련", f"{int(res_df['_sol'].sum())}건", C['success_text']),
+        ]), unsafe_allow_html=True)
 
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("낙찰", f"{(res_df['kind'] == '낙찰').sum()}건")
-        k2.metric("계약", f"{(res_df['kind'] == '계약').sum()}건")
-        k3.metric("🔴 경쟁사 수주", f"{int(res_df['_comp'].sum())}건")
-        k4.metric("🟢 자사 솔루션 관련", f"{int(res_df['_sol'].sum())}건")
-
-        only_hot = st.toggle("경쟁사·자사 관련 건만 보기", value=False, key="proc_hot_only")
-        view = res_df[res_df["_comp"] | res_df["_sol"]] if only_hot else res_df
-        view = view.assign(
-            표시=["🔴 경쟁사" if c else ("🟢 자사관련" if so else "") for c, so in zip(view["_comp"], view["_sol"])],
-            금액=view["amount"].map(lambda v: format_budget_eok(v) or "-"),
-        )
+        st.markdown("#### 🏆 낙찰·계약 결과 (최근 30일)")
+        view = res_df[res_df["_comp"] | res_df["_sol"]] if proc_mine else res_df
+        view = view.sort_values("event_date", ascending=False)
         if view.empty:
             st.caption("해당 조건의 결과가 없습니다.")
-        st.dataframe(
-            view[["표시", "kind", "event_date", "title", "agency", "company", "금액", "url"]].rename(columns={
-                "kind": "구분", "event_date": "일자", "title": "사업명", "agency": "수요기관",
-                "company": "수주업체", "url": "링크",
-            }),
-            hide_index=True, use_container_width=True, height=420,
-            column_config={"링크": st.column_config.LinkColumn("링크", display_text="열기")},
-        )
-        st.caption("출처: 조달청 나라장터 낙찰정보·계약정보 서비스(공공데이터포털). 사업명에 IT 관련 단어가 있거나 정보화사업으로 표시된 건만 수집.")
+        else:
+            body = ""
+            for r in view.to_dict("records"):
+                kind_c = C['accent'] if r["kind"] == "낙찰" else C['success_text']
+                body += (
+                    f'<tr><td><span class="gt-pill" style="background:{C["surface3"]};color:{kind_c};">{escape(r["kind"])}</span></td>'
+                    f'<td>{escape(str(r["event_date"])[2:10] if r["event_date"] else "-")}</td>'
+                    f'<td class="l"><a href="{escape(r["url"] or "#")}" target="_blank" title="원문 열기">'
+                    f'{_highlight(r["title"], _SOL_KWS_SORTED, proc_mine)}</a></td>'
+                    f'<td>{escape(r["agency"] or "-")}</td>'
+                    f'<td>{_highlight(r["company"] or "-", _comp_variants, proc_mine)}</td>'
+                    f'<td>{escape(format_budget_eok(r["amount"]) or "-")}</td></tr>'
+                )
+            st.markdown(_proc_table(body, ["구분", "일자", "사업명", "수요기관", "수주업체", "금액"],
+                                    [7, 9, 40, 18, 15, 11]), unsafe_allow_html=True)
+            st.caption(f"총 {len(view)}건 · 사업명을 누르면 나라장터 원문으로 이동합니다. "
+                       "출처: 조달청 나라장터 낙찰정보·계약정보 서비스(공공데이터포털), IT 관련 사업만 수집.")
 
-    # ------------------------------------------------------------
-    # [신규] 🔁 재발주 예상 — 경쟁사가 수주한 사업의 계약 종료 전 선제 영업
-    #   예상 발주 시점 = 계약 종료일 − 60일 (낙찰 건은 계약기간 정보가 없어 1년으로 추정)
-    # ------------------------------------------------------------
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-    st.markdown("#### 🔁 재발주 예상 — 경쟁사 수주 사업 (향후 6개월)")
-    ro_c1, ro_c2 = st.columns([3, 2])
-    with ro_c2:
-        ro_include_sol = st.toggle("자사 제품 관련 사업도 함께 보기", value=False, key="reorder_include_sol",
-                                   help="경쟁사 수주 건 외에, 사업명에 대기열·예약·수강신청 등이 들어간 사업도 포함합니다.")
-    reorder_df = _cached_reorder(tuple(st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)), ro_include_sol)
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+    st.markdown("#### 🔁 재발주 예상 (향후 6개월)")
+    reorder_df = _cached_reorder(tuple(_comp_kws), True)
     if reorder_df.empty:
-        st.info("아직 재발주 예상 건이 없습니다. 낙찰·계약 결과가 쌓이면 자동으로 표시됩니다. "
-                "(첫 자동수집 때 최근 1년치 자사 관련 사업을 한 번 조회합니다)")
+        st.info("아직 재발주 예상 건이 없습니다. 낙찰·계약 결과가 쌓이면 자동으로 표시됩니다.")
     else:
-        soon_n = int(((reorder_df["d_day"] >= 0) & (reorder_df["d_day"] <= 30)).sum())
-        with ro_c1:
-            st.caption(f"총 {len(reorder_df)}건 · 30일 이내 발주 예상 {soon_n}건 — 발주 1~2개월 전 기관 담당자 접촉을 권장합니다.")
-        _rv = reorder_df.assign(
-            예상발주=[f"{e} (D-{max(int(d), 0)})" if int(d) >= 0 else f"{e} (시점 지남)" for e, d in zip(reorder_df["expected"], reorder_df["d_day"])],
-            금액=reorder_df["amount"].map(lambda v: format_budget_eok(v) or "-"),
-            계약종료=[f"{d} (추정)" if est == "Y" else d for d, est in zip(reorder_df["end_date"], reorder_df["end_est"])],
-        )
-        st.dataframe(
-            _rv[["표시", "예상발주", "title", "agency", "company", "금액", "계약종료", "url"]].rename(columns={
-                "title": "사업명", "agency": "수요기관", "company": "수주업체", "url": "링크"}),
-            hide_index=True, use_container_width=True, height=min(420, 38 + 35 * len(_rv)),
-            column_config={"링크": st.column_config.LinkColumn("링크", display_text="열기")},
-        )
+        _rv = reorder_df if not proc_mine else reorder_df
+        soon_n = int(((_rv["d_day"] >= 0) & (_rv["d_day"] <= 30)).sum())
+        body = ""
+        for r in _rv.to_dict("records"):
+            d = int(r["d_day"])
+            when = f'{escape(r["expected"])}<span class="gt-sub">{"D-" + str(d) if d >= 0 else "시점 지남"}</span>'
+            end_txt = escape(str(r["end_date"])) + ('<span class="gt-sub">추정</span>' if r["end_est"] == "Y" else "")
+            body += (
+                f'<tr><td>{when}</td>'
+                f'<td class="l"><a href="{escape(r["url"] or "#")}" target="_blank" title="원문 열기">'
+                f'{_highlight(r["title"], _SOL_KWS_SORTED, proc_mine)}</a></td>'
+                f'<td>{escape(r["agency"] or "-")}</td>'
+                f'<td>{_highlight(r["company"] or "-", _comp_variants, proc_mine)}</td>'
+                f'<td>{escape(format_budget_eok(r["amount"]) or "-")}</td>'
+                f'<td>{end_txt}</td></tr>'
+            )
+        st.markdown(_proc_table(body, ["예상 발주", "사업명", "수요기관", "수주업체", "금액", "계약 종료"],
+                                [11, 38, 18, 14, 9, 10]), unsafe_allow_html=True)
+        st.caption(f"총 {len(_rv)}건 · 30일 이내 발주 예상 {soon_n}건 · 예상 발주 = 계약 종료일 − 60일 "
+                   "(낙찰 건은 계약기간 정보가 없어 1년으로 추정). 대상: 경쟁사 수주 + 자사 제품 관련 사업.")
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def _daily_headline(day_key, titles_tuple):
     obj, err = generate_headline(list(titles_tuple))
@@ -2290,10 +2181,10 @@ with main_tab_integrated:
     # Ⅰ. 핵심 요약 (KPI 및 AI 헤드라인)
     # ----------------------------------------------------------------
     with st.container():
-        KPI_BLUE = _tc("#2D5BFF", "#5B9BFF")
-        KPI_RED = _tc("#B42318", "#FF6B6B")
-        KPI_ORANGE = _tc("#C2410C", "#FFA94D")
-        KPI_GREEN = _tc("#0F9D58", "#4ADE80")
+        KPI_BLUE = C["accent"]
+        KPI_RED = C["danger_text"]
+        KPI_ORANGE = _tc("#C2410C", C["warn_text"])
+        KPI_GREEN = _tc("#0F9D58", C["success_text"])
 
         k1, k2, k3, k4 = st.columns(4)
         with k1:
@@ -2322,13 +2213,22 @@ with main_tab_integrated:
         st.session_state[f"integrated_headline_{now_dt.date().isoformat()}"] = ("OK", headline_obj) if headline_obj else (None, None)
 
         if headline_obj:
+            _pts = [p for p in (headline_obj.get("points") or []) if str(p).strip()][:3]
+            _est_tag = '<span class="gt-est">추정</span>'
+            _pts_html = "".join(
+                f'<div style="display:flex;gap:10px;margin-top:8px;font-size:13.5px;line-height:1.6;color:{C["text_body"]};">'
+                f'<span style="font-weight:800;color:{C["text_muted"]};min-width:20px;">{i:02d}</span>'
+                f'<span>{escape(str(p)).replace("(추정)", _est_tag)}</span></div>'
+                for i, p in enumerate(_pts, start=1)
+            )
             st.markdown(
                 f"""
                 <div class="gt-surface" style="border-left:5px solid {C['accent']};padding:16px 20px;margin-top:4px;">
-                    <span style="color:{C["text_muted"]};font-weight:700;border-bottom:2px solid {C["accent"]};padding-bottom:2px;">AI 핵심요약</span>
+                    <span style="color:{C['text_muted']};font-weight:700;border-bottom:2px solid {C['accent']};padding-bottom:2px;">AI 핵심요약</span>
                     <span class="gt-muted" style="font-size:10.5px;margin-left:8px;">{escape(str(headline_time or '')[5:16])} 생성</span>
                     <p class="gt-text" style="margin-top:10px;margin-bottom:4px;font-size:16px;font-weight:700;line-height:1.4;">{escape(str(headline_obj.get('headline','')))}</p>
                     <p class="gt-body" style="margin-top:6px;margin-bottom:0;font-size:13.5px;line-height:1.75;font-weight:500;color:{C['text_body']};">{escape(str(headline_obj.get('subtext','')))}</p>
+                    {_pts_html}
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -2356,17 +2256,28 @@ with main_tab_integrated:
         st.session_state[f"integrated_issues_{now_dt.date().isoformat()}"] = ("OK", issues_payload_now)
 
         if issues_payload_now:
-            issue_row_box = st.container(key="gt_issue_cards_row")
-            with issue_row_box:
-                cols = st.columns(len(issues_payload_now), gap="small")
-                for i, issue in enumerate(issues_payload_now):
-                    with cols[i]:
-                        with st.container(border=True):
-                            st.markdown(f"**{escape(str(issue.get('theme','')))}**")
-                            meta = " · ".join(x for x in [str(issue.get("impact") or ""), f"{issue.get('count')}건" if issue.get("count") else ""] if x)
-                            if meta:
-                                st.caption(meta)
-                            st.markdown(f"<div style='font-size:12px;'>{escape(str(issue.get('summary','')))}</div>", unsafe_allow_html=True)
+            _IMPACT_COLOR = {"매우높음": C["danger_border"], "높음": C["warn_border"], "보통": C["accent"], "낮음": C["border_strong"]}
+
+            def _est(txt):   # 문장 끝 "(추정)"은 작은 표식으로
+                t = escape(str(txt or ""))
+                return t.replace("(추정)", '<span class="gt-est">추정</span>')
+
+            cards = ""
+            for issue in issues_payload_now:
+                meta = " · ".join(x for x in [str(issue.get("impact") or ""), f"{issue.get('count')}건" if issue.get("count") else ""] if x)
+                prods = "".join(f'<span class="gt-prod-tag">{escape(str(p))}</span>' for p in (issue.get("products") or [])[:4])
+                impact_html = (f'<div class="gt-issue-impact"><b>우리 사업 영향</b> — {_est(issue.get("biz_impact"))}</div>'
+                               if issue.get("biz_impact") else "")
+                cards += (
+                    f'<div class="gt-issue" style="--pri:{_IMPACT_COLOR.get(str(issue.get("impact")), C["border_strong"])};">'
+                    f'<div class="gt-issue-title">{escape(str(issue.get("theme", "")))}</div>'
+                    f'<div class="gt-issue-meta">{escape(meta)}</div>'
+                    f'<div class="gt-issue-desc">{_est(issue.get("summary"))}</div>{impact_html}<div>{prods}</div></div>'
+                )
+            st.markdown(
+                f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;">{cards}</div>',
+                unsafe_allow_html=True,
+            )
         else:
             st.caption("아직 이슈 카드가 없습니다. (아침 자동수집 후 표시됩니다)")
 
@@ -2374,141 +2285,103 @@ with main_tab_integrated:
     # ----------------------------------------------------------------
     # Ⅲ. 주요 사업/과제 (현황표)
     # ----------------------------------------------------------------
-    def _biz_rnd_table_html(sub_df, accent_color, empty_msg):
+    def _due_cell(due_raw):
+        d = pd.to_datetime(str(due_raw or "")[:10], errors="coerce")
+        if pd.isna(d):
+            return f'<span style="color:{C["text_muted"]};">미정</span>'
+        left = (d.normalize() - pd.Timestamp(now_dt.date())).days
+        dday = "D-DAY" if left == 0 else (f"D-{left}" if left > 0 else "마감")
+        color = C["danger_text"] if 0 <= left <= 3 else (C["warn_text"] if 0 <= left <= 7 else C["text_muted"])
+        return f'{d.strftime("%m-%d")}<span class="gt-sub" style="color:{color};font-weight:700;">{dday}</span>'
+
+    def _budget_cell(r):
+        b = format_budget_eok(r.get(COL_BUDGET))
+        if not b:
+            return f'<span style="color:{C["text_muted"]};">미정</span>'
+        label = str(r.get("budget_label") or "")
+        sub = f'<span class="gt-sub">{escape(label)}</span>' if label and label not in ("사업금액", "사업예산", "배정예산", "예산액", "추정가격") else ""
+        return escape(b) + sub
+
+    def _biz_rnd_table_html(sub_df, empty_msg):
+        """사업명 | 기관 | 지역 | 예산 | 마감 | 연관도 — 머리글 전체·본문(사업명 제외) 가운데 정렬"""
         rows = sub_df.sort_values(COL_AI_SCORE, ascending=False).head(8)
         if rows.empty:
             return f'<div style="padding:16px;color:{C["text_muted"]};">{empty_msg}</div>'
-        head = (
-            f'<div style="display:grid;grid-template-columns:2.4fr 1fr 0.7fr 1fr 1.3fr; background:{C["navy"]}; '
-            f'color:{C["navy_text"]}; padding:9px; font-size:10.5px;font-weight:700;">'
-            f'<div>사업명</div><div>기관</div><div>지역</div><div>예산 · 마감</div><div>현황</div></div>'
-        )
         body = ""
         for _, r in rows.iterrows():
-            budget_txt = format_budget_eok(r.get(COL_BUDGET)) or "예산 미정"
-            due_txt = str(r.get(COL_DUE_DATE) or "").strip()
-            due_txt = f"~{due_txt[5:]}" if len(due_txt) >= 10 else "마감 미정"
             body += (
-                f'<div style="display:grid;grid-template-columns:2.4fr 1fr 0.7fr 1fr 1.3fr; border-bottom:1px solid {C["row_border"]}; padding:10px; font-size:11.5px;">'
-                f'<div><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" style="font-weight:700; color:{C["text"]}; text-decoration:none;">{escape(str(r[COL_TITLE]))}</a></div>'
-                f'<div>{escape(str(r.get(COL_AGENCY) or "-"))}</div>'
-                f'<div>{escape(str(r.get("_region_label") or "-"))}</div>'
-                f'<div>{escape(budget_txt)}<br><span style="color:{C["text_muted"]};">{escape(due_txt)}</span></div>'
-                f'<div>{score_badge_html(r.get(COL_AI_SCORE,-1))}</div></div>'
+                f'<tr><td class="l"><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" title="원문 공고 열기">'
+                f'{escape(str(r[COL_TITLE]))}</a></td>'
+                f'<td>{escape(str(r.get("_org") or r.get(COL_AGENCY) or "-"))}</td>'
+                f'<td>{escape(str(r.get("_region_label") or "-"))}</td>'
+                f'<td>{_budget_cell(r)}</td>'
+                f'<td>{_due_cell(r.get(COL_DUE_DATE))}</td>'
+                f'<td>{score_badge_html(r.get(COL_AI_SCORE, -1))}</td></tr>'
             )
-        return f'<div style="border:1px solid {C["border"]}; border-radius:10px; overflow:hidden;">{head}{body}</div>'
+        cols = "".join(f'<col style="width:{w}%">' for w in (38, 16, 9, 11, 10, 16))
+        head = "".join(f"<th>{h}</th>" for h in ("사업명", "기관", "지역", "예산", "마감", "연관도"))
+        return f'<table class="gt-table"><colgroup>{cols}</colgroup><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
 
     with st.expander("Ⅲ. 주요 사업/과제 — 사업부(수주) · R&D(개발과제) 현황표", expanded=True):
         st.markdown("##### 💼 사업부 — 연관도 높은 사업 Top 8")
-        st.markdown(_biz_rnd_table_html(biz_df, C['accent'], "공고 없음"), unsafe_allow_html=True)
+        st.markdown(_biz_rnd_table_html(biz_df, "공고 없음"), unsafe_allow_html=True)
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
         st.markdown("##### 🔬 R&D — 연관도 높은 과제 Top 8")
-        st.markdown(_biz_rnd_table_html(rnd_df, C['success_text'], "과제 없음"), unsafe_allow_html=True)
+        st.markdown(_biz_rnd_table_html(rnd_df, "과제 없음"), unsafe_allow_html=True)
+        st.caption("사업명을 누르면 해당 공고 원문으로 이동합니다. 예산 아래 작은 글씨는 금액 구분(지원규모·상금 등), 마감 아래는 남은 기간입니다.")
 
     # ----------------------------------------------------------------
-    # Ⅳ. 제품별 대응 가이드  (※ 여기가 원본 파일에서 들여쓰기가 깨진 지점이었음 — 전부 수정됨)
+    # Ⅳ. 제품별 대응 가이드 — 제품 제목을 누르면 관련 사업·과제·뉴스가 한 번에 펼쳐짐
+    #     아래에는 아침 배치 AI가 정리한 '관련 이슈 / 우리 사업 영향 / 지금 할 일'
     # ----------------------------------------------------------------
-    def _match_rows(sub, keywords):
-        """키워드 기반 1차 필터링"""
-        if sub is None or sub.empty or not keywords:
-            return sub.iloc[0:0] if sub is not None else df.iloc[0:0]
-        pat = "|".join(re.escape(k) for k in keywords)
-        mask = (
-            sub[COL_TITLE].astype(str).str.contains(pat, case=False, na=False)
-            | sub[COL_KEYWORDS].astype(str).str.contains(pat, case=False, na=False)
-        )
-        return sub[mask]
-
     _product_ai = brief(K_PRODUCT_AI) if isinstance(brief(K_PRODUCT_AI), dict) else {}
+    _guide_ai = brief(K_PRODUCT_GUIDE) if isinstance(brief(K_PRODUCT_GUIDE), dict) else {}
+    _guide_news = [it for it in (brief(K_NEWS_SOLUTION) or []) + (brief(K_NEWS_DEFAULT) or []) if isinstance(it, dict)]
 
-    def _match_rows_with_ai_fallback(sub, keywords, product_name, product_desc, cache_key):
-        """1차: 키워드 매칭. 0건이면 아침 배치에서 AI가 문맥으로 골라 둔 결과 사용 (화면에서 AI 호출 없음).
-        진짜 연관 없으면 억지로 채우지 않고 빈 상태 유지."""
-        hits = _match_rows(sub, keywords)
-        if not hits.empty or sub is None or sub.empty:
-            return hits
-        matched_titles = _product_ai.get(cache_key) or []
-        if not matched_titles:
-            return hits
-        return sub[sub[COL_TITLE].astype(str).isin([str(t) for t in matched_titles])]
+    def _est_html(txt):
+        return escape(str(txt or "")).replace("(추정)", '<span class="gt-est">추정</span>')
 
+    def _guide_item_html(title, url, meta, kind, color):
+        return (f'<div class="gt-guide-item"><span class="gt-pill" style="background:{C["surface3"]};color:{color};">{kind}</span>'
+                f'<a href="{escape(str(url or "#"))}" target="_blank" title="원문 열기">{escape(str(title))}</a>'
+                f'<span class="gt-guide-meta">{meta}</span></div>')
+
+    _g_rnd = df[df["_track"] == TRACK_RND].rename(columns={COL_AI_SCORE: "_score"})
+    _g_biz = df[df["_track"] == TRACK_BIZ].rename(columns={COL_AI_SCORE: "_score"})
     with st.expander("Ⅳ. 제품별 대응 가이드 — NF · NFA · BM · LT", expanded=True):
-        pg_cols = st.columns(4)
-        PG_COLORS = [_tc("#0d47a1", "#5B9BFF"), _tc("#004d40", "#2DD4BF"), _tc("#e65100", "#FF9D5C"), _tc("#1b5e20", "#66BB6A")]
-
-        for i, (pname, pinfo) in enumerate(PRODUCT_KEYWORDS.items()):
-            biz_hits = _match_rows_with_ai_fallback(
-                biz_df, pinfo["keywords"], pname, pinfo["desc"], cache_key=f"biz_{pname}"
-            ).sort_values(COL_AI_SCORE, ascending=False)
-
-            domain_kws = []
-            for dname in PRODUCT_TO_DOMAIN.get(pname, []):
-                domain_kws.extend(INTEGRATED_RND_DOMAINS.get(dname, {}).get("keywords", []))
-
-            rnd_hits = _match_rows_with_ai_fallback(
-                rnd_df, domain_kws, pname, pinfo["desc"], cache_key=f"rnd_{pname}"
-            ).sort_values(COL_AI_SCORE, ascending=False)
-
-            with pg_cols[i]:
-                color = PG_COLORS[i % len(PG_COLORS)]
-                st.markdown(
-                    f"""
-                    <div class="gt-surface" style="border-top:4px solid {color};padding:12px;">
-                        <div style="font-size:14px;font-weight:800;color:{color};">{pname}</div>
-                        <div style="font-size:11px;color:{C['text_muted']};margin-top:4px;height:32px;overflow:hidden;">{pinfo['desc']}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                total_hits = len(rnd_hits) + len(biz_hits)
-                with st.popover(f"🔍 {pname} 대응 과제 보기 ({total_hits}건)", use_container_width=True):
-                    st.markdown(f"**🔬 R&D 추천 ({len(rnd_hits)}건)**")
-                    if rnd_hits.empty:
-                        st.caption("추천된 R&D 과제가 없습니다.")
-                    else:
-                        for _, r in rnd_hits.head(5).iterrows():
-                            one_line = get_oneline_summary(r)
-                            st.markdown(
-                                f"""
-                                <div class='gt-popover-item' style="height:64px;overflow:hidden;">
-                                    <a href='{escape(str(r.get(COL_URL) or '#'))}' target='_blank'
-                                       style='color:{C['success_text']};text-decoration:none;font-weight:600;
-                                              display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>
-                                        {escape(str(r[COL_TITLE]))}
-                                    </a>
-                                    <div style='font-size:11px;color:{C['text_muted']};margin-top:3px;
-                                                display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;'>
-                                        {escape(str(one_line or '요약 생성 중...'))}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
-
-                    st.markdown("---")
-                    st.markdown(f"**💼 사업 공고 ({len(biz_hits)}건)**")
-                    if biz_hits.empty:
-                        st.caption("관련 사업 공고가 없습니다.")
-                    else:
-                        for _, r in biz_hits.head(5).iterrows():
-                            one_line = get_oneline_summary(r)
-                            st.markdown(
-                                f"""
-                                <div class='gt-popover-item' style="height:64px;overflow:hidden;">
-                                    <a href='{escape(str(r.get(COL_URL) or '#'))}' target='_blank'
-                                       style='color:{C['accent']};text-decoration:none;font-weight:600;
-                                              display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>
-                                        {escape(str(r[COL_TITLE]))}
-                                    </a>
-                                    <div style='font-size:11px;color:{C['text_muted']};margin-top:3px;
-                                                display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;'>
-                                        {escape(str(one_line or '요약 생성 중...'))}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
-
+        st.caption("제품 이름을 누르면 관련 사업·과제·뉴스가 펼쳐집니다. 대응 내용은 매일 아침 AI가 오늘 연결된 공고·뉴스를 근거로 작성합니다.")
+        for pname in PRODUCT_KEYWORDS:
+            code = PRODUCT_CODES[pname]
+            eng, desc = PRODUCT_TITLES[code]
+            mt = match_product(pname, _g_biz, _g_rnd, _guide_news, ai_titles=_product_ai)
+            nb, nr, nn = len(mt["biz"]), len(mt["rnd"]), len(mt["news"])
+            g = _guide_ai.get(code) or {}
+            with st.container(border=True):
+                with st.expander(f"**{code}** · {eng} — {desc}　　사업 {nb} · 과제 {nr} · 뉴스 {nn}", expanded=False):
+                    items = ""
+                    for r in mt["biz"].head(6).to_dict("records"):
+                        meta = " · ".join(x for x in [str(r.get("_org") or ""), format_budget_eok(r.get(COL_BUDGET)) or "",
+                                                     ("~" + str(r.get(COL_DUE_DATE))[5:10]) if r.get(COL_DUE_DATE) else ""] if x)
+                        items += _guide_item_html(r[COL_TITLE], r.get(COL_URL), escape(meta), "사업", C["accent"])
+                    for r in mt["rnd"].head(5).to_dict("records"):
+                        meta = " · ".join(x for x in [str(r.get("_org") or ""), format_budget_eok(r.get(COL_BUDGET)) or "",
+                                                     ("~" + str(r.get(COL_DUE_DATE))[5:10]) if r.get(COL_DUE_DATE) else ""] if x)
+                        items += _guide_item_html(r[COL_TITLE], r.get(COL_URL), escape(meta), "과제", C["success_text"])
+                    for it in mt["news"][:5]:
+                        items += _guide_item_html(it.get("title"), it.get("url") or it.get("link"),
+                                                  escape(SOURCE_LABEL_KO.get(it.get("_src"), "뉴스")), "뉴스", C["warn_text"])
+                    st.markdown(items or f'<div class="gt-guide-none">오늘 연결된 사업·과제·뉴스가 없습니다.</div>',
+                                unsafe_allow_html=True)
+                if g and not g.get("none"):
+                    acts = "".join(f"<div>· {_est_html(a)}</div>" for a in (g.get("actions") or []))
+                    st.markdown(
+                        f'<dl class="gt-guide-row"><dt>관련 이슈</dt><dd>{_est_html(g.get("issue"))}</dd>'
+                        f'<dt>우리 사업 영향</dt><dd>{_est_html(g.get("impact"))}</dd>'
+                        f'<dt>지금 할 일</dt><dd>{acts or "-"}</dd></dl>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown('<div class="gt-guide-none">오늘 신규 이슈 없음 — 지속 모니터링</div>', unsafe_allow_html=True)
 
     # ----------------------------------------------------------------
     # Ⅴ. 주요 동향 분석 — 5단계 + 근거 키워드
