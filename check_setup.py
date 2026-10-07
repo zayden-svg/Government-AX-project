@@ -39,8 +39,6 @@ def main():
         print(f"  {'✅' if v else '⚠️'} {name} — {why}{'' if v else ' (미등록)'}")
 
     key = read_secret("ANTHROPIC_API_KEY")
-    if key and not key.startswith("sk-ant-api"):
-        print("  ⚠️ ANTHROPIC_API_KEY 형식이 일반 API 키(sk-ant-api...)와 다릅니다. Console → API Keys에서 발급했는지 확인하세요.")
 
     print("\n=== 2) DB 연결 ===")
     if read_secret("DATABASE_URL"):
@@ -60,7 +58,14 @@ def main():
         try:
             from ai_utils import _call
             txt, err = _call("OK라고만 답해.", json_mode=False, max_tokens=5)
-            print(f"  {'✅ 정상 응답' if not err else '⚠️ 실패: ' + str(err)[:200]}")
+            if not err:
+                print("  ✅ 정상 응답")
+            elif "credit balance" in str(err):
+                print("  ❌ 크레딧 잔액 부족 — platform.claude.com → Settings → Billing → Buy credits 후 다시 실행하세요. (AI 분석 없이 진행)")
+            elif "authentication" in str(err).lower() or "401" in str(err):
+                print("  ❌ API 키 인증 실패 — 키를 다시 발급해 Secrets에 등록하세요.")
+            else:
+                print(f"  ⚠️ 실패: {str(err)[:200]}")
         except Exception as e:
             print(f"  ⚠️ 실패: {type(e).__name__}: {e}")
     else:

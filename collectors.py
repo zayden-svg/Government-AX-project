@@ -824,11 +824,17 @@ def fetch_iris(limit=20, max_pages=3):
         browser = p.chromium.launch(headless=True)
         _detail_holder = {}
         page = browser.new_page()
-        page.goto(IRIS_LIST_URL, timeout=30000)
-        try:
-            page.wait_for_selector("li:has(a[onclick*='f_bsnsAncmListForm_view'])", timeout=15000)
-        except Exception:
-            print("[WARN] IRIS 목록이 15초 내에 로드되지 않았습니다. 0건으로 처리합니다.")
+        loaded = False
+        for attempt in (1, 2):   # 해외 서버에서 느릴 때가 있어 1회 재시도
+            try:
+                page.goto(IRIS_LIST_URL, timeout=60000, wait_until="domcontentloaded")
+                page.wait_for_selector("li:has(a[onclick*='f_bsnsAncmListForm_view'])", timeout=30000)
+                loaded = True
+                break
+            except Exception as e:
+                print(f"[WARN] IRIS 목록 로딩 {attempt}차 실패: {str(e)[:120]}")
+        if not loaded:
+            print("[WARN] IRIS 목록을 불러오지 못했습니다. 0건으로 처리합니다.")
             browser.close()
             return results
         page.wait_for_timeout(3000)

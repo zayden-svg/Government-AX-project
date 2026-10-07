@@ -208,7 +208,7 @@ def recommend_keywords(titles, exclude_terms=None, n=8):
 # ------------------------------------------------------------
 def extract_trend_keywords(titles):
     titles_text = "\n".join(f"- {t}" for t in titles[:150])
-    prompt = f"""아래 뉴스·공고 제목들을 분석해서 핵심 키워드를 15~30개 추출해라.
+    prompt = f"""아래 뉴스·공고 제목들을 분석해서 핵심 키워드를 15~20개 추출해라.
 
 각 키워드마다 다음 항목을 포함해라:
 - keyword: 키워드 자체
@@ -218,17 +218,20 @@ def extract_trend_keywords(titles):
   (예시일 뿐 그대로 쓰지 말고 실제 내용에 맞게 자유롭게 명명: 'AI', '사이버보안', '클라우드', '정책/제도', '산업동향' 등)
   특정 회사의 제품 카테고리로 분류하지 말고, 업계 전반의 주제로 분류해라.
 - reason: 1줄 판단 근거
-- sample_titles: 근거가 된 실제 제목 2~3개 (목록에 있는 제목 그대로)
+- sample_titles: 근거가 된 실제 제목 최대 2개 (목록에 있는 제목 그대로)
 
 [제목 목록]
 {titles_text}
 
 출력은 JSON 배열로만.
 """
-    text, err = _call(prompt, json_mode=True)
+    text, err = _call(prompt, json_mode=True, max_tokens=6000)
     if err:
         return [], err
     result = _parse_json(text, [])
+    if isinstance(result, dict):          # {"keywords": [...]} 형태로 감싸서 줘도 처리
+        result = next((v for v in result.values() if isinstance(v, list)), [])
+    result = [r for r in result if isinstance(r, dict) and r.get("keyword")]
     # 거의 동일한 키워드가 중복 추출되는 경우 1차 정리 (importance 높은 쪽을 우선 유지)
     result = sorted(result, key=lambda x: -(x.get("importance") or 0))
     result = _dedupe_similar_keywords(result)
@@ -534,8 +537,15 @@ async def analyze_postings_batch(pending, progress_cb=None):
                 await asyncio.sleep(wait)
             last_sent["t"] = time.monotonic()
 
+    fatal = {"msg": None}   # 크레딧 부족·키 오류면 나머지는 호출하지 않고 바로 실패 처리 (시간 낭비 방지)
+
     async def _one(key, info):
         async with sem:
+            if fatal["msg"]:
+                results[key] = {"error": fatal["msg"]}
+                if progress_cb:
+                    progress_cb(key, results[key])
+                return
             await _throttle()
             try:
                 resp = await client.messages.create(
@@ -546,7 +556,10 @@ async def analyze_postings_batch(pending, progress_cb=None):
                 )
                 res = _normalize_analysis(_parse_json(_resp_text(resp), None))
             except Exception as e:
-                res = {"error": f"{type(e).__name__}: {e}"[:200]}
+                msg = f"{type(e).__name__}: {e}"[:200]
+                if "credit balance" in msg or "authentication_error" in msg or "invalid x-api-key" in msg.lower():
+                    fatal["msg"] = "크레딧 부족 또는 API 키 오류 — 이번 실행은 AI 분석 생략"
+                res = {"error": msg}
             results[key] = res
             if progress_cb:
                 progress_cb(key, res)
