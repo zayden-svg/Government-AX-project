@@ -106,7 +106,9 @@ def extract_budget(text):
     """반환: (원 단위 금액 문자열, 라벨) — 못 찾으면 ('', '')"""
     if not text:
         return "", ""
-    t = str(text)
+    # NTIS처럼 숫자와 단위가 다른 줄에 찍히는 경우 ("공고금액 :\n1,575.9\n억원") → 한 줄로 붙임
+    t = re.sub(rf"(\d)[ \t]*\n\s*({_UNITS}?\s*원)", r"\1\2", str(text))
+    t = re.sub(rf"({_UNITS})[ \t]*\n\s*원", r"\1원", t)
     for rx, name, width, same_line in _BUDGET_RULES:
         min_amount = 300_000 if name in _REWARD_NAMES else 1_000_000
         for m in rx.finditer(t):

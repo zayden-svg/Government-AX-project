@@ -15,7 +15,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 from collectors import run_all_collectors, fetch_g2b_results, refresh_records, refreshable_url
-from common import is_mois_noise, posting_key, family_key, full_agency, is_closed, series_title
+from common import is_mois_noise, posting_key, family_key, full_agency, is_closed, series_title, is_list_url
 from store import load_cache, save_cache
 from procurement_store import save_results, count_results
 from biz_classifier import classify_and_score as biz_classify_and_score
@@ -153,8 +153,33 @@ def _d(v):
 
 
 def _quality(r):
-    return (r.get("reg_date") or "", bool(r.get("due_date")), bool(r.get("budget")),
+    """같은 공고 여러 행 중 남길 행: ① 공고 1건 원문 주소 ② 최근 등록(연장·재공고) ③ 최근 갱신(오늘 수집)
+    ④ IRIS 대신 실제 주관기관 표기 ⑤ 마감·예산·AI분석·본문이 있는 행"""
+    return (not is_list_url(r.get("url")), _d(r.get("reg_date")) or date.min, str(r.get("updated_at") or ""),
+            "IRIS" not in str(r.get("agency") or ""), bool(r.get("due_date")), bool(r.get("budget")),
             r.get("ai_priority_score") is not None, len(r.get("content") or ""))
+
+
+_JUNK_TITLES = {"전체", "공지", "검색", "목록"}
+_NEW_BADGE_RE = re.compile(r"^\s*N\s*(?=[가-힣\[\(「『<〈'\"‘“])")
+
+
+def clean_title(agency, title):
+    """TIPA 목록의 새 글 배지 'N'이 제목 앞에 붙은 경우 제거 (같은 공고가 2건으로 보이던 원인)"""
+    t = re.sub(r"\s+", " ", str(title or "")).strip()
+    if "중소기업기술정보진흥원" in str(agency or "") or str(agency or "") == "TIPA":
+        t = _NEW_BADGE_RE.sub("", t)
+    return t
+
+
+def is_junk_row(r):
+    """예전 수집기가 화면 메뉴·조회수 등을 공고로 잘못 저장한 행 / 목록 페이지 주소만 가진 행"""
+    reg = str(r.get("reg_date") or "").strip()
+    if reg and not _d(reg):
+        return True                      # 등록일 칸에 '7,663'(조회수) · '접수중' · 부처명 등이 들어간 행
+    if str(r.get("title") or "").strip() in _JUNK_TITLES:
+        return True
+    return is_list_url(r.get("url"))
 
 
 def merge_duplicates(rows):
@@ -173,9 +198,10 @@ def merge_duplicates(rows):
         if ri != rj:
             parent[rj] = ri
 
-    by_key, by_ref, by_fam = {}, {}, {}
+    by_key, by_ref, by_url, by_fam = {}, {}, {}, {}
     for i, r in enumerate(rows):
-        for idx, k in ((by_key, r["uniq_key"]), (by_ref, r.get("ref_no") or "")):
+        url_k = "" if is_list_url(r.get("url")) else str(r.get("url")).strip().rstrip("/")   # 같은 원문 주소 = 같은 공고
+        for idx, k in ((by_key, r["uniq_key"]), (by_ref, r.get("ref_no") or ""), (by_url, url_k)):
             if k:
                 if k in idx:
                     union(idx[k], i)
@@ -295,6 +321,7 @@ def _build_ai_info_block(rec):
 
 def _prepare_new(rec):
     rec["agency"] = full_agency(rec.get("agency"))
+    rec["title"] = clean_title(rec["agency"], rec.get("title"))
     rec["manager"] = clean_manager_name(rec.get("manager", ""))
     rec["post_type"] = classify_post_type(rec["title"])
     info = biz_classify_and_score(rec["title"], rec.get("content", ""))
@@ -315,12 +342,15 @@ def collect_and_process():
     before = len(rows)
     for r in rows:
         r["agency"] = full_agency(r["agency"])
+        r["title"] = clean_title(r["agency"], r["title"])
         r["uniq_key"] = posting_key(r["agency"], r["title"], r["reg_date"])
         r["dedup_hash"] = family_key(r["agency"], r.get("dept"), r["title"])
-    cutoff = (today - timedelta(days=KEEP_DAYS)).isoformat()
-    rows = [r for r in rows if not r["reg_date"] or r["reg_date"] >= cutoff]
+    cutoff = today - timedelta(days=KEEP_DAYS)
+    junk = sum(1 for r in rows if is_junk_row(r))
+    rows = [r for r in rows if not is_junk_row(r) and (not _d(r["reg_date"]) or _d(r["reg_date"]) >= cutoff)]
     rows, merged0 = merge_duplicates(rows)
-    print(f"[0단계] 기존 {before}건 정리 → {len(rows)}건 (중복·연장공고 합침 {merged0}건)")
+    print(f"[0단계] 기존 {before}건 정리 → {len(rows)}건 (잘못 저장된 행·목록 주소 삭제 {junk}건, "
+          f"중복·연장공고 합침 {merged0}건)")
 
     # [1단계] 수집
     results_by_agency = run_all_collectors(limit=COLLECT_LIMIT)
@@ -336,6 +366,10 @@ def collect_and_process():
                 skipped_count += 1
                 continue
             rec = _prepare_new(rec)
+            if is_junk_row(rec):
+                print(f"[WARN] 원문 주소 확인 불가로 제외: {agency} · {rec['title'][:40]} ({str(rec.get('url'))[:60]})")
+                skipped_count += 1
+                continue
             if is_closed(rec.get("due_date"), rec.get("reg_date"), rec.get("period_end"), today) \
                     and rec["uniq_key"] not in by_key:
                 skipped_count += 1          # 이미 마감된 새 공고는 저장·AI 분석하지 않음 (비용 절감)

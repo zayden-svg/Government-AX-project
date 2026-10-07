@@ -969,7 +969,11 @@ def fetch_tipa(limit=20):
         a_tag = row.select_one("td.subject a") or row.find("a")
         if not a_tag:
             continue
-        title = (a_tag.get("title") or a_tag.get_text(strip=True)).strip()
+        for badge in a_tag.select("span, i, em, img"):          # 새 글 표시 'N' 배지가 제목에 붙는 것 방지
+            if badge.get_text(strip=True).upper() in ("N", "NEW", "") or "new" in " ".join(badge.get("class") or []).lower():
+                badge.decompose()
+        title = (a_tag.get("title") or a_tag.get_text(" ", strip=True)).strip()
+        title = re.sub(r"^\s*N\s*(?=[가-힣\[\(「『<〈'\"‘“])", "", title)
         if not title:
             continue
         href = a_tag.get("href", "")

@@ -174,6 +174,19 @@ def family_key(agency, dept, title):
     return f"{org}|{series_title(title)}"
 
 
+_LIST_URL_RE = re.compile(r"(mng\.do|list\.do|List\.do|ancList\.do|selectTenderList\.do|ListView\.do)(?:[?#]|$)")
+
+
+def is_list_url(url):
+    """공고 1건이 아니라 '목록 페이지'를 가리키는 주소인지 (예전 수집기가 남긴 잘못된 원문 링크)"""
+    u = str(url or "").strip()
+    if not u:
+        return True
+    if "retrieveBsnsAncmView.do" in u and "bsnsAncmSn=" not in u:
+        return True      # IRIS 예전 짧은 주소 — 공고 1건이 아니라 사업 통합공고가 열림
+    return bool(_LIST_URL_RE.search(u.split("://", 1)[-1]))
+
+
 def posting_key(agency, title, reg_date):
     """공고 고유번호 — 원문 주소가 바뀌어도(링크 수정) 같은 공고면 같은 번호"""
     import hashlib
