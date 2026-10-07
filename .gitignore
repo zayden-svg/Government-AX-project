@@ -1,6 +1,7 @@
 # 절대 업로드하면 안 되는 비밀정보
 .env
 .env.*
+.streamlit/secrets.toml
 
 # 로컬 SQLite 데이터베이스
 gov_tracker.db
@@ -15,8 +16,13 @@ venv/
 .venv/
 env/
 
-# 실행 결과 엑셀 (매번 새로 생성됨)
+# 실행 결과 (매번 새로 생성됨)
 Gov-Tracker_결과.xlsx
+run_log.txt
+debug_*.html
+
+# 배포용 압축 파일
+*.zip
 
 # OS 자동 생성 잡파일
 .DS_Store

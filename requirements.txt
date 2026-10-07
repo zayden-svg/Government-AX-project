@@ -1,7 +1,7 @@
-streamlit
+streamlit>=1.46
 pandas
 openpyxl
-google-generativeai
+anthropic
 python-dotenv
 beautifulsoup4
 requests

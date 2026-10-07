@@ -4,7 +4,7 @@ import re
 import time
 import traceback
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urljoin
 
 import urllib3
@@ -20,6 +20,16 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 }
+
+G2B_LOOKBACK_DAYS = 7       # 조달청 조회 기간(일)
+G2B_MAX_PAGES = 5           # 100건 × 5페이지 = 최대 500건 조회
+G2B_IT_KEYWORDS = [   # 너무 넓은 단어(대기·구축·유지보수·성능)는 대기오염·건물보수 등이 섞여 제외
+    "정보시스템", "정보화", "시스템", "홈페이지", "누리집", "포털", "플랫폼", "소프트웨어", "SW",
+    "클라우드", "보안", "데이터", "AI", "인공지능", "전산", "서버", "네트워크", "웹", "앱", "모바일",
+    "예약", "수강신청", "대기열", "트래픽", "부하테스트", "부하시험", "성능시험", "ISP", "ISMP", "차세대",
+]
+
+from common import MOIS_KEEP_WORDS  # noqa: E402
 
 STANDARD_FIELDS = [
     "source", "agency", "gubun", "title", "dept", "manager",
@@ -100,34 +110,52 @@ def _strip_html(raw_html):
 # 표현이 제각각이라 하나의 정규식 세트로 통일해서 처리한다.
 # ------------------------------------------------------------------
 BUDGET_LABEL_PATTERNS = [
-    r"사업\s*금액", r"예산\s*규모", r"배정\s*예산", r"추정\s*가격", r"추정\s*금액",
-    r"계약\s*금액", r"총\s*사업\s*비", r"사업\s*비", r"지원\s*금액", r"정부\s*지원\s*연구개발비",
+    r"총\s*사업\s*비", r"사업\s*금액", r"사업\s*예산", r"예산\s*규모", r"배정\s*예산", r"추정\s*가격",
+    r"추정\s*금액", r"기초\s*금액", r"계약\s*금액", r"정부\s*지원\s*연구\s*개발\s*비",
+    r"연구\s*개발\s*비", r"지원\s*규모", r"지원\s*금액", r"사업\s*비", r"예\s*산",
 ]
-_BUDGET_LABEL_RE = re.compile(
-    r"(?:" + "|".join(BUDGET_LABEL_PATTERNS) + r")\s*[:：]?\s*"
-    r"([\d,]+(?:\.\d+)?)\s*(백만원|천만원|만원|원)?"
-)
+_BUDGET_LABEL_RE = re.compile(r"(?:" + "|".join(BUDGET_LABEL_PATTERNS) + r")")
+# 숫자+단위 조각: "1억", "5,000만", "1,200백만", "350,000천", "150,000,000"
+_AMOUNT_TOKEN_RE = re.compile(r"\s*([\d][\d,]*(?:\.\d+)?)\s*(조|억|천만|백만|만|천)?\s*")
+_UNIT = {"조": 10**12, "억": 10**8, "천만": 10**7, "백만": 10**6, "만": 10**4, "천": 10**3, None: 1}
+
+
+def _parse_amount(fragment):
+    """'1억 5,000만원' / '50억원' / '1,200백만원' / '350,000천원' → 원 단위 정수. 실패 시 0"""
+    first_digit = re.search(r"\d", fragment[:15])   # 라벨 뒤 15자 안에서 첫 숫자 위치
+    if not first_digit:
+        return 0
+    frag = fragment[first_digit.start():]
+    total, pos, matched = 0, 0, False
+    while True:
+        m = _AMOUNT_TOKEN_RE.match(frag, pos)
+        if not m or not m.group(1):
+            break
+        try:
+            num = float(m.group(1).replace(",", ""))
+        except ValueError:
+            break
+        total += num * _UNIT[m.group(2)]
+        matched = True
+        pos = m.end()
+        if m.group(2) is None:      # 단위 없는 숫자가 나오면 그 뒤는 더 합치지 않음
+            break
+    rest = frag[pos:pos + 2]
+    if not matched or not rest.startswith("원"):
+        return 0                     # '원'으로 끝나지 않으면 금액이 아님(연도·건수 오인 방지)
+    return int(total)
 
 
 def extract_budget_from_text(text_val):
-    """본문 텍스트에서 사업금액/예산 관련 문구를 찾아 '원' 단위 숫자 문자열로 변환"""
+    """본문에서 예산 라벨 뒤의 금액을 찾아 '원' 단위 숫자 문자열로 변환. 못 찾으면 ''"""
     if not text_val:
         return ""
-    m = _BUDGET_LABEL_RE.search(str(text_val))
-    if not m:
-        return ""
-    num_str, unit = m.groups()
-    try:
-        num = float(num_str.replace(",", ""))
-    except ValueError:
-        return ""
-    if unit == "백만원":
-        num *= 1_000_000
-    elif unit == "천만원":
-        num *= 10_000_000
-    elif unit == "만원":
-        num *= 10_000
-    return str(int(num))
+    t = str(text_val)
+    for m in _BUDGET_LABEL_RE.finditer(t):
+        amount = _parse_amount(t[m.end():m.end() + 40])
+        if amount >= 1_000_000:      # 100만원 미만은 오인식으로 간주
+            return str(amount)
+    return ""
 
 
 def _fetch_budgets_parallel(urls, max_workers=5):
@@ -155,12 +183,28 @@ def _fetch_budgets_parallel(urls, max_workers=5):
     return results
 
 
+def _pw_detail_budget(browser, url, holder, label):
+    """[속도 개선] 상세페이지 예산 추출 — 탭 1개를 재사용하고 이미지·폰트·CSS 로딩을 막아 빠르게 연다."""
+    try:
+        if holder.get("page") is None:
+            pg = browser.new_page()
+            pg.route("**/*", lambda r: r.abort() if r.request.resource_type in ("image", "font", "media", "stylesheet") else r.continue_())
+            holder["page"] = pg
+        pg = holder["page"]
+        pg.goto(url, timeout=15000, wait_until="domcontentloaded")
+        pg.wait_for_timeout(300)
+        return extract_budget_from_text(pg.inner_text("body"))
+    except Exception as e:
+        print(f"[WARN] {label} 상세 예산 추출 실패({url}): {e}")
+        return ""
+
+
 # ------------------------------------------------------------------
 # 1. 조달청 (나라장터 OpenAPI) - BidPublicInfoService
 #    예산(presmptPrce/asignBdgtAmt)이 API 필드로 이미 제공되므로 수정 불필요
 # ------------------------------------------------------------------
 def fetch_g2b(limit=10):
-    service_key = os.getenv("G2B_SERVICE_KEY")
+    service_key = _g2b_key()
     if not service_key:
         print("[SKIP] G2B_SERVICE_KEY가 없어 조달청 수집을 건너뜁니다. .env 파일에 G2B_SERVICE_KEY를 설정해주세요.")
         return []
@@ -169,23 +213,27 @@ def fetch_g2b(limit=10):
 
     url = "http://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch"
     today = datetime.now()
-    begin = today.replace(day=1).strftime("%Y%m%d") + "0000"
+    begin = (today - timedelta(days=G2B_LOOKBACK_DAYS)).strftime("%Y%m%d") + "0000"
     end = today.strftime("%Y%m%d") + "2359"
 
-    params = {
-        "serviceKey": service_key, "pageNo": "1", "numOfRows": str(limit),
-        "inqryDiv": "1", "inqryBgnDt": begin, "inqryEndDt": end, "type": "xml",
-    }
-
-    resp = safe_get(url, params=params)
-    root = ET.fromstring(resp.content)
-
-    err_msg = root.findtext(".//errMsg")
-    if err_msg:
-        print(f"[FAIL] 조달청 API 오류: {err_msg}")
-        return []
-
-    items = root.findall(".//item")
+    items = []
+    for page_no in range(1, G2B_MAX_PAGES + 1):
+        params = {
+            "serviceKey": service_key, "pageNo": str(page_no), "numOfRows": "100",
+            "inqryDiv": "1", "inqryBgnDt": begin, "inqryEndDt": end, "type": "xml",
+        }
+        resp = safe_get(url, params=params, timeout=15)
+        root = ET.fromstring(resp.content)
+        err_msg = root.findtext(".//errMsg")
+        if err_msg:
+            print(f"[FAIL] 조달청 API 오류: {err_msg}")
+            break
+        page_items = root.findall(".//item")
+        items.extend(page_items)
+        if len(page_items) < 100:
+            break
+    # IT 관련 공고만 남김 (전체 용역 공고 중 무작위 10건만 가져오던 문제 해결)
+    items = [it for it in items if any(k in (it.findtext("bidNtceNm") or "") for k in G2B_IT_KEYWORDS)]
     results = []
     for item in items:
         def g(*names):
@@ -211,7 +259,259 @@ def fetch_g2b(limit=10):
         )
         results.append(rec)
 
-    return results[:limit]
+    return results[:limit * 3]
+
+
+
+# ------------------------------------------------------------------
+# 조달청 공통 헬퍼 (사전규격·낙찰·계약 3개 서비스 공용)
+#  - 같은 공공데이터포털 인증키(G2B_SERVICE_KEY)를 쓰되, 서비스마다 활용신청 승인은 따로 필요
+#  - 주소: 사전규격 ao/HrcspSsstndrdInfoService, 낙찰 as/ScsbidInfoService, 계약 ao/CntrctInfoService
+# ------------------------------------------------------------------
+G2B_PRESPEC_URL = "http://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServcPPSSrch"
+G2B_SCSBID_URL = "http://apis.data.go.kr/1230000/as/ScsbidInfoService/getScsbidListSttusServcPPSSrch"
+G2B_CNTRCT_URL = "http://apis.data.go.kr/1230000/ao/CntrctInfoService/getCntrctInfoListServcPPSSrch"
+G2B_RESULT_LOOKBACK_DAYS = 7    # 낙찰·계약 조회 기간(일) — 매일 실행되므로 7일이면 누락 없음
+
+
+_G2B_DEAD = set()
+
+
+def _g2b_key():
+    """인증키 반환. Encoding 키(%2B 등 포함)를 넣어도 자동으로 Decoding 키로 바꿔 이중 변환 오류를 막는다."""
+    from urllib.parse import unquote
+    key = (os.getenv("G2B_SERVICE_KEY") or "").strip()
+    return unquote(key) if "%" in key else key
+
+
+def _g2b_items(url, params, label, max_pages=None):
+    """조달청 API를 JSON으로 호출해 item 목록을 페이지별로 모은다. 오류 시 원인을 로그로 남기고 빈 목록."""
+    max_pages = max_pages or G2B_MAX_PAGES
+    key = _g2b_key()
+    if not key:
+        print(f"[SKIP] G2B_SERVICE_KEY 미설정 → {label} 건너뜀")
+        return []
+    if url in _G2B_DEAD:          # 같은 실행에서 이미 인증 실패한 서비스는 다시 부르지 않음
+        return []
+    out = []
+    for page_no in range(1, max_pages + 1):
+        q = {"serviceKey": key, "pageNo": str(page_no), "numOfRows": "100", "type": "json", **params}
+        resp = None
+        try:
+            resp = safe_get(url, params=q, timeout=20)
+            data = resp.json()
+        except ValueError:
+            # 키 미승인·오류 시 JSON이 아니라 XML 오류문이 옴
+            body_txt = resp.text if resp is not None else ""
+            msg = re.search(r"<(?:returnAuthMsg|errMsg|resultMsg)>([^<]+)<", body_txt)
+            print(f"[FAIL] {label}: {msg.group(1) if msg else body_txt[:120]} (활용신청 승인 여부 확인)")
+            _G2B_DEAD.add(url)
+            break
+        except Exception as e:
+            print(f"[FAIL] {label}: {e}")
+            break
+        root = data.get("response") or {}
+        header = root.get("header") or {}
+        if header.get("resultCode") not in (None, "00"):
+            print(f"[FAIL] {label}: {header.get('resultMsg')}")
+            break
+        items = (root.get("body") or {}).get("items") or []
+        if isinstance(items, dict):
+            items = items.get("item") or []
+        if isinstance(items, dict):
+            items = [items]
+        out.extend(items)
+        if len(items) < 100:
+            break
+    return out
+
+
+def _is_it_title(title, extra_flag=""):
+    return str(extra_flag).upper() == "Y" or any(k in (title or "") for k in G2B_IT_KEYWORDS)
+
+
+def _won(v):
+    try:
+        return str(int(float(str(v).replace(",", ""))))
+    except Exception:
+        return ""
+
+
+# ------------------------------------------------------------------
+# 1-2. 조달청 사전규격 — 입찰공고 '전 단계'. 공고 전에 규격서를 미리 보고 영업 선제 대응
+#      postings 테이블에 '사전규격' 구분으로 함께 저장됨
+# ------------------------------------------------------------------
+def fetch_g2b_prespec(limit=10):
+    now = datetime.now()
+    params = {
+        "inqryDiv": "1",   # 1: 등록일시 기준
+        "inqryBgnDt": (now - timedelta(days=G2B_LOOKBACK_DAYS)).strftime("%Y%m%d") + "0000",
+        "inqryEndDt": now.strftime("%Y%m%d") + "2359",
+    }
+    results = []
+    for it in _g2b_items(G2B_PRESPEC_URL, params, "조달청 사전규격"):
+        title = (it.get("prdctClsfcNoNm") or "").strip()
+        if not title or not _is_it_title(title, it.get("swBizObjYn")):
+            continue
+        results.append(base_record(
+            source="API", agency="조달청(사전규격)", gubun="사전규격", title=title,
+            dept=it.get("orderInsttNm") or it.get("rlDminsttNm") or "",
+            manager=it.get("ofclNm", ""),
+            reg_date=normalize_date(it.get("rgstDt") or it.get("rcptDt")),
+            due_date=normalize_date(it.get("opninRgstClseDt")),   # 의견등록 마감일
+            budget=_won(it.get("asignBdgtAmt")),
+            url=it.get("specDocFileUrl1") or "https://www.g2b.go.kr",
+            content=(f"{title} / 실수요기관: {it.get('rlDminsttNm', '')} / "
+                     f"사전규격번호: {it.get('bfSpecRgstNo', '')} / SW사업: {it.get('swBizObjYn', '')}"),
+        ))
+    return results[:limit * 3]
+
+
+# ------------------------------------------------------------------
+# 조달 결과(낙찰·계약) — 영업기회가 아니라 '시장 정보'이므로 postings가 아닌
+# procurement_results 테이블에 따로 저장 (main.py → procurement_store.py)
+# ------------------------------------------------------------------
+def _first_corp_name(corp_list):
+    """계약 API 업체목록 '[순번^업체구분^공동도급^업체명^...]' → 업체명 (공동계약이면 '외 N')"""
+    names = []
+    for p in re.findall(r"\[([^\]]*)\]", str(corp_list or "")):
+        f = p.split("^")
+        if len(f) >= 4 and f[3].strip():
+            names.append(f[3].strip())
+    if not names:
+        return ""
+    return names[0] + (f" 외 {len(names) - 1}" if len(names) > 1 else "")
+
+
+def _first_dminstt(dminstt_list, fallback=""):
+    """계약 API 수요기관목록 '[순번^기관코드^기관명^...]' → 첫 기관명"""
+    m = re.search(r"\[([^\]]*)\]", str(dminstt_list or ""))
+    if m:
+        f = m.group(1).split("^")
+        if len(f) >= 3 and f[2].strip():
+            return f[2].strip()
+    return fallback
+
+
+# 재발주 추적용 표적 검색어 — 자사 제품(NF·BM·LT) 도입 사업에 자주 들어가는 사업명 단어
+G2B_TARGET_KEYWORDS = ["대기열", "접속", "예약", "수강신청", "매크로", "트래픽", "티켓", "부하테스트", "가상대기"]
+
+
+def _contract_end_date(it):
+    """계약 종료일: 총완수일자 → 금차완수일자 → 계약기간 문구('~2026-12-31', '착수일부터 120일') 순으로 찾음"""
+    for k in ("ttalScmpltDate", "thtmScmpltDate"):
+        d = normalize_date(it.get(k))
+        if re.match(r"\d{4}-\d{2}-\d{2}$", d or ""):
+            return d
+    prd = str(it.get("cntrctPrd") or "")
+    dates = re.findall(r"(\d{4})[.\-/년\s]*(\d{1,2})[.\-/월\s]*(\d{1,2})", prd)
+    if len(dates) >= 2:
+        y, m, d = dates[-1]
+        return f"{int(y):04d}-{int(m):02d}-{int(d):02d}"
+    days = re.search(r"(\d{2,4})\s*일", prd)
+    start = normalize_date(it.get("wbgnDate") or it.get("cntrctCnclsDate") or it.get("cntrctDate"))
+    if days and re.match(r"\d{4}-\d{2}-\d{2}$", start or ""):
+        try:
+            return (datetime.strptime(start, "%Y-%m-%d") + timedelta(days=int(days.group(1)))).strftime("%Y-%m-%d")
+        except ValueError:
+            return ""
+    return ""
+
+
+def _plus_one_year(date_str):
+    try:
+        return (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=365)).strftime("%Y-%m-%d")
+    except (TypeError, ValueError):
+        return ""
+
+
+def _scsbid_row(it):
+    title = (it.get("bidNtceNm") or "").strip()
+    event = normalize_date(it.get("fnlSucsfDate") or it.get("rlOpengDt"))
+    no = it.get("bidNtceNo", "")
+    return {
+        "kind": "낙찰", "ref_no": f"{no}-{it.get('bidNtceOrd', '')}", "title": title,
+        "agency": it.get("dminsttNm", ""), "company": it.get("bidwinnrNm", ""),
+        "amount": _won(it.get("sucsfbidAmt")), "rate": str(it.get("sucsfbidRate") or ""),
+        "event_date": event,
+        "end_date": _plus_one_year(event), "end_est": "Y",      # 낙찰 정보엔 계약기간이 없어 1년으로 추정
+        "url": (f"https://www.g2b.go.kr/link/PNPE027_01/simple?bidPbancNo={no}&bidPbancOrd={it.get('bidNtceOrd', '000')}"
+                if no else "https://www.g2b.go.kr"),
+    }
+
+
+def _cntrct_row(it):
+    title = (it.get("cntrctNm") or "").strip()
+    event = normalize_date(it.get("cntrctCnclsDate") or it.get("cntrctDate"))
+    end = _contract_end_date(it)
+    return {
+        "kind": "계약", "ref_no": it.get("untyCntrctNo") or it.get("dcsnCntrctNo", ""), "title": title,
+        "agency": _first_dminstt(it.get("dminsttList"), it.get("cntrctInsttNm", "")),
+        "company": _first_corp_name(it.get("corpList")),
+        "amount": _won(it.get("totCntrctAmt") or it.get("thtmCntrctAmt")), "rate": "",
+        "event_date": event,
+        "end_date": end or _plus_one_year(event), "end_est": "N" if end else "Y",
+        "url": it.get("cntrctDtlInfoUrl") or it.get("cntrctInfoUrl") or "https://www.g2b.go.kr",
+    }
+
+
+def _date_chunks(days_back, chunk_days=30):
+    """[오늘-days_back, 오늘] 구간을 30일 단위로 쪼갬 (조달청 API 조회기간 제한 대비)"""
+    end = datetime.now()
+    start = end - timedelta(days=days_back)
+    chunks = []
+    cur = start
+    while cur < end:
+        nxt = min(cur + timedelta(days=chunk_days), end)
+        chunks.append((cur, nxt))
+        cur = nxt + timedelta(days=1)
+    return chunks
+
+
+def fetch_g2b_results(backfill_days=0):
+    """조달청 낙찰·계약 결과.
+    ① 최근 7일: IT 관련 전체
+    ② 표적 검색: 자사 제품 관련 단어가 사업명에 들어간 건 — backfill_days>0이면 그 기간(예: 365일)을 30일씩 나눠 조회
+    반환: [{kind, ref_no, title, agency, company, amount, rate, event_date, end_date, end_est, url}, ...]"""
+    rows = {}
+
+    def _add(r):
+        if r["title"]:
+            rows[(r["kind"], r["ref_no"] or r["title"])] = r
+
+    # ① 최근 7일 — IT 관련 전체
+    for b, e in _date_chunks(G2B_RESULT_LOOKBACK_DAYS):
+        for it in _g2b_items(G2B_SCSBID_URL, {
+            "inqryDiv": "2", "inqryBgnDt": b.strftime("%Y%m%d") + "0000", "inqryEndDt": e.strftime("%Y%m%d") + "2359",
+        }, "조달청 낙찰"):
+            r = _scsbid_row(it)
+            if _is_it_title(r["title"]):
+                _add(r)
+        for it in _g2b_items(G2B_CNTRCT_URL, {
+            "inqryDiv": "1", "inqryBgnDate": b.strftime("%Y%m%d"), "inqryEndDate": e.strftime("%Y%m%d"),
+        }, "조달청 계약"):
+            r = _cntrct_row(it)
+            if _is_it_title(r["title"], it.get("infoBizYn")):
+                _add(r)
+
+    # ② 표적 검색 — 자사 제품 관련 사업 (재발주 추적용)
+    span = max(int(backfill_days or 0), G2B_RESULT_LOOKBACK_DAYS)
+    for kw in G2B_TARGET_KEYWORDS:
+        for b, e in _date_chunks(span):
+            for it in _g2b_items(G2B_SCSBID_URL, {
+                "inqryDiv": "2", "inqryBgnDt": b.strftime("%Y%m%d") + "0000", "inqryEndDt": e.strftime("%Y%m%d") + "2359",
+                "bidNtceNm": kw,
+            }, f"조달청 낙찰({kw})", max_pages=2):
+                _add(_scsbid_row(it))
+            for it in _g2b_items(G2B_CNTRCT_URL, {
+                "inqryDiv": "1", "inqryBgnDate": b.strftime("%Y%m%d"), "inqryEndDate": e.strftime("%Y%m%d"),
+                "cntrctNm": kw,
+            }, f"조달청 계약({kw})", max_pages=2):
+                _add(_cntrct_row(it))
+
+    out = list(rows.values())
+    print(f"[OK] 조달청 낙찰·계약: {len(out)}건 (IT·자사관련, 조회기간 {span}일)")
+    return out
 
 
 # ------------------------------------------------------------------
@@ -234,8 +534,8 @@ def fetch_mois(limit=10):
         title_cell = cells[1]
         a_tag = title_cell.find("a")
         title = a_tag.get_text(strip=True) if a_tag else title_cell.get_text(strip=True)
-        if not title:
-            continue
+        if not title or not any(w in title for w in MOIS_KEEP_WORDS):
+            continue   # 일반 보도자료는 사업·과제가 아니므로 제외
 
         href = a_tag.get("href", "") if a_tag else ""
         if href.startswith("http"):
@@ -318,6 +618,7 @@ def fetch_keris(limit=10):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        _detail_holder = {}
         page = browser.new_page()
         try:
             page.goto(url, timeout=30000)
@@ -348,14 +649,7 @@ def fetch_keris(limit=10):
 
                     budget_val = ""
                     if tender_seq:
-                        try:
-                            detail_page = browser.new_page()
-                            detail_page.goto(detail_url, timeout=15000)
-                            detail_page.wait_for_timeout(500)
-                            budget_val = extract_budget_from_text(detail_page.inner_text("body"))
-                            detail_page.close()
-                        except Exception as e:
-                            print(f"[WARN] KERIS 상세 예산 추출 실패({detail_url}): {e}")
+                        budget_val = _pw_detail_budget(browser, detail_url, _detail_holder, "KERIS")
 
                     rec = base_record(
                         source="SCRAPE", agency="KERIS", gubun="입찰공고",
@@ -393,6 +687,7 @@ def fetch_aihub(limit=10):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        _detail_holder = {}
         page = browser.new_page()
         try:
             page.goto(url, timeout=30000)
@@ -422,14 +717,7 @@ def fetch_aihub(limit=10):
 
                     budget_val = ""
                     if nttsn:
-                        try:
-                            detail_page = browser.new_page()
-                            detail_page.goto(detail_url, timeout=15000)
-                            detail_page.wait_for_timeout(500)
-                            budget_val = extract_budget_from_text(detail_page.inner_text("body"))
-                            detail_page.close()
-                        except Exception as e:
-                            print(f"[WARN] AIHub 상세 예산 추출 실패({detail_url}): {e}")
+                        budget_val = _pw_detail_budget(browser, detail_url, _detail_holder, "AIHub")
 
                     rec = base_record(
                         source="SCRAPE", agency="AIHub", gubun="사업공고",
@@ -534,6 +822,7 @@ def fetch_iris(limit=20, max_pages=3):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        _detail_holder = {}
         page = browser.new_page()
         page.goto(IRIS_LIST_URL, timeout=30000)
         try:
@@ -601,14 +890,7 @@ def fetch_iris(limit=20, max_pages=3):
 
                 # === 신규: 상세페이지 방문해서 예산규모 텍스트 추출 ===
                 budget_val = ""
-                try:
-                    detail_page = browser.new_page()
-                    detail_page.goto(detail_url, timeout=15000)
-                    detail_page.wait_for_timeout(600)
-                    budget_val = extract_budget_from_text(detail_page.inner_text("body"))
-                    detail_page.close()
-                except Exception as e:
-                    print(f"[WARN] IRIS 상세 예산 추출 실패({detail_url}): {e}")
+                budget_val = _pw_detail_budget(browser, detail_url, _detail_holder, "IRIS")
 
                 rec = base_record(
                     source="SCRAPE", agency="IRIS", gubun="사업공고",
@@ -680,6 +962,7 @@ def fetch_ntis(limit=20):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        _detail_holder = {}
         page = browser.new_page()
         try:
             page.goto(url, timeout=30000)
@@ -706,14 +989,7 @@ def fetch_ntis(limit=20):
                     due_date = cells[6].inner_text().strip() if len(cells) > 6 else ""
 
                     budget_val = ""
-                    try:
-                        detail_page = browser.new_page()
-                        detail_page.goto(detail_url, timeout=15000)
-                        detail_page.wait_for_timeout(500)
-                        budget_val = extract_budget_from_text(detail_page.inner_text("body"))
-                        detail_page.close()
-                    except Exception as e:
-                        print(f"[WARN] NTIS 상세 예산 추출 실패({detail_url}): {e}")
+                    budget_val = _pw_detail_budget(browser, detail_url, _detail_holder, "NTIS")
 
                     rec = base_record(
                         source="SCRAPE", agency="NTIS", gubun="국가R&D통합공고",
@@ -967,6 +1243,7 @@ COLLECTORS = {
     "AIHub": fetch_aihub,
     "국가AI전략위원회": fetch_ai_strategy,
     "조달청": fetch_g2b,
+    "조달청(사전규격)": fetch_g2b_prespec,
     "IRIS": fetch_iris,
     "NTIS": fetch_ntis,
     "TIPA": fetch_tipa,
@@ -977,39 +1254,63 @@ COLLECTORS = {
 }
 
 
+PLAYWRIGHT_COLLECTORS = ("KERIS", "AIHub", "NTIS")   # 크롬을 띄우는 수집처 (IRIS는 별도)
+
+
+def _run_playwright_group(limit):
+    """크롬(Playwright)을 쓰는 수집처는 한 줄로 차례대로 실행 — 여러 크롬을 동시에 띄울 때의 충돌·메모리 부족 방지.
+    반환: {이름: (레코드 목록 또는 None, 오류)}"""
+    out = {}
+    try:
+        iris_all = fetch_iris(limit=max(limit * 4, 40))
+        out["IRIS"] = (iris_all[:limit], None)
+        out["IITP"] = (filter_iitp_from_iris(iris_all, limit=limit), None)
+    except Exception as e:
+        traceback.print_exc()
+        out["IRIS"] = (None, e)
+        out["IITP"] = (None, e)
+    for name in PLAYWRIGHT_COLLECTORS:
+        try:
+            out[name] = (COLLECTORS[name](limit=limit), None)
+        except Exception as e:
+            traceback.print_exc()
+            out[name] = (None, e)
+    return out
+
+
 def run_all_collectors(limit=10):
-    """=== 수정: 13개 수집처를 ThreadPoolExecutor로 동시 실행.
-    IITP는 IRIS를 한 번만(넓게) 긁어서 재사용 — 중복 스크래핑 제거.
-    ↓ max_workers 숫자를 늘리면 더 빨라지지만, 사이트별 차단 위험과 PC 리소스를 고려해 8 권장. """
+    """수집처 실행: 일반 사이트(requests)는 동시에, 크롬이 필요한 사이트는 별도 1줄로 차례대로.
+    IITP는 IRIS를 한 번만(넓게) 긁어서 재사용 — 중복 수집 없음."""
     all_results = {}
-    collectors_to_run = {k: v for k, v in COLLECTORS.items() if k not in ("IRIS", "IITP")}
+    simple = {k: v for k, v in COLLECTORS.items() if k not in ("IRIS", "IITP") + PLAYWRIGHT_COLLECTORS}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        future_map = {executor.submit(fn, limit=limit): name for name, fn in collectors_to_run.items()}
+        future_map = {executor.submit(fn, limit=limit): name for name, fn in simple.items()}
+        pw_future = executor.submit(_run_playwright_group, limit)
 
-        iris_pool_future = executor.submit(fetch_iris, limit=max(limit * 4, 40))
-        future_map[iris_pool_future] = "__IRIS_POOL__"
-
-        for future in concurrent.futures.as_completed(future_map):
+        for future in concurrent.futures.as_completed(list(future_map) + [pw_future]):
+            if future is pw_future:
+                try:
+                    group = future.result()
+                except Exception as e:
+                    traceback.print_exc()
+                    group = {n: (None, e) for n in ("IRIS", "IITP") + PLAYWRIGHT_COLLECTORS}
+                for name, (records, err) in group.items():
+                    if err is not None:
+                        print(f"[FAIL] {name} 수집 실패: {err}")
+                        all_results[name] = []
+                    else:
+                        print(f"[OK] {name}: {len(records)}건 수집")
+                        all_results[name] = records
+                continue
             name = future_map[future]
             try:
                 records = future.result()
-                if name == "__IRIS_POOL__":
-                    all_results["IRIS"] = records[:limit]
-                    all_results["IITP"] = filter_iitp_from_iris(records, limit=limit)
-                    print(f"[OK] IRIS: {len(all_results['IRIS'])}건 수집")
-                    print(f"[OK] IITP: {len(all_results['IITP'])}건 수집 (IRIS 결과 재사용, 재수집 없음)")
-                else:
-                    print(f"[OK] {name}: {len(records)}건 수집")
-                    all_results[name] = records
+                print(f"[OK] {name}: {len(records)}건 수집")
+                all_results[name] = records
             except Exception as e:
-                label = "IRIS/IITP" if name == "__IRIS_POOL__" else name
-                print(f"[FAIL] {label} 수집 실패: {e}")
+                print(f"[FAIL] {name} 수집 실패: {e}")
                 traceback.print_exc()
-                if name == "__IRIS_POOL__":
-                    all_results["IRIS"] = []
-                    all_results["IITP"] = []
-                else:
-                    all_results[name] = []
+                all_results[name] = []
 
     return all_results

@@ -1,3 +1,5 @@
+import common  # noqa: F401  (한국시간 고정 — 다른 모듈보다 먼저)
+
 import re
 import json
 from datetime import datetime, timedelta
@@ -7,37 +9,55 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from common import (
+    PRODUCT_KEYWORDS, INTEGRATED_RND_DOMAINS, PRODUCT_TO_DOMAIN, PROCUREMENT_BOOST_KEYWORDS,
+    COMPETITOR_DEFAULT, is_competitor_match, procurement_boost_score, is_mois_noise,
+    detect_regions, region_label, match_regions, ALL_REGIONS, MY_REGIONS_DEFAULT, NATIONAL_LABEL,
+    DEFAULT_NEWS_KEYWORDS, SOLUTION_NEWS_KEYWORDS, ALERT_MIN_SCORE_DEFAULT, validate_email,
+)
 from ai_utils import (
-    is_gemini_ready, generate_summary, recommend_keywords,
-    generate_news_digest, score_news_relevance, extract_trend_keywords,
-    generate_action_strategies, generate_headline, generate_key_issues,
-    generate_opportunity_bullets, summarize_titles_oneline,
-    match_titles_to_product, simplify_news_titles,
+    is_ai_ready, generate_summary, recommend_keywords,
+    generate_news_digest, score_news_relevance,
+    generate_headline, generate_key_issues,
+    summarize_titles_oneline, simplify_news_titles,
 )
 from db2 import get_engine
 from news_utils import (
     fetch_naver_news, fetch_google_news_rss, fetch_boannews, fetch_etnews_rss,
     is_naver_ready, _clean_naver_text,
 )
-from trend_store import load_latest_trend, load_trend_history, save_trend_snapshot
+from trend_store import load_latest_trend, load_trend_history
 from pdf_report import build_daily_report_pdf
+from procurement_store import load_results, load_reorder_candidates
+from store import (
+    load_cache_many, upsert_subscriber, delete_subscriber, get_subscriber, count_subscribers,
+)
+from briefing_batch import (
+    K_NEWS_DEFAULT, K_NEWS_SRC10, K_NEWS_SOLUTION, K_NEWS_SIMPLE, K_REC_KEYWORDS,
+    K_HEADLINE, K_ISSUES, K_DIGEST, K_PRODUCT_AI, K_META,
+)
 
 TABLE_NAME = "postings"
 
 st.set_page_config(page_title="정부 IT 사업 AI 분석 대시보드", page_icon="📋", layout="wide")
 
 # ============================================================
-# 테마 상태 관리 — 최초 진입은 라이트모드, 우측 상단 토글로 전환
+# 테마 — Streamlit 기본 테마(⋮ 메뉴 → Settings)를 그대로 따른다.
+# 위젯(버튼·입력창·표)은 config.toml의 [theme.light]/[theme.dark]가 자동 처리하고,
+# 직접 그린 HTML 카드만 아래 C 팔레트로 색을 맞춘다. → 다크모드에서 위젯만 흰색으로 남던 문제의 근본 해결
 # ============================================================
-if "ui_theme" not in st.session_state:
-    st.session_state.ui_theme = "light"
+def _detect_theme():
+    try:
+        th = st.context.theme            # Streamlit 1.46 이상
+        val = getattr(th, "type", None) or getattr(th, "base", None)
+        if val is None and hasattr(th, "get"):
+            val = th.get("type") or th.get("base")
+        return "dark" if str(val).lower() == "dark" else "light"
+    except Exception:
+        return "light"
 
 
-def _toggle_theme():
-    st.session_state.ui_theme = "dark" if st.session_state.ui_theme == "light" else "light"
-
-
-THEME = st.session_state.ui_theme
+THEME = _detect_theme()
 
 LIGHT = dict(
     bg="#FAFBFD", surface="#FFFFFF", surface2="#F6F8FB", surface3="#EEF3FF",
@@ -81,40 +101,152 @@ def _tc(light_hex, dark_hex):
     return dark_hex if THEME == "dark" else light_hex
 
 
-st.markdown(
-    f"""
-    <script>
-    (function() {{
-        try {{
-            const theme = "{THEME}";
-            localStorage.setItem('gt_theme', theme);
-            const bg = theme === 'dark' ? '{DARK["bg"]}' : '{LIGHT["bg"]}';
-            const txt = theme === 'dark' ? '{DARK["text"]}' : '{LIGHT["text"]}';
-            const root = window.parent.document.documentElement;
-            const body = window.parent.document.body;
-            if (root) {{ root.style.backgroundColor = bg; root.style.colorScheme = theme; }}
-            if (body) {{ body.style.backgroundColor = bg; body.style.color = txt; }}
-        }} catch (e) {{}}
-    }})();
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-
-tcol1, tcol_pdf, tcol_dark = st.columns([8.3, 1.3, 1])
+tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([7.0, 1.5, 1.3, 1])
 with tcol_pdf:
     pdf_top_slot = st.empty()
     pdf_top_slot.markdown(
         f"<div style='text-align:center;font-size:11px;color:{C['text_muted']};padding-top:9px;'>📄 PDF 준비 중...</div>",
         unsafe_allow_html=True,
     )
+with tcol_mail:
+    # ------------------------------------------------------------
+    # 📧 메일 알림 등록 — 매일 아침 연관도 높은 신규 공고를 메일로 받기 (사내 메일만)
+    # ------------------------------------------------------------
+    with st.popover("📧 메일 알림", use_container_width=True):
+        st.markdown("**매일 아침 영업 기회 메일 받기**")
+        st.caption("오늘 새로 올라온 공고 중 AI 연관도가 기준 이상인 것 + 경쟁사 수주 사업 재발주 예상을 보내드립니다.")
+        mail_input = st.text_input("이메일", key="alert_email", placeholder="name@stclab.com")
+        mail_email, mail_err = validate_email(mail_input) if mail_input else (None, None)
+        if mail_err:
+            st.error(mail_err)
+        current_sub = None
+        if mail_email:
+            try:
+                current_sub = get_subscriber(mail_email)
+            except Exception as e:
+                st.error(f"구독 정보를 불러오지 못했습니다: {e}")
+            st.caption("✅ 이미 등록된 주소입니다. 아래에서 조건을 바꾸거나 해제할 수 있습니다." if current_sub
+                       else "ℹ️ 아직 등록되지 않은 주소입니다.")
+        mail_regions = st.multiselect(
+            "받을 지역 (비우면 전체)", ALL_REGIONS,
+            default=(current_sub["regions"] if current_sub else MY_REGIONS_DEFAULT),
+            key=f"alert_regions_{mail_email or 'new'}",
+        )
+        mail_national = st.checkbox(
+            f"지역이 안 적힌 공고({NATIONAL_LABEL})도 받기",
+            value=(current_sub["include_national"] if current_sub else True),
+            key=f"alert_national_{mail_email or 'new'}",
+        )
+        mail_score = st.slider(
+            "AI 연관도 기준(점 이상)", 40, 95,
+            value=(current_sub["min_score"] if current_sub else ALERT_MIN_SCORE_DEFAULT), step=5,
+            key=f"alert_score_{mail_email or 'new'}",
+        )
+        mb1, mb2 = st.columns(2)
+        with mb1:
+            if st.button("등록·저장", key="alert_save", type="primary", use_container_width=True, disabled=not mail_email):
+                try:
+                    res = upsert_subscriber(mail_email, mail_regions, mail_national, mail_score)
+                    st.success("등록했습니다." if res == "created" else "조건을 저장했습니다.")
+                except Exception as e:
+                    st.error(f"저장 실패: {e}")
+        with mb2:
+            if st.button("알림 해제", key="alert_delete", use_container_width=True,
+                         disabled=not (mail_email and current_sub)):
+                try:
+                    delete_subscriber(mail_email)
+                    st.success("해제했습니다. 더 이상 메일이 가지 않습니다.")
+                except Exception as e:
+                    st.error(f"해제 실패: {e}")
+        st.caption(f"현재 등록 {count_subscribers()}명 · 매일 아침 8시 자동수집 후 발송")
+
+
 with tcol_dark:
-    st.button(
-        "🌙 다크" if THEME == "light" else "☀️ 라이트",
-        key="theme_toggle_btn",
-        on_click=_toggle_theme,
-        use_container_width=True,
+    st.markdown(
+        f"<div style='text-align:center;font-size:11px;color:{C['text_muted']};padding-top:9px;' "
+        f"title='우측 상단 ⋮ 메뉴 → Settings → Theme에서 라이트/다크 전환'>"
+        f"{'🌙 다크' if THEME == 'dark' else '☀️ 라이트'}</div>",
+        unsafe_allow_html=True,
     )
+
+# 다크모드 전용 CSS (Python 3.11에서도 동작하도록 중첩 f-string을 변수로 분리)
+_DARK_CSS_1 = "" if THEME != "dark" else f"""
+/* [1] elevation 계층: 카드/패널/팝오버가 배경보다 점진적으로 밝아지게 */
+.gt-surface, div[data-testid="stVerticalBlockBorderWrapper"] {{
+    background: {C['surface']} !important;
+    border: 1px solid {C['border']} !important;
+}}
+div[data-testid="stPopover"] > div {{
+    background: {C['surface2']} !important;
+    border: 1px solid {C['border']} !important;
+}}
+
+/* [2] 매직넘버 기준 텍스트 — 헤딩(7:1) / 본문(15:1) 분리 적용 */
+h1, h2, h3, h4,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stExpander"] summary p {{
+    color: {C['text']} !important;
+}}
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stCaptionContainer"] p,
+[data-testid="stMetricValue"],
+label {{
+    color: {C['text_body']} !important;
+}}
+
+/* [3] 모든 테두리 매직넘버50 기준으로 가시성 확보 (이전엔 거의 안 보였던 부분) */
+div[data-testid="stVerticalBlockBorderWrapper"],
+div[data-testid="stExpander"],
+.gt-surface, .gt-mon-card {{
+    border: 1px solid {C['border']} !important;
+}}
+
+/* [4] 검색창 — 실제 testid 기준 재작성 */
+div[data-testid="stTextInputRootElement"] {{
+    background: #ECEEF1 !important;
+    border: 1.5px solid {C['border']} !important;
+    border-radius: 10px !important;
+}}
+div[data-testid="stTextInputField"] {{
+    color: #000000 !important;
+    background: transparent !important;
+}}
+div[data-testid="stTextInputField"]::placeholder {{
+    color: #5B6472 !important;
+}}
+
+/* 검색 버튼 + 추천 키워드 칩 + AI 추천 키워드 버튼 — secondary 계열 전부 */
+button[data-testid^="stBaseButton-secondary"] {{
+    background: #ECEEF1 !important;
+    border: 1px solid {C['border']} !important;
+}}
+button[data-testid^="stBaseButton-secondary"] p,
+button[data-testid^="stBaseButton-secondary"] span,
+button[data-testid^="stBaseButton-secondary"] div {{
+    color: #000000 !important;
+}}
+
+
+/* [5] 시스템 색상(알림창) — 다크모드 역할 반전: 아이콘/텍스트 밝게, 배경 매우 어둡게 */
+div[data-testid="stAlert"] {{
+    background: {C['surface2']} !important;
+    border: 1px solid {C['border']} !important;
+    border-radius: 10px;
+}}
+div[data-testid="stAlert"] p, div[data-testid="stAlert"] div {{
+    color: {C['text_body']} !important;
+}}
+"""
+_DARK_CSS_2 = "" if THEME != "dark" else f"""
+div[data-testid="stVerticalBlockBorderWrapper"] {{
+    border: 1.5px solid #6B7684 !important;
+}}
+"""
 
 st.markdown(
     f"""
@@ -431,84 +563,9 @@ st.markdown(
    - 계층 밝기 순서 / 매직넘버 대비 / 흰색 눈부심 방지 / 시스템색 역할 반전
    ============================================================ */
 
-{"" if THEME != "dark" else f"""
-/* [1] elevation 계층: 카드/패널/팝오버가 배경보다 점진적으로 밝아지게 */
-.gt-surface, div[data-testid="stVerticalBlockBorderWrapper"] {{
-    background: {C['surface']} !important;
-    border: 1px solid {C['border']} !important;
-}}
-div[data-testid="stPopover"] > div {{
-    background: {C['surface2']} !important;
-    border: 1px solid {C['border']} !important;
-}}
+{_DARK_CSS_1}
 
-/* [2] 매직넘버 기준 텍스트 — 헤딩(7:1) / 본문(15:1) 분리 적용 */
-h1, h2, h3, h4,
-[data-testid="stMarkdownContainer"] h1,
-[data-testid="stMarkdownContainer"] h2,
-[data-testid="stMarkdownContainer"] h3,
-[data-testid="stMarkdownContainer"] h4,
-[data-testid="stExpander"] summary p {{
-    color: {C['text']} !important;
-}}
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] span,
-[data-testid="stMarkdownContainer"] li,
-[data-testid="stCaptionContainer"] p,
-[data-testid="stMetricValue"],
-label {{
-    color: {C['text_body']} !important;
-}}
-
-/* [3] 모든 테두리 매직넘버50 기준으로 가시성 확보 (이전엔 거의 안 보였던 부분) */
-div[data-testid="stVerticalBlockBorderWrapper"],
-div[data-testid="stExpander"],
-.gt-surface, .gt-mon-card {{
-    border: 1px solid {C['border']} !important;
-}}
-
-/* [4] 검색창 — 실제 testid 기준 재작성 */
-div[data-testid="stTextInputRootElement"] {{
-    background: #ECEEF1 !important;
-    border: 1.5px solid {C['border']} !important;
-    border-radius: 10px !important;
-}}
-div[data-testid="stTextInputField"] {{
-    color: #000000 !important;
-    background: transparent !important;
-}}
-div[data-testid="stTextInputField"]::placeholder {{
-    color: #5B6472 !important;
-}}
-
-/* 검색 버튼 + 추천 키워드 칩 + AI 추천 키워드 버튼 — secondary 계열 전부 */
-button[data-testid^="stBaseButton-secondary"] {{
-    background: #ECEEF1 !important;
-    border: 1px solid {C['border']} !important;
-}}
-button[data-testid^="stBaseButton-secondary"] p,
-button[data-testid^="stBaseButton-secondary"] span,
-button[data-testid^="stBaseButton-secondary"] div {{
-    color: #000000 !important;
-}}
-
-
-/* [5] 시스템 색상(알림창) — 다크모드 역할 반전: 아이콘/텍스트 밝게, 배경 매우 어둡게 */
-div[data-testid="stAlert"] {{
-    background: {C['surface2']} !important;
-    border: 1px solid {C['border']} !important;
-    border-radius: 10px;
-}}
-div[data-testid="stAlert"] p, div[data-testid="stAlert"] div {{
-    color: {C['text_body']} !important;
-}}
-"""}
-
-{"" if THEME != "dark" else f"""
-div[data-testid="stVerticalBlockBorderWrapper"] {{
-    border: 1.5px solid #6B7684 !important;
-}}
-"""}
+{_DARK_CSS_2}
 
 .st-key-gt_issue_cards_row div[data-testid="stHorizontalBlock"] {{
     gap: 8px !important;
@@ -644,70 +701,7 @@ def render_meta_line(agency, due, status, score, budget=None):
     )
 
 
-# ------------------------------------------------------------
-# 자사 솔루션 키워드 / R&D 도메인 키워드
-# === 수정: INTEGRATED_RND_DOMAINS를 전역으로 이동(Ⅲ번 새 표에서도 재사용하기 위함) ===
-# ------------------------------------------------------------
-PRODUCT_KEYWORDS = {
-    "넷퍼넬 (NF)": {"desc": "가상 대기실 · 트래픽·대기열 관리",
-                   "keywords": ["넷퍼넬", "NetFUNNEL", "가상대기실", "가상 대기실", "대기열", "대기방", "대기 페이지", "대기페이지",
-                                "트래픽 제어", "트래픽 관리", "트래픽 폭주", "동시접속", "접속량", "진입 허용", "서버 다운", "서버다운",
-                                "먹통", "수강신청", "청약", "예매", "티켓", "선착순", "예약 시스템", "예약시스템",
-                                "대량접속제어", "대량접속", "순번대기", "순차처리", "접속자 순차처리", "유량제어", "접속제어",
-                                "트랜잭션 제어", "접속대기", "대기시스템"]},
-    "넷퍼넬API (NFA)": {"desc": "API 트래픽 제어 · AI 에이전트 트래픽 대응",
-                      "keywords": ["넷퍼넬API", "넷퍼넬 API", "NetFUNNEL API", "NFA",
-                                   "API 트래픽", "API 트래픽 제어", "API 대기열", "대기열 API", "API 제어",
-                                   "에이전트 트래픽", "LLM 트래픽", "API 요청"]},
-    "봇매니저 (BM)": {"desc": "봇 탐지·차단 · 매크로·어뷰징 방어",
-                    "keywords": ["봇매니저", "봇 매니저", "BotManager", "MBUSTER", "엠버스터", "엠버스터v2", "MBUSTER v2.0",
-                                 "봇탐지", "봇 탐지", "봇 차단", "악성봇", "악성 봇", "매크로", "매크로탐지", "매크로 탐지",
-                                 "매크로차단", "매크로 차단", "어뷰징", "부정예약", "부정 예약", "부정접속", "부정 접속",
-                                 "크리덴셜", "스크래핑", "리셀", "되팔이", "선점구매", "선점 구매"]},
-    "로드테스터 (LT)": {"desc": "웹·앱 부하테스트(성능 검증)",
-                     "keywords": ["로드테스터", "로드 테스터", "LoadTester", "Load Tester",
-                                  "부하테스트", "부하 테스트", "부하시험", "부하 시험", "성능테스트", "성능 테스트",
-                                  "스트레스 테스트", "가상사용자", "가상 사용자"]},
-}
-
-INTEGRATED_RND_DOMAINS = {
-    "AI 모델": {"desc": "생성형 · 에이전틱 AI 등 모델 개발", "keywords": ["AI", "인공지능", "생성형", "LLM", "거대언어", "에이전틱", "머신러닝", "딥러닝", "파운데이션 모델", "파운데이션모델"]},
-    "데이터": {"desc": "학습용 데이터 · 데이터셋 구축", "keywords": ["데이터", "데이터셋", "학습용", "빅데이터", "데이터 품질", "벤치마크"]},
-    "보안·인증": {"desc": "사이버보안 · 취약점 · 인증", "keywords": ["보안", "사이버", "취약점", "침해", "인증", "신원확인", "신원 확인"]},
-    "클라우드": {"desc": "클라우드 · GPU · 인프라", "keywords": ["클라우드", "컨테이너", "쿠버네티스", "GPU", "데이터센터", "데이터 센터", "서버"]},
-    "표준·정책": {"desc": "표준화 · 정책연구 · 실태조사", "keywords": ["표준", "정책", "기획", "실태조사", "성과분석", "가이드"]},
-}
-
-PROCUREMENT_BOOST_KEYWORDS = sorted({
-    kw for info in PRODUCT_KEYWORDS.values() for kw in info["keywords"]
-})
-
 FIXED_NEWS_KEYWORDS = ["차세대", "시스템"]
-
-COMPETITOR_ALIASES = {
-    "dynapath": ["dynapath", "다이나패스"],
-    "eversafe": ["eversafe", "에버세이프"],
-}
-
-
-def _competitor_alias_variants(name_list):
-    out = []
-    for name in name_list:
-        key = str(name).strip().lower()
-        out.append(key)
-        out.extend(COMPETITOR_ALIASES.get(key, []))
-    return list(dict.fromkeys(out))
-
-
-def is_competitor_match(title, competitor_keywords):
-    title_low = str(title or "").lower()
-    variants = _competitor_alias_variants(competitor_keywords)
-    return any(v.lower() in title_low for v in variants)
-
-
-def procurement_boost_score(title):
-    title_low = str(title or "").lower()
-    return 15 if any(kw.lower() in title_low for kw in PROCUREMENT_BOOST_KEYWORDS) else 0
 
 
 def _product_tags_for_title(title_text, kw_text=""):
@@ -728,6 +722,16 @@ def _domain_tags_for_title(title_text, kw_text=""):
     return "·".join(tags) if tags else "-"
 
 
+@st.cache_data(ttl=600)
+def _cached_procurement_results():
+    return load_results(days=30)
+
+
+@st.cache_data(ttl=600)
+def _cached_reorder(competitors_tuple, include_solution):
+    return load_reorder_candidates(list(competitors_tuple), horizon_days=180, include_solution=include_solution)
+
+
 @st.cache_data(ttl=300)
 def load_data():
     engine = get_engine()
@@ -735,16 +739,45 @@ def load_data():
     return df
 
 
-df = load_data()
-if df.empty:
-    st.warning("데이터가 없습니다. python main.py를 먼저 실행해주세요.")
+BRIEF_KEYS = [K_NEWS_DEFAULT, K_NEWS_SRC10, K_NEWS_SOLUTION, K_NEWS_SIMPLE, K_REC_KEYWORDS,
+              K_HEADLINE, K_ISSUES, K_DIGEST, K_PRODUCT_AI, K_META]
+
+
+@st.cache_data(ttl=300)
+def load_briefing():
+    """아침 배치(briefing_batch.py)가 미리 만들어 둔 결과 — 없으면 빈 값 (화면은 실시간 생성으로 대체)"""
+    return load_cache_many(BRIEF_KEYS)
+
+
+def brief(key):
+    val, _ = BRIEF.get(key, (None, None))
+    return val
+
+
+def brief_time(key):
+    _, ts = BRIEF.get(key, (None, None))
+    return ts
+
+
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"DB에서 공고를 불러오지 못했습니다. Streamlit Secrets의 DATABASE_URL을 확인해 주세요. ({type(e).__name__})")
     st.stop()
+if df.empty:
+    st.warning("데이터가 없습니다. GitHub Actions에서 자동수집(Run workflow)을 먼저 실행해 주세요.")
+    st.stop()
+
+BRIEF = load_briefing()
+if COL_KEY in df.columns:      # 예전 DB에 같은 공고가 두 줄 들어간 경우 한 줄만 표시
+    df = df.drop_duplicates(subset=[COL_KEY], keep="last")
 
 for c in [COL_GRADE, COL_CATEGORY, COL_STATUS, COL_AGENCY]:
     if c in df.columns:
         df[c] = df[c].fillna("미분류").replace("", "미분류")
 
-for c in [COL_TRACK, COL_TRACK_REASON, COL_AI_REASON]:
+for c in [COL_TRACK, COL_TRACK_REASON, COL_AI_REASON, COL_TITLE, COL_DEPT, COL_KEYWORDS, COL_URL,
+          COL_DUE_DATE, COL_REG_DATE, COL_BUDGET, COL_CONTENT, "ai_oneline", "ai_summary"]:
     if c not in df.columns:
         df[c] = ""
     df[c] = df[c].fillna("")
@@ -758,6 +791,20 @@ if COL_AI_SCORE not in df.columns:
 df[COL_AI_SCORE] = pd.to_numeric(df[COL_AI_SCORE], errors="coerce").fillna(-1).astype(int)
 
 today = pd.Timestamp(datetime.now().date())
+
+# [정리] 마감일이 지난 공고는 화면에서 제외 (마감일 미표기 건은 유지)
+df = df[df["_due_date_parsed"].isna() | (df["_due_date_parsed"] >= today)].copy()
+
+# [정리] 행안부 게시판의 일반 보도자료 제외 — 사업·공모 성격 단어가 있는 글만 남김
+df = df[[not is_mois_noise(a, t) for a, t in zip(df[COL_AGENCY], df[COL_TITLE])]].copy()
+if df.empty:
+    st.warning("진행 중인 공고가 없습니다. 자동수집(GitHub Actions) 실행 여부를 확인해주세요.")
+    st.stop()
+
+# [지역] 기관명·부서·제목·본문으로 시·도 판별 → 담당 지역 필터에 사용
+df["_regions"] = [detect_regions(a, d, t, str(c)[:300]) for a, d, t, c in
+                  zip(df[COL_AGENCY], df[COL_DEPT], df[COL_TITLE], df[COL_CONTENT])]
+df["_region_label"] = df["_regions"].map(region_label)
 last_updated = None
 if COL_UPDATED_AT in df.columns:
     parsed = pd.to_datetime(df[COL_UPDATED_AT], errors="coerce")
@@ -801,11 +848,21 @@ def build_info_block(row):
     return "\n".join(lines) if lines else "(제공된 정보가 거의 없습니다)"
 
 
+def _stored(row, col):
+    v = row.get(col) if hasattr(row, "get") else None
+    v = "" if v is None else str(v).strip()
+    return "" if v in ("nan", "None") else v
+
+
 def generate_ai_summary(row):
     key = row.get(COL_KEY) or row.get(COL_TITLE)
     if key in st.session_state.ai_summary_cache:
         return st.session_state.ai_summary_cache[key]
-    if not is_gemini_ready():
+    stored = _stored(row, "ai_summary")          # main.py가 미리 만들어 둔 요약 (AI 호출 0회)
+    if stored:
+        st.session_state.ai_summary_cache[key] = stored
+        return stored
+    if not is_ai_ready():
         return None
     text_val, error = generate_summary(build_info_block(row))
     if error:
@@ -818,14 +875,18 @@ ONELINE_AUTO_LIMIT = 40
 
 
 def ensure_oneline_summaries(rows_df, auto=True):
-    if not is_gemini_ready() or rows_df.empty:
+    if rows_df.empty:
         return
     need = []
     for _, r in rows_df.iterrows():
         key = r.get(COL_KEY) or r.get(COL_TITLE)
+        stored = _stored(r, "ai_oneline")
+        if stored:
+            st.session_state.oneline_summary_cache[key] = stored
+            continue
         if key not in st.session_state.oneline_summary_cache:
             need.append({"key": key, "title": r.get(COL_TITLE), "agency": r.get(COL_AGENCY)})
-    if not need:
+    if not need or not is_ai_ready():
         return
     if auto:
         need = need[:ONELINE_AUTO_LIMIT]
@@ -842,15 +903,17 @@ def ensure_oneline_summaries(rows_df, auto=True):
 
 
 def get_oneline_summary(row):
+    if not hasattr(row, "get"):          # 제목 문자열만 넘어와도 멈추지 않도록 방어
+        return st.session_state.oneline_summary_cache.get(row)
     key = row.get(COL_KEY) or row.get(COL_TITLE)
-    return st.session_state.oneline_summary_cache.get(key)
+    return _stored(row, "ai_oneline") or st.session_state.oneline_summary_cache.get(key)
 
 if "news_simple_cache" not in st.session_state:
     st.session_state.news_simple_cache = {}
 
 
 def ensure_news_simple(items, limit=50):
-    if not is_gemini_ready() or not items:
+    if not is_ai_ready() or not items:
         return
     need = []
     for it in items:
@@ -966,45 +1029,95 @@ with search_form_box:
             st.form_submit_button("🔍 검색", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-if "ai_search_chips" not in st.session_state:
-    st.session_state.ai_search_chips = None
+@st.cache_data(ttl=86400, show_spinner=False)
+def _daily_rec_keywords(day_key, titles_tuple):
+    """아침 배치 결과가 없을 때만: 하루 1번(모든 접속자 공용) AI 추천 키워드 생성"""
+    rec, _err = recommend_keywords(list(titles_tuple))
+    return rec or []
 
-if st.session_state.ai_search_chips is None:
-    if is_gemini_ready():
-        sample_titles = df[COL_TITLE].dropna().astype(str).head(80).tolist()
-        if not trend_top_df.empty and "keyword" in trend_top_df.columns:
-            sample_titles += trend_top_df["keyword"].dropna().astype(str).head(20).tolist()
-        with st.spinner("AI가 공고·뉴스 전체를 분석해 트렌드 키워드를 뽑는 중..."):
-            rec_list, rec_err = recommend_keywords(sample_titles)
-        st.session_state.ai_search_chips = rec_list if rec_list else []
-    else:
-        st.session_state.ai_search_chips = []
+
+def _get_rec_keywords():
+    rec = brief(K_REC_KEYWORDS)
+    if isinstance(rec, list) and rec:
+        return [r for r in rec if isinstance(r, dict) and r.get("keyword")]
+    if not is_ai_ready():
+        return []
+    sample = df[COL_TITLE].dropna().astype(str).head(80).tolist()
+    if not trend_top_df.empty and "keyword" in trend_top_df.columns:
+        sample += trend_top_df["keyword"].dropna().astype(str).head(20).tolist()
+    with st.spinner("AI가 오늘의 추천 키워드를 뽑는 중... (하루 1번만)"):
+        return [r for r in _daily_rec_keywords(datetime.now().strftime("%Y-%m-%d"), tuple(sample))
+                if isinstance(r, dict) and r.get("keyword")]
+
+
+def _set_search(kw):
+    st.session_state.int_top_search = kw
+
+
+def _clear_search():
+    st.session_state.int_top_search = ""
+
+
+REC_KEYWORDS = _get_rec_keywords()
 
 chip_box = st.container(key="search_chip_row")
 with chip_box:
-    _rec_kws = [r["keyword"] for r in st.session_state.ai_search_chips][:8]
+    _rec_kws = [r["keyword"] for r in REC_KEYWORDS][:8]
     if _rec_kws:
         _chip_cols = st.columns(len(_rec_kws) + 1)
         for _i, _kw in enumerate(_rec_kws):
             with _chip_cols[_i]:
-                help_txt = next((r.get("reason", "") for r in st.session_state.ai_search_chips if r["keyword"] == _kw), "")
-                if st.button(_kw, key=f"top_rec_{_i}", help=help_txt, use_container_width=True):
-                    st.session_state.int_top_search = _kw
-                    st.rerun()
+                help_txt = next((r.get("reason", "") for r in REC_KEYWORDS if r["keyword"] == _kw), "")
+                st.button(_kw, key=f"top_rec_{_i}", help=help_txt, use_container_width=True,
+                          on_click=_set_search, args=(_kw,))
         with _chip_cols[-1]:
-            if st.button("🔄", key="refresh_search_chips", help="추천 키워드 다시 뽑기", use_container_width=True):
-                st.session_state.ai_search_chips = None
-                st.rerun()
+            st.button("✖", key="clear_search_chips", help="검색어 지우기", use_container_width=True,
+                      on_click=_clear_search)
 
+# ------------------------------------------------------------
+# 📍 지역 필터 — 내 담당 지역(서울·인천·강원·전라·제주)만 바로 보기
+# ------------------------------------------------------------
+if "my_regions" not in st.session_state:
+    st.session_state.my_regions = list(MY_REGIONS_DEFAULT)
+
+rf1, rf2, rf3 = st.columns([2.2, 2.2, 5.6])
+with rf1:
+    region_only = st.toggle("📍 내 담당 지역만 보기", value=False, key="region_only",
+                            help="기관명·부서·제목에 들어간 지역명으로 판별합니다.")
+with rf2:
+    include_national = st.toggle(f"{NATIONAL_LABEL} 공고 포함", value=True, key="region_include_national",
+                                 help="지역이 적혀 있지 않은 공고(중앙부처·전국 공모 등)도 함께 봅니다.")
+with rf3:
+    with st.popover(f"담당 지역: {', '.join(st.session_state.my_regions) or '없음'}", use_container_width=True):
+        picked = st.multiselect("담당 지역 선택", ALL_REGIONS, default=st.session_state.my_regions, key="my_regions_pick")
+        if st.button("적용", key="my_regions_apply"):
+            st.session_state.my_regions = picked
+            st.rerun()
+
+df_all = df   # 필터 전 원본 (전체 건수 비교용)
+search_keyword = str(st.session_state.get("int_top_search") or "").strip()
+if search_keyword:
+    _pat = re.escape(search_keyword)
+    _m = (df[COL_TITLE].astype(str).str.contains(_pat, case=False, na=False)
+          | df[COL_KEYWORDS].astype(str).str.contains(_pat, case=False, na=False)
+          | df[COL_AGENCY].astype(str).str.contains(_pat, case=False, na=False)
+          | df[COL_DEPT].astype(str).str.contains(_pat, case=False, na=False))
+    df = df[_m].copy()
+if region_only:
+    df = df[[match_regions(r, st.session_state.my_regions, include_national) for r in df["_regions"]]].copy()
+
+if search_keyword or region_only:
+    _parts = []
+    if search_keyword:
+        _parts.append(f"검색어 '{search_keyword}'")
+    if region_only:
+        _parts.append(f"지역 {', '.join(st.session_state.my_regions)}" + (f" + {NATIONAL_LABEL}" if include_national else ""))
+    st.info(f"🔎 {' · '.join(_parts)} 기준으로 {len(df)}건을 보고 있습니다. (전체 {len(df_all)}건)")
+    if df.empty:
+        st.warning("조건에 맞는 공고가 없습니다. 검색어를 지우거나 지역 필터를 꺼 주세요.")
+        df = df_all.iloc[0:0].copy()
 
 filtered = df.copy()
-
-if st.session_state.biz_keyword_filter:
-    pattern = "|".join(re.escape(k) for k in st.session_state.biz_keyword_filter)
-    filtered = filtered[
-        filtered[COL_TITLE].astype(str).str.contains(pattern, case=False, na=False, regex=True)
-        | filtered[COL_KEYWORDS].astype(str).str.contains(pattern, case=False, na=False, regex=True)
-    ]
 
 
 FIELD_LABELS = {
@@ -1019,10 +1132,13 @@ FIELD_LABELS = {
 
 def render_ai_summary_block(row):
     cache_key = row.get(COL_KEY) or row.get(COL_TITLE)
-    cached = st.session_state.ai_summary_cache.get(cache_key)
+    cached = st.session_state.ai_summary_cache.get(cache_key) or _stored(row, "ai_summary")
+    if cached:
+        st.success(cached)
+        return
 
-    if not is_gemini_ready():
-        st.warning("Gemini API 키가 설정되지 않았습니다. .env 파일에 GEMINI_API_KEY를 추가한 뒤 앱을 다시 실행해 주세요.")
+    if not is_ai_ready():
+        st.warning("Claude API 키가 설정되지 않았습니다. Streamlit Secrets에 ANTHROPIC_API_KEY를 추가해 주세요.")
         return
 
     if cached and not str(cached).startswith("__ERROR__"):
@@ -1032,7 +1148,7 @@ def render_ai_summary_block(row):
             with st.spinner("AI가 공고를 분석하고 있습니다..."):
                 result = generate_ai_summary(row)
             if result is None:
-                st.warning("Gemini API가 설정되지 않아 요약을 생성할 수 없습니다.")
+                st.warning("Claude API가 설정되지 않아 요약을 생성할 수 없습니다.")
             elif str(result).startswith("__ERROR__"):
                 st.error(f"요약 생성 중 오류가 발생했습니다: {result.replace('__ERROR__:', '')}")
             else:
@@ -1187,11 +1303,12 @@ def _within_collection_window(pub_val):
         return False
 
 
+# 뱃지는 '좋다/나쁘다'가 아니라 '자사 솔루션과 얼마나 관련 있는지'를 뜻함 (예전 POSITIVE 표기는 오해 소지)
 NEWS_STATUS_STYLE = {
-    "positive": {"label": "POSITIVE", "bg": lambda: C['success_bg'], "text": lambda: C['success_text']},
-    "risk":     {"label": "RISK",     "bg": lambda: C['danger_bg'],  "text": lambda: C['danger_text']},
-    "watch":    {"label": "WATCH",    "bg": lambda: C['warn_bg'],    "text": lambda: C['warn_text']},
-    "neutral":  {"label": "NEUTRAL",  "bg": lambda: C['surface3'],   "text": lambda: C['text_muted']},
+    "positive": {"label": "연관 높음", "bg": lambda: C['success_bg'], "text": lambda: C['success_text']},
+    "risk":     {"label": "경쟁사",   "bg": lambda: C['danger_bg'],  "text": lambda: C['danger_text']},
+    "watch":    {"label": "관련",     "bg": lambda: C['warn_bg'],    "text": lambda: C['warn_text']},
+    "neutral":  {"label": "",        "bg": lambda: C['surface3'],   "text": lambda: C['text_muted']},
 }
 
 
@@ -1203,7 +1320,7 @@ def news_status_badge_html(status_key):
 
 def get_news_status(item):
     title_low = str(item.get("title", "")).lower()
-    comp_kws = st.session_state.get("competitor_keywords", ["DynaPath", "다이나패스", "EverSafe", "엑스큐", "xQueue", "소프트베이스", "큐잇", "Queue-it ", "에버세이프", "데브와이", "메가펜스"])
+    comp_kws = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
     if is_competitor_match(title_low, comp_kws):
         return "risk"
     score = item.get("_score", -1)
@@ -1213,25 +1330,27 @@ def get_news_status(item):
         return "watch"
     return "neutral"
 
-def mon_row_html(src_label, src_color, title, url, status_key, time_str):
+def mon_row_html(src_label, src_color, title, url, status_key, time_str, orig_title=None):
     title_esc = escape(str(title or "(제목 없음)"))
+    tip_esc = escape(str(orig_title or title or ""))      # 마우스를 올리면 원문 제목
     url_esc = escape(str(url or "#"))
     return (
         f'<a href="{url_esc}" target="_blank" class="gt-news-card">'
         f'<span class="gt-mon-src-tag" style="background:{src_color};">{escape(str(src_label))}</span>'
-        f'<span class="gt-news-card-title" title="{title_esc}">{title_esc}</span>'
+        f'<span class="gt-news-card-title" title="원문: {tip_esc}">{title_esc}</span>'
         f'<span class="gt-news-card-right">{news_status_badge_html(status_key)}'
         f'<span class="gt-mon-time">{escape(str(time_str))}</span></span>'
         f'</a>'
     )
 
 
-def mon_row_plain_html(title, url, status_key, time_str):
-    """=== 수정 #5: 뉴스 수집처별 보기 전용 — 로고/뱃지 없이 제목 전체 표시 ==="""
+def mon_row_plain_html(title, url, status_key, time_str, orig_title=None):
+    """뉴스 수집처별 보기 전용 — 로고/뱃지 없이 제목 전체 표시 (마우스를 올리면 원문 제목)"""
     title_esc = escape(str(title or "(제목 없음)"))
+    tip_esc = escape(str(orig_title or title or ""))
     url_esc = escape(str(url or "#"))
     return (
-        f'<a href="{url_esc}" target="_blank" class="gt-news-card">'
+        f'<a href="{url_esc}" target="_blank" class="gt-news-card" title="원문: {tip_esc}">'
         f'<span class="gt-news-card-title gt-news-card-title-wrap">{title_esc}</span>'
         f'<span class="gt-news-card-right">{news_status_badge_html(status_key)}'
         f'<span class="gt-mon-time">{escape(str(time_str))}</span></span>'
@@ -1501,7 +1620,7 @@ with main_tab_dash:
                             on_click=_toggle_quick, args=("due_soon",))
 
     if st.session_state.quick_filter:
-        label_map = {"in_progress": "진행중 공고", "high_grade": "등급 '상' 공고", "due_soon": "마감 3일 이내 공고"}
+        label_map = {"in_progress": "진행중 공고", "high_grade": "AI 연관도 60점 이상 공고", "due_soon": "마감 3일 이내 공고"}
         st.info(f"🔎 현재 '{label_map[st.session_state.quick_filter]}' 만 보고 있습니다. 카드를 다시 누르면 해제됩니다.")
 
     display_df = tab_filtered.copy()
@@ -1523,23 +1642,24 @@ with main_tab_dash:
             return f'<div style="padding:16px;color:{C["text_muted"]};">조건에 맞는 공고가 없습니다.</div>'
 
         head = (
-            f'<div style="display:grid;grid-template-columns:2.6fr 1fr 1fr 1fr 1fr 0.8fr;'
+            f'<div style="display:grid;grid-template-columns:2.6fr 1fr 1fr 0.7fr 0.9fr 0.9fr 1fr;'
             f'background:{C["navy"]};color:{C["navy_text"]};font-size:11px;font-weight:700;">'
             f'<div style="padding:9px 12px;">공고명/과제명</div><div style="padding:9px 12px;">주관기관</div>'
-            f'<div style="padding:9px 12px;">공고기관</div><div style="padding:9px 12px;">마감일</div>'
+            f'<div style="padding:9px 12px;">공고기관</div><div style="padding:9px 12px;">지역</div><div style="padding:9px 12px;">마감일</div>'
             f'<div style="padding:9px 12px;">예산</div><div style="padding:9px 12px;">AI연관도</div></div>'
         )
         body = ""
         for _, r in table_df.iterrows():
             budget_txt = format_budget_eok(r.get(COL_BUDGET)) if COL_BUDGET in table_df.columns else None
             body += (
-                f'<div style="display:grid;grid-template-columns:2.6fr 1fr 1fr 1fr 1fr 0.8fr;'
+                f'<div style="display:grid;grid-template-columns:2.6fr 1fr 1fr 0.7fr 0.9fr 0.9fr 1fr;'
                 f'border-bottom:1px solid {C["row_border"]};background:{C["surface"]};">'
                 f'<div style="padding:9px 12px;"><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" '
                 f'style="color:{C["text"]};font-weight:600;font-size:12px;text-decoration:none;">{escape(str(r[COL_TITLE]))}</a></div>'
                 f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get(COL_DEPT,"-") or "-"))}</div>'
                 f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get(COL_AGENCY,"-") or "-"))}</div>'
-                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{r[COL_DUE_DATE] if pd.notna(r[COL_DUE_DATE]) else "미정"}</div>'
+                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get("_region_label") or "-"))}</div>'
+                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r[COL_DUE_DATE] or "미정"))}</div>'
                 f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{budget_txt or "-"}</div>'
                 f'<div style="padding:9px 12px;">{score_badge_html(r.get(COL_AI_SCORE,-1))}</div></div>'
             )
@@ -1562,23 +1682,21 @@ with main_tab_dash:
 
         refresh_summary = st.button("🔄 새로고침", key="refresh_ai_summary_all")
         if refresh_summary:
-            if is_gemini_ready() and not priority_df.empty:
+            if is_ai_ready() and not priority_df.empty:
                 progress = st.progress(0.0, text="AI 요약 생성 중...")
                 total = len(priority_df)
                 for i, (_, r) in enumerate(priority_df.iterrows(), start=1):
                     generate_ai_summary(r)
                     progress.progress(i / total, text=f"AI 요약 생성 중... ({i}/{total})")
                 progress.empty()
-            elif not is_gemini_ready():
-                st.warning("Gemini API 키가 설정되지 않아 요약을 생성할 수 없습니다.")
+            elif not is_ai_ready():
+                st.warning("Claude API 키가 설정되지 않아 요약을 생성할 수 없습니다.")
 
-        if is_gemini_ready() and not priority_df.empty:
-            auto_targets = priority_df.head(15)
-            missing = [r for _, r in auto_targets.iterrows() if not st.session_state.ai_summary_cache.get(r.get(COL_KEY) or r.get(COL_TITLE))]
-            if missing:
-                with st.spinner("AI가 핵심 공고를 요약하는 중..."):
-                    for r in missing:
-                        generate_ai_summary(r)
+        # 요약은 아침 자동수집 때 미리 만들어 DB에 저장됨 → 화면을 열 때 AI를 다시 부르지 않음
+        for _, _r in priority_df.iterrows():
+            _sv = _stored(_r, "ai_summary")
+            if _sv:
+                st.session_state.ai_summary_cache.setdefault(_r.get(COL_KEY) or _r.get(COL_TITLE), _sv)
 
         if priority_df.empty:
             st.info("표시할 공고가 없습니다.")
@@ -1606,7 +1724,7 @@ with main_tab_dash:
                     elif cached and str(cached).startswith("__ERROR__"):
                         st.error("요약 생성 중 오류가 발생했습니다. 새로고침 버튼을 눌러 다시 시도해 주세요.")
                     else:
-                        st.caption("🤖 AI 요약 생성 대기 중입니다.")
+                        st.caption("🤖 아직 요약이 없습니다. 위 '🔄 새로고침'을 누르면 지금 생성합니다.")
 
     st.markdown("---")
     st.caption("본 대시보드는 매일 아침 8시 자동 수집 데이터를 기준으로 표시합니다. 새로고침(F5) 또는 오른쪽 상단 ⟳ 버튼으로 최신화할 수 있습니다.")
@@ -1636,227 +1754,232 @@ with main_tab_news:
                         st.session_state.news_selected_keywords.append(fkw)
                         st.rerun()
 
-    rec_title_col, rec_btn_col = st.columns([5, 1])
-    with rec_title_col:
-        st.markdown("**🤖 AI 추천 키워드**")
-    with rec_btn_col:
-        if st.button("🔄 새로고침", key="refresh_rec_kw", use_container_width=True):
-            st.session_state.news_ai_rec_kw = None
+    st.markdown("**🤖 AI 추천 키워드** — 누르면 해당 키워드 뉴스를 실시간으로 모아 봅니다.")
+    news_rec = REC_KEYWORDS[:8]
+    with st.container(key="rec_kw_chip_row"):
+        if news_rec:
+            chip_cols = st.columns(len(news_rec))
+            for i, rec in enumerate(news_rec):
+                with chip_cols[i]:
+                    is_selected = rec["keyword"] in st.session_state.news_selected_keywords
+                    chip_label = f"✓ {rec['keyword']}" if is_selected else f"➕ {rec['keyword']}"
+                    if st.button(chip_label, key=f"rec_kw_{i}", help=rec.get("reason", ""),
+                                 use_container_width=True, type="primary" if is_selected else "secondary"):
+                        if is_selected:
+                            st.session_state.news_selected_keywords.remove(rec["keyword"])
+                        else:
+                            st.session_state.news_selected_keywords.append(rec["keyword"])
+                        st.rerun()
+        else:
+            st.caption("추천 키워드가 아직 없습니다. (아침 자동수집 후 표시됩니다)")
 
-# 정상 코드로 교체
-if "news_ai_rec_kw" not in st.session_state:
-    st.session_state.news_ai_rec_kw = None
-if st.session_state.news_ai_rec_kw is None:
-    if is_gemini_ready():
-        sample_titles = tuple(df[COL_TITLE].dropna().astype(str).head(60).tolist())
-        with st.spinner("AI가 최근 공고를 분석해 추천 키워드를 뽑는 중..."):
-            rec_list, rec_err = _cached_recommend_keywords(sample_titles)
-            st.session_state.news_ai_rec_kw = rec_list if rec_list else []
+    if st.session_state.news_selected_keywords:
+        sel_col1, sel_col2 = st.columns([5, 1])
+        with sel_col1:
+            st.caption("선택된 키워드: " + ", ".join(st.session_state.news_selected_keywords))
+        with sel_col2:
+            if st.button("🧹 초기화", key="reset_news_kw", use_container_width=True):
+                st.session_state.news_selected_keywords = []
+                st.rerun()
+
+    keywords = st.session_state.news_selected_keywords
+    base_query_kws = keywords if keywords else list(DEFAULT_NEWS_KEYWORDS)
+
+    # 키워드를 따로 고르지 않았으면 → 아침에 미리 모아 둔 뉴스 사용 (즉시 표시)
+    _stored_pool = brief(K_NEWS_DEFAULT)
+    use_stored_news = (not keywords) and isinstance(_stored_pool, list) and len(_stored_pool) > 0
+    if use_stored_news:
+        all_items_pool = [it for it in _stored_pool if isinstance(it, dict) and it.get("title")]
+        st.caption(f"🕗 아침 자동수집 결과 ({brief_time(K_NEWS_DEFAULT) or '-'} 기준) · 키워드를 고르면 실시간으로 다시 모읍니다.")
     else:
-        st.session_state.news_ai_rec_kw = []
+        with st.spinner("정보 수집 중..."):
+            all_items_pool = _fetch_news_pool_for_keywords(base_query_kws)
+    all_titles_for_digest = list(dict.fromkeys(it["title"] for it in all_items_pool))
+    st.session_state["all_titles_for_digest"] = all_titles_for_digest
+    st.session_state["all_items_pool_cache"] = all_items_pool
 
-with st.container(key="rec_kw_chip_row"):
+    _stored_digest = brief(K_DIGEST)
+    if use_stored_news and _stored_digest:
+        st.markdown("##### 🤖 오늘의 IT 뉴스 AI 요약")
+        st.success(_stored_digest)
+        digest_clicked = False
+    else:
+        digest_clicked = st.button("🤖 오늘의 IT 뉴스 AI 요약 생성", use_container_width=False)
+    if digest_clicked:
+        if not is_ai_ready():
+            st.warning("Claude API 키가 설정되지 않아 요약할 수 없습니다.")
+        elif not all_titles_for_digest:
+            st.info("요약할 뉴스가 없습니다. 먼저 키워드를 검색해 주세요.")
+        else:
+            with st.spinner("AI가 오늘의 뉴스를 요약하는 중..."):
+                digest_text, digest_err = generate_news_digest(all_titles_for_digest)
+            if digest_err:
+                st.error(f"요약 생성 실패: {digest_err}")
+            else:
+                st.markdown("##### 🤖 오늘의 IT 뉴스 AI 요약")
+                st.success(digest_text)
 
+    if not is_naver_ready():
+        st.warning("⚠️ NAVER_CLIENT_ID / NAVER_CLIENT_SECRET이 설정되지 않아 네이버 뉴스는 비어서 표시됩니다.")
 
-        if st.session_state.news_ai_rec_kw:
-            chip_cols = st.columns(len(st.session_state.news_ai_rec_kw))
-        for i, rec in enumerate(st.session_state.news_ai_rec_kw):
-            with chip_cols[i]:
-                is_selected = rec["keyword"] in st.session_state.news_selected_keywords
-                chip_label = f"✓ {rec['keyword']}" if is_selected else f"➕ {rec['keyword']}"
-                if st.button(chip_label, key=f"rec_kw_{i}", help=rec.get("reason", ""),
-                             use_container_width=True, type="primary" if is_selected else "secondary"):
-                    if is_selected:
-                        st.session_state.news_selected_keywords.remove(rec["keyword"])
-                    else:
-                        st.session_state.news_selected_keywords.append(rec["keyword"])
+    st.markdown("---")
+
+    mc1, mc2, mc3 = st.columns(3)
+
+    total_mentions = len(all_items_pool)
+    with mc1:
+        st.markdown(
+            f"""
+            <div class="gt-mon-card">
+                <div class="gt-mon-card-label">Mentions · 수집 기사</div>
+                <div class="gt-mon-card-value">{total_mentions}건</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # === 수정 #4: mc2를 실제 container(key=...)로 교체 — 기존엔 markdown div가 다른 markdown 호출에서 닫혀 박스가 제대로 안 그려졌음 ===
+    with mc2:
+        kw_box2 = st.container(key="mc2_kw_box")
+        with kw_box2:
+            st.markdown('<div class="gt-mon-card-label">상위 키워드</div>', unsafe_allow_html=True)
+            kw_hit_counts = {}
+            for it in all_items_pool:
+                for kw in base_query_kws:
+                    if kw.lower() in it["title"].lower():
+                        kw_hit_counts[kw] = kw_hit_counts.get(kw, 0) + 1
+            if not kw_hit_counts:
+                st.caption("아직 집계된 키워드가 없습니다.")
+            else:
+                max_hit = max(kw_hit_counts.values())
+                KW_BAR_COLORS = [C['accent'], C['success_text'], C['warn_text'], C['danger_text'], C['text_muted']]
+                for i, (kw, cnt) in enumerate(sorted(kw_hit_counts.items(), key=lambda x: -x[1])):
+                    # === 정확한 비율: 최댓값 기준 pct 계산, 0건은 막대 0px로 비워둠 ===
+                    pct = int(round(cnt / max_hit * 100)) if max_hit else 0
+                    color = KW_BAR_COLORS[i % len(KW_BAR_COLORS)]
+                    st.markdown(
+                        f"""
+                        <div class="gt-mon-bar-row">
+                            <span style="width:62px;flex-shrink:0;font-weight:700;color:{color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{escape(kw)}</span>
+                            <span class="gt-mon-bar-track"><span class="gt-mon-bar-fill" style="width:{max(pct,4)}%;background:{color};"></span></span>
+                            <span style="width:36px;text-align:right;flex-shrink:0;">{cnt}건</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+    with mc3:
+        comp_box = st.container(key="mc3_comp_box")
+        with comp_box:
+            st.markdown('<div class="gt-mon-card-label">경쟁사 동향</div>', unsafe_allow_html=True)
+            with st.popover("⚙️ 경쟁사 키워드 관리"):
+                if "competitor_keywords" not in st.session_state:
+                    st.session_state.competitor_keywords = list(COMPETITOR_DEFAULT)
+                comp_kw_text = st.text_area("쉼표로 구분 입력 (영/한 둘 다 등록해도 되고, 하나만 입력해도 자동 매칭됩니다)", value=", ".join(st.session_state.competitor_keywords), height=70)
+                if st.button("저장", key="save_comp_kw"):
+                    st.session_state.competitor_keywords = [k.strip() for k in comp_kw_text.split(",") if k.strip()]
                     st.rerun()
+            competitor_keywords = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
+            # === is_competitor_match가 COMPETITOR_ALIASES로 영/한 자동 치환하므로 키워드 하나만 등록해도 매칭됨 ===
+            cp_matches = [it for it in all_items_pool if is_competitor_match(it["title"], competitor_keywords)]
+            if cp_matches:
+                for it in sorted(cp_matches, key=lambda x: -x.get("_score", -1))[:4]:
+                    t_raw = _news_pub_dt(it)
+                    st.markdown(
+                        mon_row_html(SOURCE_BADGE_TEXT.get(it["_src"], it["_src"]), SOURCE_COLOR.get(it["_src"], "#888"),
+                                     it["title"], it.get("url") or it.get("link"), "risk", _relative_time(t_raw)),
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.caption("관련 기사 없음")
 
-        else:
-         st.caption("추천 키워드가 아직 없습니다. (Gemini 미설정이거나 분석 실패)")
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
-if st.session_state.news_selected_keywords:
-    sel_col1, sel_col2 = st.columns([5, 1])
-    with sel_col1:
-        st.caption("선택된 키워드: " + ", ".join(st.session_state.news_selected_keywords))
-    with sel_col2:
-        if st.button("🧹 초기화", key="reset_news_kw", use_container_width=True):
-            st.session_state.news_selected_keywords = []
-            st.rerun()
-
-keywords = st.session_state.news_selected_keywords
-base_query_kws = keywords if keywords else ["AI", "공공IT"]
-
-with st.spinner("정보 수집 중..."):
-    all_items_pool = _fetch_news_pool_for_keywords(base_query_kws)
-all_titles_for_digest = list(dict.fromkeys(it["title"] for it in all_items_pool))
-st.session_state["all_titles_for_digest"] = all_titles_for_digest
-st.session_state["all_items_pool_cache"] = all_items_pool
-
-digest_clicked = st.button("🤖 오늘의 IT 뉴스 AI 요약 생성", use_container_width=False)
-if digest_clicked:
-    if not is_gemini_ready():
-        st.warning("Gemini API 키가 설정되지 않아 요약할 수 없습니다.")
-    elif not all_titles_for_digest:
-        st.info("요약할 뉴스가 없습니다. 먼저 키워드를 검색해 주세요.")
+    ranked = sorted(all_items_pool, key=lambda x: -x.get("_score", -1))
+    _stored_src10 = brief(K_NEWS_SRC10)
+    if use_stored_news and isinstance(_stored_src10, dict) and _stored_src10:
+        src_pool_map = {k: [it for it in (_stored_src10.get(k) or []) if isinstance(it, dict)]
+                        for k in ["google", "naver", "boan", "etnews"]}
     else:
-        with st.spinner("AI가 오늘의 뉴스를 요약하는 중..."):
-            digest_text, digest_err = generate_news_digest(all_titles_for_digest)
-        if digest_err:
-            st.error(f"요약 생성 실패: {digest_err}")
-        else:
-            st.markdown("##### 🤖 오늘의 IT 뉴스 AI 요약")
-            st.success(digest_text)
+        src_query_kw = (base_query_kws[0] if base_query_kws else "AI")
+        naver_10, google_10, boan_10, etnews_10 = _cached_fetch_keyword_news_10(src_query_kw)
+        src_pool_map = {
+            "google": _tag(google_10, "google"),
+            "naver": _tag(naver_10, "naver"),
+            "boan": _tag(boan_10, "boan"),
+            "etnews": _tag(etnews_10, "etnews"),
+        }
 
-if not is_naver_ready():
-    st.warning("⚠️ NAVER_CLIENT_ID / NAVER_CLIENT_SECRET이 설정되지 않아 네이버 뉴스는 비어서 표시됩니다.")
+    _stored_simple = brief(K_NEWS_SIMPLE)
+    if isinstance(_stored_simple, dict):
+        for _k, _v in _stored_simple.items():
+            st.session_state.news_simple_cache.setdefault(_k, _v)
+    if not use_stored_news:   # 실시간으로 모은 뉴스만 그 자리에서 쉬운말 변환
+        _simplify_batch = list(ranked[:10])
+        for _src_key in ["google", "naver", "boan", "etnews"]:
+            _simplify_batch.extend(src_pool_map[_src_key][:10])
+        ensure_news_simple(_simplify_batch, limit=50)
 
-st.markdown("---")
 
-mc1, mc2, mc3 = st.columns(3)
+    def _display_title(it):
+        # 캐시에 쉬운말이 있으면 그걸 보여주고, 없으면 원문 제목. 링크는 항상 원문 URL로 연결됨.
+        return get_news_simple(it) or it.get("title", "(제목 없음)")
 
-total_mentions = len(all_items_pool)
-with mc1:
-    st.markdown(
-        f"""
-        <div class="gt-mon-card">
-            <div class="gt-mon-card-label">Mentions · 수집 기사</div>
-            <div class="gt-mon-card-value">{total_mentions}건</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
-# === 수정 #4: mc2를 실제 container(key=...)로 교체 — 기존엔 markdown div가 다른 markdown 호출에서 닫혀 박스가 제대로 안 그려졌음 ===
-with mc2:
-    kw_box2 = st.container(key="mc2_kw_box")
-    with kw_box2:
-        st.markdown('<div class="gt-mon-card-label">상위 키워드</div>', unsafe_allow_html=True)
-        kw_hit_counts = {}
-        for it in all_items_pool:
-            for kw in base_query_kws:
-                if kw.lower() in it["title"].lower():
-                    kw_hit_counts[kw] = kw_hit_counts.get(kw, 0) + 1
-        if not kw_hit_counts:
-            st.caption("아직 집계된 키워드가 없습니다.")
-        else:
-            max_hit = max(kw_hit_counts.values())
-            KW_BAR_COLORS = [C['accent'], C['success_text'], C['warn_text'], C['danger_text'], C['text_muted']]
-            for i, (kw, cnt) in enumerate(sorted(kw_hit_counts.items(), key=lambda x: -x[1])):
-                # === 정확한 비율: 최댓값 기준 pct 계산, 0건은 막대 0px로 비워둠 ===
-                pct = int(round(cnt / max_hit * 100)) if max_hit else 0
-                color = KW_BAR_COLORS[i % len(KW_BAR_COLORS)]
+    # 2) TOP 10 뉴스 — 단독 섹션, 접기/펼치기
+    with st.expander("🔴 TOP 10 뉴스", expanded=True):
+        seen = set()
+        shown = 0
+        rows_html = ""
+        for it in ranked:
+            if it["title"] in seen:
+                continue
+            seen.add(it["title"])
+            t_raw = _news_pub_dt(it)
+            rows_html += mon_row_html(
+                SOURCE_BADGE_TEXT.get(it["_src"], it["_src"]), SOURCE_COLOR.get(it["_src"], "#888"),
+                _display_title(it), it.get("url") or it.get("link"), get_news_status(it), _relative_time(t_raw),
+                orig_title=it.get("title"),
+            )
+            shown += 1
+            if shown >= 10:
+                break
+        if shown == 0:
+            rows_html = '<div style="padding:20px;text-align:center;color:' + C['text_muted'] + ';font-size:13px;">아직 분석된 뉴스가 없습니다. 추천 키워드를 클릭해 주세요.</div>'
+        st.markdown(f'<div class="gt-mon-main">{rows_html}</div>', unsafe_allow_html=True)
+
+    # 3) 전체 뉴스보기 — 별도 섹션, 독립적으로 접기/펼치기 (기본 접힌 상태)
+    with st.expander("📡 전체 뉴스보기 (플랫폼당 10건 · 당일 09:00 이후 실시간 갱신)", expanded=False):
+        src_cols = st.columns(4)
+        for i, src_key in enumerate(["google", "naver", "boan", "etnews"]):
+            with src_cols[i]:
                 st.markdown(
                     f"""
-                    <div class="gt-mon-bar-row">
-                        <span style="width:62px;flex-shrink:0;font-weight:700;color:{color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{escape(kw)}</span>
-                        <span class="gt-mon-bar-track"><span class="gt-mon-bar-fill" style="width:{max(pct,4)}%;background:{color};"></span></span>
-                        <span style="width:36px;text-align:right;flex-shrink:0;">{cnt}건</span>
+                    <div class="gt-mon-card-label" style="margin-bottom:6px;">
+                        <span class="gt-mon-dot" style="background:{SOURCE_COLOR[src_key]};display:inline-block;margin-right:5px;"></span>
+                        {SOURCE_LABEL_KO[src_key]}
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
-
-with mc3:
-    comp_box = st.container(key="mc3_comp_box")
-    with comp_box:
-        st.markdown('<div class="gt-mon-card-label">경쟁사 동향</div>', unsafe_allow_html=True)
-        with st.popover("⚙️ 경쟁사 키워드 관리"):
-            if "competitor_keywords" not in st.session_state:
-                st.session_state.competitor_keywords = ["DynaPath", "다이나패스", "EverSafe", "에버세이프", "엑스큐", "xQueue", "소프트베이스", "큐잇", "Queue-it", "데브와이", "메가펜스"]
-            comp_kw_text = st.text_area("쉼표로 구분 입력 (영/한 둘 다 등록해도 되고, 하나만 입력해도 자동 매칭됩니다)", value=", ".join(st.session_state.competitor_keywords), height=70)
-            if st.button("저장", key="save_comp_kw"):
-                st.session_state.competitor_keywords = [k.strip() for k in comp_kw_text.split(",") if k.strip()]
-                st.rerun()
-        competitor_keywords = st.session_state.get("competitor_keywords", ["DynaPath", "다이나패스", "EverSafe", "에버세이프"])
-        # === is_competitor_match가 COMPETITOR_ALIASES로 영/한 자동 치환하므로 키워드 하나만 등록해도 매칭됨 ===
-        cp_matches = [it for it in all_items_pool if is_competitor_match(it["title"], competitor_keywords)]
-        if cp_matches:
-            for it in sorted(cp_matches, key=lambda x: -x.get("_score", -1))[:4]:
-                t_raw = _news_pub_dt(it)
-                st.markdown(
-                    mon_row_html(SOURCE_BADGE_TEXT.get(it["_src"], it["_src"]), SOURCE_COLOR.get(it["_src"], "#888"),
-                                 it["title"], it.get("url") or it.get("link"), "risk", _relative_time(t_raw)),
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.caption("관련 기사 없음")
-
-st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-
-ranked = sorted(all_items_pool, key=lambda x: -x.get("_score", -1))
-src_query_kw = (base_query_kws[0] if base_query_kws else "AI")
-naver_10, google_10, boan_10, etnews_10 = _cached_fetch_keyword_news_10(src_query_kw)
-src_pool_map = {
-    "google": _tag(google_10, "google"),
-    "naver": _tag(naver_10, "naver"),
-    "boan": _tag(boan_10, "boan"),
-    "etnews": _tag(etnews_10, "etnews"),
-}
-
-_simplify_batch = list(ranked[:10])
-for _src_key in ["google", "naver", "boan", "etnews"]:
-    _simplify_batch.extend(src_pool_map[_src_key][:10])
-ensure_news_simple(_simplify_batch, limit=50)
-
-
-def _display_title(it):
-    # 캐시에 쉬운말이 있으면 그걸 보여주고, 없으면 원문 제목. 링크는 항상 원문 URL로 연결됨.
-    return get_news_simple(it) or it.get("title", "(제목 없음)")
-
-
-# 2) TOP 10 뉴스 — 단독 섹션, 접기/펼치기
-with st.expander("🔴 TOP 10 뉴스", expanded=True):
-    seen = set()
-    shown = 0
-    rows_html = ""
-    for it in ranked:
-        if it["title"] in seen:
-            continue
-        seen.add(it["title"])
-        t_raw = _news_pub_dt(it)
-        rows_html += mon_row_html(
-            SOURCE_BADGE_TEXT.get(it["_src"], it["_src"]), SOURCE_COLOR.get(it["_src"], "#888"),
-            _display_title(it), it.get("url") or it.get("link"), get_news_status(it), _relative_time(t_raw),
-        )
-        shown += 1
-        if shown >= 10:
-            break
-    if shown == 0:
-        rows_html = '<div style="padding:20px;text-align:center;color:' + C['text_muted'] + ';font-size:13px;">아직 분석된 뉴스가 없습니다. 추천 키워드를 클릭해 주세요.</div>'
-    st.markdown(f'<div class="gt-mon-main">{rows_html}</div>', unsafe_allow_html=True)
-
-# 3) 전체 뉴스보기 — 별도 섹션, 독립적으로 접기/펼치기 (기본 접힌 상태)
-with st.expander("📡 전체 뉴스보기 (플랫폼당 10건 · 당일 09:00 이후 실시간 갱신)", expanded=False):
-    src_cols = st.columns(4)
-    for i, src_key in enumerate(["google", "naver", "boan", "etnews"]):
-        with src_cols[i]:
-            st.markdown(
-                f"""
-                <div class="gt-mon-card-label" style="margin-bottom:6px;">
-                    <span class="gt-mon-dot" style="background:{SOURCE_COLOR[src_key]};display:inline-block;margin-right:5px;"></span>
-                    {SOURCE_LABEL_KO[src_key]}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            raw_items = src_pool_map[src_key]
-            windowed = [it for it in raw_items if _within_collection_window(_news_pub_dt(it))]
-            src_items = _dedup_by_title(windowed if windowed else raw_items)[:10]
-            if not src_items:
-                st.caption("수집된 기사 없음")
-            else:
-                rows_html_src = '<div class="gt-mon-main">'
-                for it in src_items:
-                    t_raw = it.get("pubDate") or it.get("pub_date")
-                    rows_html_src += mon_row_plain_html(
-                        _display_title(it),
-                        it.get("url") or it.get("link"),
-                        get_news_status({**it, "_score": -1}),
-                        _relative_time(t_raw),
-                    )
-                rows_html_src += "</div>"
-                st.markdown(rows_html_src, unsafe_allow_html=True)
+                raw_items = src_pool_map[src_key]
+                windowed = [it for it in raw_items if _within_collection_window(_news_pub_dt(it))]
+                src_items = _dedup_by_title(windowed if windowed else raw_items)[:10]
+                if not src_items:
+                    st.caption("수집된 기사 없음")
+                else:
+                    rows_html_src = '<div class="gt-mon-main">'
+                    for it in src_items:
+                        t_raw = it.get("pubDate") or it.get("pub_date")
+                        rows_html_src += mon_row_plain_html(
+                            _display_title(it),
+                            it.get("url") or it.get("link"),
+                            get_news_status({**it, "_score": -1}),
+                            _relative_time(t_raw),
+                            orig_title=it.get("title"),
+                        )
+                    rows_html_src += "</div>"
+                    st.markdown(rows_html_src, unsafe_allow_html=True)
 #------------------------------------------------------------
 #솔루션 분석 대탭 — 변경 없음 (기존 로직 유지)
 #------------------------------------------------------------
@@ -1864,149 +1987,223 @@ with main_tab_trend:
     if last_updated:
         st.caption(f"마지막 데이터 갱신: {last_updated.strftime('%Y-%m-%d %H:%M')}")
 
-if "trend_bg_done_date" not in st.session_state:
-    st.session_state.trend_bg_done_date = None
-
-today_str = datetime.now().date().isoformat()
-if st.session_state.trend_bg_done_date != today_str and is_gemini_ready():
-    bg_titles = st.session_state.get("all_titles_for_digest") or df[COL_TITLE].dropna().astype(str).head(100).tolist()
-    if bg_titles:
-        kw_result, kw_err = extract_trend_keywords(bg_titles)
-        if kw_result and not kw_err:
-            save_trend_snapshot(kw_result)
-    st.session_state.trend_bg_done_date = today_str
-
-def _is_within_1day(pub_val):
-    try:
-        t = pd.Timestamp(pub_val)
-        if pd.isna(t):
+    def _is_within_1day(pub_val):
+        try:
+            t = pd.Timestamp(pub_val)
+            if pd.isna(t):
+                return False
+            if t.tzinfo is not None:
+                t = t.tz_localize(None)
+            return (pd.Timestamp(datetime.now()) - t) <= timedelta(days=1)
+        except Exception:
             return False
-        if t.tzinfo is not None:
-            t = t.tz_localize(None)
-        return (pd.Timestamp(datetime.now()) - t) <= timedelta(days=1)
-    except Exception:
-        return False
 
-solution_news_pool_all = _fetch_news_pool_for_keywords(["넷퍼넬", "봇매니저", "MBUSTER", "부하테스트", "대기열"])
-solution_news_pool = [n for n in solution_news_pool_all if _is_within_1day(_news_pub_dt(n))]
-st.caption(f"📰 뉴스 데이터는 최근 24시간 이내 수집분만 반영됩니다. (대상 {len(solution_news_pool)}건 / 전체 수집 {len(solution_news_pool_all)}건)")
+    _stored_sol = brief(K_NEWS_SOLUTION)
+    if isinstance(_stored_sol, list) and _stored_sol:
+        solution_news_pool_all = [it for it in _stored_sol if isinstance(it, dict) and it.get("title")]
+    else:
+        solution_news_pool_all = _fetch_news_pool_for_keywords(list(SOLUTION_NEWS_KEYWORDS))
+    solution_news_pool = [n for n in solution_news_pool_all if _is_within_1day(_news_pub_dt(n))]
+    st.caption(f"📰 뉴스는 최근 24시간 이내 기사만 반영합니다. (대상 {len(solution_news_pool)}건 / 전체 수집 {len(solution_news_pool_all)}건"
+               + (f" · 아침 자동수집 {brief_time(K_NEWS_SOLUTION)} 기준)" if isinstance(_stored_sol, list) and _stored_sol else ")"))
 
-def _count_postings_for(keywords_list):
-    pat = "|".join(re.escape(k) for k in keywords_list)
-    mask = (
-        df[COL_TITLE].astype(str).str.contains(pat, case=False, na=False)
-        | df[COL_KEYWORDS].astype(str).str.contains(pat, case=False, na=False)
-    )
-    return df[mask]
+    def _count_postings_for(keywords_list):
+        pat = "|".join(re.escape(k) for k in keywords_list)
+        mask = (
+            df[COL_TITLE].astype(str).str.contains(pat, case=False, na=False)
+            | df[COL_KEYWORDS].astype(str).str.contains(pat, case=False, na=False)
+        )
+        return df[mask]
 
-def _count_news_for(keywords_list):
-    return [it for it in solution_news_pool if any(k.lower() in it["title"].lower() for k in keywords_list)]
+    def _count_news_for(keywords_list):
+        return [it for it in solution_news_pool if any(k.lower() in it["title"].lower() for k in keywords_list)]
 
-solution_rows = []
-for sname, sinfo in PRODUCT_KEYWORDS.items():
-    p_rows = _count_postings_for(sinfo["keywords"])
-    n_rows = _count_news_for(sinfo["keywords"])
-    solution_rows.append({
-        "name": sname, "desc": sinfo["desc"],
-        "posting_rows": p_rows, "news_rows": n_rows,
-        "total": len(p_rows) + len(n_rows),
+    solution_rows = []
+    for sname, sinfo in PRODUCT_KEYWORDS.items():
+        p_rows = _count_postings_for(sinfo["keywords"])
+        n_rows = _count_news_for(sinfo["keywords"])
+        solution_rows.append({
+            "name": sname, "desc": sinfo["desc"],
+            "posting_rows": p_rows, "news_rows": n_rows,
+            "total": len(p_rows) + len(n_rows),
+        })
+
+    st.markdown("#### 자사 솔루션별 수집 현황 (공고·개발과제·최근 1일 뉴스 통합)")
+    sol_cols = st.columns(4)
+    SOL_COLORS = [C['accent'], C['success_text'], C['warn_text'], C['danger_text']]
+    for i, srow in enumerate(solution_rows):
+        with sol_cols[i]:
+            st.markdown(
+                f"""
+                <div class="gt-mon-card" style="border-left:4px solid {SOL_COLORS[i % len(SOL_COLORS)]};">
+                    <div class="gt-mon-card-label">{escape(srow['name'])}</div>
+                    <div class="gt-mon-card-value">{srow['total']}건</div>
+                    <div style="font-size:11px;color:{C['text_muted']};margin-top:4px;">{escape(srow['desc'])}</div>
+                    <div style="font-size:11px;color:{C['text_muted']};margin-top:6px;">공고 {len(srow['posting_rows'])}건 · 뉴스(1일) {len(srow['news_rows'])}건</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    kw_chart_df = pd.DataFrame({
+        "solution": [s["name"] for s in solution_rows],
+        "count": [s["total"] for s in solution_rows],
     })
+    fig_sol = px.bar(
+        kw_chart_df, x="solution", y="count", text="count",
+        color="solution",
+        color_discrete_sequence=SOL_COLORS,
+    )
+    fig_sol.update_traces(textposition="outside")
+    fig_sol.update_layout(
+        margin=dict(l=10, r=10, t=20, b=10), height=260,
+        paper_bgcolor=C['surface'], plot_bgcolor=C['surface'],
+        font=dict(color=C['text_body']), showlegend=False,
+        xaxis_title="자사 솔루션", yaxis_title="수집 건수(공고+뉴스)",
+        xaxis=dict(gridcolor=C['border']), yaxis=dict(gridcolor=C['border']),
+    )
+    st.plotly_chart(fig_sol, use_container_width=True)
 
-st.markdown("#### 자사 솔루션별 수집 현황 (공고·개발과제·최근 1일 뉴스 통합)")
-sol_cols = st.columns(4)
-SOL_COLORS = [C['accent'], C['success_text'], C['warn_text'], C['danger_text']]
-for i, srow in enumerate(solution_rows):
-    with sol_cols[i]:
-        st.markdown(
-            f"""
-            <div class="gt-mon-card" style="border-left:4px solid {SOL_COLORS[i % len(SOL_COLORS)]};">
-                <div class="gt-mon-card-label">{escape(srow['name'])}</div>
-                <div class="gt-mon-card-value">{srow['total']}건</div>
-                <div style="font-size:11px;color:{C['text_muted']};margin-top:4px;">{escape(srow['desc'])}</div>
-                <div style="font-size:11px;color:{C['text_muted']};margin-top:6px;">공고 {len(srow['posting_rows'])}건 · 뉴스(1일) {len(srow['news_rows'])}건</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    st.markdown("---")
+
+    st.markdown("#### 🏆 자사 솔루션 연관도 TOP 10 (공고·개발·최근1일뉴스 통합)")
+
+    top_candidates = []
+    seen_titles_top = set()
+    for srow in solution_rows:
+        for _, r in srow["posting_rows"].iterrows():
+            if r[COL_TITLE] in seen_titles_top:
+                continue
+            seen_titles_top.add(r[COL_TITLE])
+            budget_txt = format_budget_eok(r.get(COL_BUDGET))
+            meta_txt = f"{r.get(COL_AGENCY, '')} · 마감 {r[COL_DUE_DATE] if pd.notna(r[COL_DUE_DATE]) else '미정'}"
+            if budget_txt:
+                meta_txt += f" · 예산 {budget_txt}"
+            top_candidates.append({
+                "type": "공고", "solution": srow["name"],
+                "title": r[COL_TITLE], "url": r.get(COL_URL) or "#",
+                "score": r.get(COL_AI_SCORE, -1) if r.get(COL_AI_SCORE, -1) >= 0 else 50,
+                "meta": meta_txt,
+            })
+        for it in srow["news_rows"]:
+            if it["title"] in seen_titles_top:
+                continue
+            seen_titles_top.add(it["title"])
+            top_candidates.append({
+                "type": "뉴스", "solution": srow["name"],
+                "title": it["title"], "url": it.get("url") or it.get("link") or "#",
+                "score": it.get("_score", 50),
+                "meta": SOURCE_LABEL_KO.get(it["_src"], it["_src"]) + " · 최근 1일",
+            })
+
+    top_candidates = sorted(top_candidates, key=lambda x: -x["score"])[:10]
+
+    if not top_candidates:
+        st.info("아직 자사 솔루션과 관련된 수집 데이터가 충분하지 않습니다. (뉴스는 최근 1일 이내만 집계됩니다)")
+    else:
+        for i, cand in enumerate(top_candidates, start=1):
+            type_color = C['accent'] if cand["type"] == "공고" else C['success_text']
+            st.markdown(
+                f"""
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
+                            border-bottom:1px solid {C['row_border']};">
+                    <span style="color:{C['text_muted']};font-weight:700;width:20px;flex-shrink:0;">{i}</span>
+                    <span style="background:{type_color};color:#fff;font-size:10px;font-weight:700;
+                                padding:2px 7px;border-radius:5px;flex-shrink:0;">{cand['type']}</span>
+                    <span style="background:{C['surface3']};color:{C['text']};font-size:10px;font-weight:700;
+                                padding:2px 7px;border-radius:5px;flex-shrink:0;">{escape(cand['solution'])}</span>
+                    <a href="{escape(cand['url'])}" target="_blank" title="{escape(cand['title'])}"
+                        style="flex:1;color:{C['text']};font-weight:600;font-size:13px;text-decoration:none;
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{escape(cand['title'])}</a>
+                    <span style="font-size:11px;color:{C['text_muted']};flex-shrink:0;">{escape(str(cand['meta']))}</span>
+                    {score_badge_html(cand['score'])}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    # ------------------------------------------------------------
+    # [신규] 조달 결과 — 낙찰·계약 (최근 30일, IT 관련만)
+    #   경쟁사 수주 / 자사 솔루션 관련 사업을 한눈에 → 영업 타깃·가격 근거로 활용
+    # ------------------------------------------------------------
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    st.markdown("#### 🏆 조달 결과 — 낙찰·계약 (최근 30일)")
+    res_df = _cached_procurement_results()
+    if res_df.empty:
+        st.info("아직 수집된 낙찰·계약 결과가 없습니다. (조달청 낙찰·계약 API 활용신청 승인 후 다음 자동수집부터 표시)")
+    else:
+        _comp_kws = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
+        _sol_kws = [k.lower() for info in PRODUCT_KEYWORDS.values() for k in info["keywords"]]
+        res_df = res_df.fillna("")
+        res_df["_comp"] = res_df["company"].map(lambda c: is_competitor_match(c, _comp_kws))
+        res_df["_sol"] = res_df["title"].map(lambda t: any(k in str(t).lower() for k in _sol_kws))
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("낙찰", f"{(res_df['kind'] == '낙찰').sum()}건")
+        k2.metric("계약", f"{(res_df['kind'] == '계약').sum()}건")
+        k3.metric("🔴 경쟁사 수주", f"{int(res_df['_comp'].sum())}건")
+        k4.metric("🟢 자사 솔루션 관련", f"{int(res_df['_sol'].sum())}건")
+
+        only_hot = st.toggle("경쟁사·자사 관련 건만 보기", value=False, key="proc_hot_only")
+        view = res_df[res_df["_comp"] | res_df["_sol"]] if only_hot else res_df
+        view = view.assign(
+            표시=["🔴 경쟁사" if c else ("🟢 자사관련" if so else "") for c, so in zip(view["_comp"], view["_sol"])],
+            금액=view["amount"].map(lambda v: format_budget_eok(v) or "-"),
         )
-
-st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-kw_chart_df = pd.DataFrame({
-    "solution": [s["name"] for s in solution_rows],
-    "count": [s["total"] for s in solution_rows],
-})
-fig_sol = px.bar(
-    kw_chart_df, x="solution", y="count", text="count",
-    color="solution",
-    color_discrete_sequence=SOL_COLORS,
-)
-fig_sol.update_traces(textposition="outside")
-fig_sol.update_layout(
-    margin=dict(l=10, r=10, t=20, b=10), height=260,
-    paper_bgcolor=C['surface'], plot_bgcolor=C['surface'],
-    font=dict(color=C['text_body']), showlegend=False,
-    xaxis_title="자사 솔루션", yaxis_title="수집 건수(공고+뉴스)",
-    xaxis=dict(gridcolor=C['border']), yaxis=dict(gridcolor=C['border']),
-)
-st.plotly_chart(fig_sol, use_container_width=True)
-
-st.markdown("---")
-
-st.markdown("#### 🏆 자사 솔루션 연관도 TOP 10 (공고·개발·최근1일뉴스 통합)")
-
-top_candidates = []
-seen_titles_top = set()
-for srow in solution_rows:
-    for _, r in srow["posting_rows"].iterrows():
-        if r[COL_TITLE] in seen_titles_top:
-            continue
-        seen_titles_top.add(r[COL_TITLE])
-        budget_txt = format_budget_eok(r.get(COL_BUDGET))
-        meta_txt = f"{r.get(COL_AGENCY, '')} · 마감 {r[COL_DUE_DATE] if pd.notna(r[COL_DUE_DATE]) else '미정'}"
-        if budget_txt:
-            meta_txt += f" · 예산 {budget_txt}"
-        top_candidates.append({
-            "type": "공고", "solution": srow["name"],
-            "title": r[COL_TITLE], "url": r.get(COL_URL) or "#",
-            "score": r.get(COL_AI_SCORE, -1) if r.get(COL_AI_SCORE, -1) >= 0 else 50,
-            "meta": meta_txt,
-        })
-    for it in srow["news_rows"]:
-        if it["title"] in seen_titles_top:
-            continue
-        seen_titles_top.add(it["title"])
-        top_candidates.append({
-            "type": "뉴스", "solution": srow["name"],
-            "title": it["title"], "url": it.get("url") or it.get("link") or "#",
-            "score": it.get("_score", 50),
-            "meta": SOURCE_LABEL_KO.get(it["_src"], it["_src"]) + " · 최근 1일",
-        })
-
-top_candidates = sorted(top_candidates, key=lambda x: -x["score"])[:10]
-
-if not top_candidates:
-    st.info("아직 자사 솔루션과 관련된 수집 데이터가 충분하지 않습니다. (뉴스는 최근 1일 이내만 집계됩니다)")
-else:
-    for i, cand in enumerate(top_candidates, start=1):
-        type_color = C['accent'] if cand["type"] == "공고" else C['success_text']
-        st.markdown(
-            f"""
-            <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
-                        border-bottom:1px solid {C['row_border']};">
-                <span style="color:{C['text_muted']};font-weight:700;width:20px;flex-shrink:0;">{i}</span>
-                <span style="background:{type_color};color:#fff;font-size:10px;font-weight:700;
-                            padding:2px 7px;border-radius:5px;flex-shrink:0;">{cand['type']}</span>
-                <span style="background:{C['surface3']};color:{C['text']};font-size:10px;font-weight:700;
-                            padding:2px 7px;border-radius:5px;flex-shrink:0;">{escape(cand['solution'])}</span>
-                <a href="{escape(cand['url'])}" target="_blank" title="{escape(cand['title'])}"
-                    style="flex:1;color:{C['text']};font-weight:600;font-size:13px;text-decoration:none;
-                    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{escape(cand['title'])}</a>
-                <span style="font-size:11px;color:{C['text_muted']};flex-shrink:0;">{escape(str(cand['meta']))}</span>
-                {score_badge_html(cand['score'])}
-            </div>
-            """,
-            unsafe_allow_html=True,
+        if view.empty:
+            st.caption("해당 조건의 결과가 없습니다.")
+        st.dataframe(
+            view[["표시", "kind", "event_date", "title", "agency", "company", "금액", "url"]].rename(columns={
+                "kind": "구분", "event_date": "일자", "title": "사업명", "agency": "수요기관",
+                "company": "수주업체", "url": "링크",
+            }),
+            hide_index=True, use_container_width=True, height=420,
+            column_config={"링크": st.column_config.LinkColumn("링크", display_text="열기")},
         )
+        st.caption("출처: 조달청 나라장터 낙찰정보·계약정보 서비스(공공데이터포털). 사업명에 IT 관련 단어가 있거나 정보화사업으로 표시된 건만 수집.")
+
+    # ------------------------------------------------------------
+    # [신규] 🔁 재발주 예상 — 경쟁사가 수주한 사업의 계약 종료 전 선제 영업
+    #   예상 발주 시점 = 계약 종료일 − 60일 (낙찰 건은 계약기간 정보가 없어 1년으로 추정)
+    # ------------------------------------------------------------
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    st.markdown("#### 🔁 재발주 예상 — 경쟁사 수주 사업 (향후 6개월)")
+    ro_c1, ro_c2 = st.columns([3, 2])
+    with ro_c2:
+        ro_include_sol = st.toggle("자사 제품 관련 사업도 함께 보기", value=False, key="reorder_include_sol",
+                                   help="경쟁사 수주 건 외에, 사업명에 대기열·예약·수강신청 등이 들어간 사업도 포함합니다.")
+    reorder_df = _cached_reorder(tuple(st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)), ro_include_sol)
+    if reorder_df.empty:
+        st.info("아직 재발주 예상 건이 없습니다. 낙찰·계약 결과가 쌓이면 자동으로 표시됩니다. "
+                "(첫 자동수집 때 최근 1년치 자사 관련 사업을 한 번 조회합니다)")
+    else:
+        soon_n = int((reorder_df["d_day"] <= 30).sum())
+        with ro_c1:
+            st.caption(f"총 {len(reorder_df)}건 · 30일 이내 발주 예상 {soon_n}건 — 발주 1~2개월 전 기관 담당자 접촉을 권장합니다.")
+        _rv = reorder_df.assign(
+            예상발주=[f"{e} (D-{max(int(d), 0)})" if int(d) >= 0 else f"{e} (시점 지남)" for e, d in zip(reorder_df["expected"], reorder_df["d_day"])],
+            금액=reorder_df["amount"].map(lambda v: format_budget_eok(v) or "-"),
+            계약종료=[f"{d} (추정)" if est == "Y" else d for d, est in zip(reorder_df["end_date"], reorder_df["end_est"])],
+        )
+        st.dataframe(
+            _rv[["표시", "예상발주", "title", "agency", "company", "금액", "계약종료", "url"]].rename(columns={
+                "title": "사업명", "agency": "수요기관", "company": "수주업체", "url": "링크"}),
+            hide_index=True, use_container_width=True, height=min(420, 38 + 35 * len(_rv)),
+            column_config={"링크": st.column_config.LinkColumn("링크", display_text="열기")},
+        )
+@st.cache_data(ttl=86400, show_spinner=False)
+def _daily_headline(day_key, titles_tuple):
+    obj, err = generate_headline(list(titles_tuple))
+    return obj if (not err and isinstance(obj, dict)) else None
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _daily_issues(day_key, items_txt):
+    issues, err = generate_key_issues(items_txt, n=4)
+    return issues if (not err and isinstance(issues, list)) else []
+
+
 # ------------------------------------------------------------
 # 통합보기 대탭
 # ------------------------------------------------------------
@@ -2035,8 +2232,8 @@ with main_tab_integrated:
             st.cache_data.clear()
             st.rerun()
 
-    if not is_gemini_ready():
-        st.warning("Gemini API 키가 설정되지 않았습니다. .env 파일에 GEMINI_API_KEY를 추가한 뒤 앱을 다시 실행해 주세요.")
+    if not is_ai_ready():
+        st.warning("Claude API 키가 설정되지 않았습니다. Streamlit Secrets에 ANTHROPIC_API_KEY를 추가해 주세요.")
 
     # 데이터 필터링 (오늘 수집 및 마감 임박)
     if COL_CREATED_AT in df.columns:
@@ -2110,38 +2307,34 @@ with main_tab_integrated:
 
         st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
 
-        headline_key = f"integrated_headline_{now_dt.date().isoformat()}"
-        if headline_key not in st.session_state:
-            headline_titles = [r[COL_TITLE] for _, r in pd.concat([today_new_df.head(5), due_soon3_df.head(5)]).iterrows()]
-            headline_titles = list(dict.fromkeys(headline_titles))
-            if not headline_titles:
-                headline_titles = df.sort_values("_reg_date_parsed", ascending=False)[COL_TITLE].dropna().astype(str).head(8).tolist()
+        # 오늘의 헤드라인 — 아침 배치 결과 우선, 없으면 하루 1번(모든 접속자 공용) 실시간 생성
+        headline_obj = brief(K_HEADLINE)
+        headline_time = brief_time(K_HEADLINE)
+        if not isinstance(headline_obj, dict) or not headline_obj.get("headline"):
+            headline_obj, headline_time = None, None
+            if is_ai_ready() and not df.empty:
+                _hl_titles = [r[COL_TITLE] for _, r in pd.concat([today_new_df.head(8), due_soon3_df.head(5)]).iterrows()]
+                if len(_hl_titles) < 5:
+                    _hl_titles += df.sort_values(COL_AI_SCORE, ascending=False)[COL_TITLE].astype(str).head(12).tolist()
+                with st.spinner("AI가 오늘의 헤드라인을 작성하는 중... (하루 1번만)"):
+                    headline_obj = _daily_headline(now_dt.strftime("%Y-%m-%d"), tuple(dict.fromkeys(_hl_titles))[:25])
+                headline_time = now_dt.strftime("%Y-%m-%d %H:%M")
+        st.session_state[f"integrated_headline_{now_dt.date().isoformat()}"] = ("OK", headline_obj) if headline_obj else (None, None)
 
-            if not is_gemini_ready():
-                st.session_state[headline_key] = ("__ERROR__", "Gemini API 키가 설정되지 않았습니다.")
-            elif not headline_titles:
-                st.session_state[headline_key] = ("__EMPTY__", "수집된 공고가 아직 없습니다.")
-            else:
-                with st.spinner("AI가 오늘의 헤드라인을 작성하는 중..."):
-                    headline_obj, headline_err = generate_headline(headline_titles)
-                if headline_err or not headline_obj:
-                    st.session_state[headline_key] = ("__ERROR__", headline_err or "생성 실패")
-                else:
-                    st.session_state[headline_key] = ("OK", headline_obj)
-
-        status, payload = st.session_state.get(headline_key, (None, None))
-        if status == "OK":
-                st.markdown(
-            f"""
-            <div class="gt-surface" style="border-left:5px solid {C['accent']};padding:16px 20px;margin-top:4px;">
-                <span style="color:{C["text_muted"]};font-weight:700;border-bottom:2px solid {C["accent"]};padding-bottom:2px;">AI 핵심요약</span>
-                <span class="gt-muted" style="font-size:10.5px;margin-left:8px;">{now_dt.strftime('%H:%M')} 자동 생성</span>
-                <p class="gt-text" style="margin-top:10px;margin-bottom:4px;font-size:16px;font-weight:700;line-height:1.4;">{escape(str(payload.get('headline','')))}</p>
-                <p class="gt-body" style="margin-top:6px;margin-bottom:0;font-size:13.5px;line-height:1.75;font-weight:500;color:{C['text_body']};">{escape(str(payload.get('subtext','')))}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-    )
+        if headline_obj:
+            st.markdown(
+                f"""
+                <div class="gt-surface" style="border-left:5px solid {C['accent']};padding:16px 20px;margin-top:4px;">
+                    <span style="color:{C["text_muted"]};font-weight:700;border-bottom:2px solid {C["accent"]};padding-bottom:2px;">AI 핵심요약</span>
+                    <span class="gt-muted" style="font-size:10.5px;margin-left:8px;">{escape(str(headline_time or '')[5:16])} 생성</span>
+                    <p class="gt-text" style="margin-top:10px;margin-bottom:4px;font-size:16px;font-weight:700;line-height:1.4;">{escape(str(headline_obj.get('headline','')))}</p>
+                    <p class="gt-body" style="margin-top:6px;margin-bottom:0;font-size:13.5px;line-height:1.75;font-weight:500;color:{C['text_body']};">{escape(str(headline_obj.get('subtext','')))}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        elif not is_ai_ready():
+            st.caption("AI 헤드라인은 Claude API 키 설정 후 표시됩니다.")
 
     st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
 
@@ -2149,28 +2342,33 @@ with main_tab_integrated:
     # Ⅱ. 핵심 동향
     # ----------------------------------------------------------------
     with st.expander("Ⅱ. 핵심 동향 — 빈도 × 영향 기준 이슈 테마", expanded=True):
+        issues_payload_now = brief(K_ISSUES)
+        if not isinstance(issues_payload_now, list) or not issues_payload_now:
+            issues_payload_now = []
+            if is_ai_ready() and not df.empty:
+                _top = df[df[COL_AI_SCORE] >= 60].sort_values(COL_AI_SCORE, ascending=False).head(25)
+                if _top.empty:
+                    _top = df.sort_values(COL_AI_SCORE, ascending=False).head(25)
+                _txt = "\n".join(f"- {r[COL_TITLE]} ({r[COL_AGENCY]})" for _, r in _top.iterrows())
+                with st.spinner("AI가 핵심 이슈를 테마별로 묶는 중... (하루 1번만)"):
+                    issues_payload_now = _daily_issues(now_dt.strftime("%Y-%m-%d"), _txt)
+        issues_payload_now = [i for i in issues_payload_now if isinstance(i, dict)][:4]
+        st.session_state[f"integrated_issues_{now_dt.date().isoformat()}"] = ("OK", issues_payload_now)
 
-        issues_key = f"integrated_issues_{now_dt.date().isoformat()}"
-        if issues_key not in st.session_state:
-            action_df_ii = df[(df[COL_AI_SCORE] >= 60)].copy().sort_values(COL_AI_SCORE, ascending=False).head(25)
-            if not is_gemini_ready():
-                st.session_state[issues_key] = ("__ERROR__", "Gemini API 키가 설정되지 않았습니다.")
-            else:
-                items_txt = "\n".join(f"- {r[COL_TITLE]} ({r[COL_AGENCY]})" for _, r in action_df_ii.iterrows())
-                with st.spinner("AI가 핵심 이슈를 테마별로 묶는 중..."):
-                    issues, issues_err = generate_key_issues(items_txt, n=4)
-                st.session_state[issues_key] = ("__ERROR__", issues_err) if issues_err else ("OK", issues)
-
-        status, payload = st.session_state.get(issues_key, (None, None))
-        if status == "OK" and payload:
+        if issues_payload_now:
             issue_row_box = st.container(key="gt_issue_cards_row")
-    with issue_row_box:
-        cols = st.columns(len(payload), gap="small")
-        for i, issue in enumerate(payload):
-            with cols[i]:
-                with st.container(border=True):
-                    st.markdown(f"**{issue.get('theme','')}**")
-                    st.markdown(f"<div style='font-size:12px;'>{issue.get('summary','')}</div>", unsafe_allow_html=True)
+            with issue_row_box:
+                cols = st.columns(len(issues_payload_now), gap="small")
+                for i, issue in enumerate(issues_payload_now):
+                    with cols[i]:
+                        with st.container(border=True):
+                            st.markdown(f"**{escape(str(issue.get('theme','')))}**")
+                            meta = " · ".join(x for x in [str(issue.get("impact") or ""), f"{issue.get('count')}건" if issue.get("count") else ""] if x)
+                            if meta:
+                                st.caption(meta)
+                            st.markdown(f"<div style='font-size:12px;'>{escape(str(issue.get('summary','')))}</div>", unsafe_allow_html=True)
+        else:
+            st.caption("아직 이슈 카드가 없습니다. (아침 자동수집 후 표시됩니다)")
 
 
     # ----------------------------------------------------------------
@@ -2179,18 +2377,23 @@ with main_tab_integrated:
     def _biz_rnd_table_html(sub_df, accent_color, empty_msg):
         rows = sub_df.sort_values(COL_AI_SCORE, ascending=False).head(8)
         if rows.empty:
-            return f'<div style="padding:16px;">{empty_msg}</div>'
+            return f'<div style="padding:16px;color:{C["text_muted"]};">{empty_msg}</div>'
         head = (
-            f'<div style="display:grid;grid-template-columns:2.4fr 1fr 1fr 1.3fr; background:{C["navy"]}; '
-            f'color:{C["navy_text"]}; padding:9px; font-size:10px;"><div>사업명</div><div>기관</div><div>예산/마감</div><div>현황</div></div>'
+            f'<div style="display:grid;grid-template-columns:2.4fr 1fr 0.7fr 1fr 1.3fr; background:{C["navy"]}; '
+            f'color:{C["navy_text"]}; padding:9px; font-size:10.5px;font-weight:700;">'
+            f'<div>사업명</div><div>기관</div><div>지역</div><div>예산 · 마감</div><div>현황</div></div>'
         )
         body = ""
         for _, r in rows.iterrows():
+            budget_txt = format_budget_eok(r.get(COL_BUDGET)) or "예산 미정"
+            due_txt = str(r.get(COL_DUE_DATE) or "").strip()
+            due_txt = f"~{due_txt[5:]}" if len(due_txt) >= 10 else "마감 미정"
             body += (
-                f'<div style="display:grid;grid-template-columns:2.4fr 1fr 1fr 1.3fr; border-bottom:1px solid {C["row_border"]}; padding:10px; font-size:11px;">'
-                f'<div><a href="{r.get(COL_URL,"#")}" style="font-weight:700; color:{C["text"]}; text-decoration:none;">{r[COL_TITLE]}</a></div>'
-                f'<div>{r.get(COL_AGENCY,"-")}</div>'
-                f'<div>{format_budget_eok(r.get(COL_BUDGET)) or "미정"}{r[COL_DUE_DATE]}</div>'
+                f'<div style="display:grid;grid-template-columns:2.4fr 1fr 0.7fr 1fr 1.3fr; border-bottom:1px solid {C["row_border"]}; padding:10px; font-size:11.5px;">'
+                f'<div><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" style="font-weight:700; color:{C["text"]}; text-decoration:none;">{escape(str(r[COL_TITLE]))}</a></div>'
+                f'<div>{escape(str(r.get(COL_AGENCY) or "-"))}</div>'
+                f'<div>{escape(str(r.get("_region_label") or "-"))}</div>'
+                f'<div>{escape(budget_txt)}<br><span style="color:{C["text_muted"]};">{escape(due_txt)}</span></div>'
                 f'<div>{score_badge_html(r.get(COL_AI_SCORE,-1))}</div></div>'
             )
         return f'<div style="border:1px solid {C["border"]}; border-radius:10px; overflow:hidden;">{head}{body}</div>'
@@ -2204,17 +2407,10 @@ with main_tab_integrated:
     # ----------------------------------------------------------------
     # Ⅳ. 제품별 대응 가이드  (※ 여기가 원본 파일에서 들여쓰기가 깨진 지점이었음 — 전부 수정됨)
     # ----------------------------------------------------------------
-    PRODUCT_TO_DOMAIN = {
-        "넷퍼넬 (NF)": ["클라우드", "표준·정책"],
-        "넷퍼넬API (NFA)": ["AI 모델", "데이터"],
-        "봇매니저 (BM)": ["보안·인증"],
-        "로드테스터 (LT)": ["클라우드"],
-    }
-
     def _match_rows(sub, keywords):
         """키워드 기반 1차 필터링"""
         if sub is None or sub.empty or not keywords:
-            return pd.DataFrame()
+            return sub.iloc[0:0] if sub is not None else df.iloc[0:0]
         pat = "|".join(re.escape(k) for k in keywords)
         mask = (
             sub[COL_TITLE].astype(str).str.contains(pat, case=False, na=False)
@@ -2222,32 +2418,18 @@ with main_tab_integrated:
         )
         return sub[mask]
 
+    _product_ai = brief(K_PRODUCT_AI) if isinstance(brief(K_PRODUCT_AI), dict) else {}
+
     def _match_rows_with_ai_fallback(sub, keywords, product_name, product_desc, cache_key):
-        """
-        1차: 키워드 매칭.
-        0건이면 2차: AI(Gemini)가 문맥으로 재판단.
-        진짜 연관 없으면 억지로 채우지 않고 빈 DataFrame 그대로 유지.
-        """
+        """1차: 키워드 매칭. 0건이면 아침 배치에서 AI가 문맥으로 골라 둔 결과 사용 (화면에서 AI 호출 없음).
+        진짜 연관 없으면 억지로 채우지 않고 빈 상태 유지."""
         hits = _match_rows(sub, keywords)
-        if not hits.empty or sub is None or sub.empty or not is_gemini_ready():
+        if not hits.empty or sub is None or sub.empty:
             return hits
-
-        cache_bucket = st.session_state.setdefault("ai_product_match_cache", {})
-        today_str_local = datetime.now().strftime("%Y-%m-%d")
-        full_key = f"{cache_key}_{today_str_local}"  # 하루 1회만 호출하여 API 낭비 방지
-
-        if full_key in cache_bucket:
-            matched_titles = cache_bucket[full_key]
-        else:
-            titles = sub[COL_TITLE].dropna().astype(str).tolist()
-            matched_titles, err = match_titles_to_product(product_name, product_desc, titles)
-            matched_titles = matched_titles if (not err and matched_titles) else []
-            cache_bucket[full_key] = matched_titles
-
+        matched_titles = _product_ai.get(cache_key) or []
         if not matched_titles:
-            return hits  # AI도 "관련 없음"으로 판단 시 빈 상태 유지
-
-        return sub[sub[COL_TITLE].astype(str).isin(matched_titles)]
+            return hits
+        return sub[sub[COL_TITLE].astype(str).isin([str(t) for t in matched_titles])]
 
     with st.expander("Ⅳ. 제품별 대응 가이드 — NF · NFA · BM · LT", expanded=True):
         pg_cols = st.columns(4)
@@ -2285,7 +2467,7 @@ with main_tab_integrated:
                         st.caption("추천된 R&D 과제가 없습니다.")
                     else:
                         for _, r in rnd_hits.head(5).iterrows():
-                            one_line = get_oneline_summary(r[COL_TITLE])
+                            one_line = get_oneline_summary(r)
                             st.markdown(
                                 f"""
                                 <div class='gt-popover-item' style="height:64px;overflow:hidden;">
@@ -2309,7 +2491,7 @@ with main_tab_integrated:
                         st.caption("관련 사업 공고가 없습니다.")
                     else:
                         for _, r in biz_hits.head(5).iterrows():
-                            one_line = get_oneline_summary(r[COL_TITLE])
+                            one_line = get_oneline_summary(r)
                             st.markdown(
                                 f"""
                                 <div class='gt-popover-item' style="height:64px;overflow:hidden;">

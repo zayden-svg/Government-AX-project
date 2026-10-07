@@ -1,5 +1,6 @@
 import io
 import os
+from xml.sax.saxutils import escape as xml_escape
 from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
@@ -33,8 +34,12 @@ KPI_NUM_STYLE = ParagraphStyle("kpi_num", fontName="Pretendard-Bold", fontSize=1
 KPI_LABEL_STYLE = ParagraphStyle("kpi_label", fontName="Pretendard", fontSize=8, leading=11, textColor=MUTED, alignment=1)
 
 
-def _p(text, style=BODY_STYLE):
-    return Paragraph(str(text).replace("\n", "<br/>"), style)
+def _p(text, style=BODY_STYLE, markup=False):
+    """공고 제목에 & < > 가 들어 있으면 PDF 생성이 통째로 실패하므로 기본으로 이스케이프한다."""
+    body = str(text if text is not None else "")
+    if not markup:
+        body = xml_escape(body)
+    return Paragraph(body.replace("\n", "<br/>"), style)
 
 
 def _kpi_table(kpi_list):
@@ -53,13 +58,13 @@ def _kpi_table(kpi_list):
 def _bullet_list(items, empty_text="해당 데이터가 부족합니다."):
     if not items:
         return [_p(empty_text, CAP_STYLE)]
-    return [_p(f"· {it}") for it in items]
+    return [_p(f"· {it.get('text', '') if isinstance(it, dict) else it}") for it in items]
 
 
 def _simple_table(headers, rows, col_widths):
     data = [[Paragraph(h, ParagraphStyle("th", fontName="Pretendard-Bold", fontSize=8.5, textColor=colors.white)) for h in headers]]
     for r in rows:
-        data.append([Paragraph(str(c), BODY_STYLE) for c in r])
+        data.append([_p(c, BODY_STYLE) for c in r])
     tbl = Table(data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
@@ -111,11 +116,11 @@ def build_daily_report_pdf(
 
     if opp_biz is not None or opp_rnd is not None:
         elements.append(_p("Ⅳ. 기회 영역", H_STYLE))
-        elements.append(_p("<b>💼 사업부 — 지금 제안서·입찰</b>", BODY_STYLE))
+        elements.append(_p("<b>사업부 — 지금 제안서·입찰</b>", BODY_STYLE, markup=True))
         for f in _bullet_list(opp_biz):
             elements.append(f)
         elements.append(Spacer(1, 2 * mm))
-        elements.append(_p("<b>🔬 R&D — 골든타임</b>", BODY_STYLE))
+        elements.append(_p("<b>R&amp;D — 골든타임</b>", BODY_STYLE, markup=True))
         for f in _bullet_list(opp_rnd):
             elements.append(f)
 

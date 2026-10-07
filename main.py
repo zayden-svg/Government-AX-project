@@ -1,21 +1,30 @@
-# main.py
+# main.py — 매일 아침 자동수집: 수집 → AI 분석 → 저장 → 낙찰·계약 결과
+import os
+import sys
+import traceback
+
+import common  # noqa: F401  (한국시간 고정 — 다른 모듈보다 먼저)
 import asyncio
 import hashlib
 import re
 from datetime import datetime, date
 
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-from collectors import run_all_collectors
+from collectors import run_all_collectors, fetch_g2b_results
+from common import is_mois_noise
+from store import load_cache, save_cache
+from procurement_store import save_results, count_results
 from biz_classifier import classify_and_score as biz_classify_and_score
-from ai_utils import is_gemini_ready, analyze_postings_batch, AI_MAX_CONCURRENCY, AI_RPM_LIMIT
+from ai_utils import is_ai_ready, analyze_postings_batch, AI_MAX_CONCURRENCY, AI_RPM_LIMIT, MODEL_NAME
 from db2 import get_engine, is_postgres
 
 EXCEL_OUTPUT = "Gov-Tracker_결과.xlsx"
+COLLECT_LIMIT = int(os.getenv("COLLECT_LIMIT", "20"))  # 수집처당 최대 건수
 
 # ------------------------------------------------------------
 # 공고 유형(입찰/RND/기타) - 이건 "AI 구분"과 다른 개념.
@@ -30,7 +39,7 @@ TRACK_LABELS = {"RND": "R&D", "BIZ": "사업부", "": "미분류"}
 AGENCY_TRACK_FALLBACK = {
     "IRIS": "RND", "KERIS": "RND", "NTIS": "RND", "TIPA": "RND",
     "KIAT": "RND", "INNOPOLIS": "RND", "국가AI전략위원회": "RND", "AIHub": "RND",
-    "NIPA": "BIZ", "조달청": "BIZ", "행정안전부": "BIZ",
+    "NIPA": "BIZ", "조달청": "BIZ", "조달청(사전규격)": "BIZ", "행정안전부": "BIZ",
 }
 
 
@@ -112,7 +121,7 @@ def init_db():
                 matched_keywords TEXT, recommended_solution TEXT, status TEXT,
                 track TEXT, track_reason TEXT,
                 ai_priority_score INTEGER, ai_priority_reason TEXT,
-                dedup_hash TEXT,
+                dedup_hash TEXT, ai_oneline TEXT, ai_summary TEXT, content TEXT,
                 created_at TEXT, updated_at TEXT
             )
         """))
@@ -124,13 +133,13 @@ def init_db():
 
 def ensure_columns(engine):
     """예전 버전 DB에 새 컬럼(track_reason, ai_priority_score 등)이 없으면 추가"""
-    needed = {
-        "track": "TEXT",
-        "track_reason": "TEXT",
-        "ai_priority_score": "INTEGER",
-        "ai_priority_reason": "TEXT",
-        "dedup_hash": "TEXT",
-    }
+    needed = {c: "TEXT" for c in [
+        "source", "agency", "gubun", "post_type", "title", "dept", "manager", "reg_date", "due_date",
+        "budget", "attach", "views", "url", "grade", "category", "matched_keywords", "recommended_solution",
+        "status", "track", "track_reason", "ai_priority_reason", "dedup_hash", "ai_oneline", "ai_summary",
+        "content", "created_at", "updated_at",
+    ]}
+    needed["ai_priority_score"] = "INTEGER"
     with engine.begin() as conn:
         if is_postgres():
             existing = {row[0] for row in conn.execute(text(
@@ -143,73 +152,70 @@ def ensure_columns(engine):
                 conn.execute(text(f"ALTER TABLE postings ADD COLUMN {col} {coltype}"))
 
 
-def find_existing_by_dedup_hash(engine, dedup_hash: str):
-    """동일 dedup_hash를 가진 기존 레코드 조회 (AI 분석 결과 재사용 및 중복 판단에 사용)"""
-    if not dedup_hash:
-        return None
+def load_existing_index(engine):
+    """기존 레코드를 DB에서 한 번에 읽어 메모리 사전으로 만든다 (공고 1건마다 DB를 왕복하지 않음)."""
+    by_hash, by_key = {}, {}
     with engine.begin() as conn:
-        row = conn.execute(text("""
-            SELECT uniq_key, agency, track, track_reason, ai_priority_score, ai_priority_reason
-            FROM postings WHERE dedup_hash=:h LIMIT 1
-        """), {"h": dedup_hash}).fetchone()
-    return row
+        rows = conn.execute(text("""
+            SELECT uniq_key, dedup_hash, track, track_reason, ai_priority_score,
+                   ai_priority_reason, ai_oneline, ai_summary, created_at, budget
+            FROM postings
+        """)).fetchall()
+    for r in rows:
+        by_key[r[0]] = r
+        if r[1] and r[1] not in by_hash:
+            by_hash[r[1]] = r
+    return by_hash, by_key
 
 
-def upsert_posting(engine, rec: dict) -> str:
-    uniq_key = rec.get("_uniq_key") or make_uniq_key(rec)
+_REC_FIELDS = [
+    "source", "agency", "gubun", "post_type", "title", "dept", "manager", "reg_date",
+    "due_date", "budget", "attach", "views", "url", "grade", "category", "matched_keywords",
+    "recommended_solution", "track", "track_reason", "ai_priority_reason", "dedup_hash",
+    "ai_oneline", "ai_summary", "content",
+]
+
+INSERT_SQL = text("""
+    INSERT INTO postings (
+        uniq_key, source, agency, gubun, post_type, title, dept, manager,
+        reg_date, due_date, budget, attach, views, url,
+        grade, category, matched_keywords, recommended_solution,
+        track, track_reason, ai_priority_score, ai_priority_reason, dedup_hash,
+        ai_oneline, ai_summary, content, status, created_at, updated_at
+    ) VALUES (
+        :uniq_key, :source, :agency, :gubun, :post_type, :title, :dept, :manager,
+        :reg_date, :due_date, :budget, :attach, :views, :url,
+        :grade, :category, :matched_keywords, :recommended_solution,
+        :track, :track_reason, :ai_priority_score, :ai_priority_reason, :dedup_hash,
+        :ai_oneline, :ai_summary, :content, '진행중', :created_at, :now
+    )
+""")
+
+
+def upsert_postings(engine, records, existing_by_key):
+    """전체 레코드를 트랜잭션 1번으로 저장. 같은 키는 지우고 다시 넣되 최초 수집시각·기존 예산은 보존."""
+    if not records:
+        return
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    params = {
-        "uniq_key": uniq_key,
-        "source": rec.get("source", ""), "agency": rec.get("agency", ""),
-        "gubun": rec.get("gubun", ""), "post_type": rec.get("post_type", ""),
-        "title": rec.get("title", ""), "dept": rec.get("dept", ""),
-        "manager": rec.get("manager", ""), "reg_date": rec.get("reg_date", ""),
-        "due_date": rec.get("due_date", ""), "budget": rec.get("budget", ""),
-        "attach": rec.get("attach", ""), "views": rec.get("views", ""),
-        "url": rec.get("url", ""), "grade": rec.get("grade", ""),
-        "category": rec.get("category", ""), "matched_keywords": rec.get("matched_keywords", ""),
-        "recommended_solution": rec.get("recommended_solution", ""),
-        "track": rec.get("track", ""), "track_reason": rec.get("track_reason", ""),
-        "ai_priority_score": rec.get("ai_priority_score"),
-        "ai_priority_reason": rec.get("ai_priority_reason", ""),
-        "dedup_hash": rec.get("dedup_hash", ""),
-        "now": now,
-    }
-
+    params = {}
+    for rec in records:
+        key = rec.get("_uniq_key") or make_uniq_key(rec)
+        p = {f: str(rec.get(f) or "") for f in _REC_FIELDS}
+        p["content"] = p["content"][:1000]
+        p["uniq_key"] = key
+        p["ai_priority_score"] = rec.get("ai_priority_score")
+        old = existing_by_key.get(key)
+        p["created_at"] = (old[8] if old and old[8] else now)
+        if not p["budget"] and old and old[9]:
+            p["budget"] = str(old[9])          # 이번에 예산을 못 찾았으면 예전에 찾은 값 유지
+        p["now"] = now
+        params[key] = p
+    keys = list(params)
     with engine.begin() as conn:
-        exists = conn.execute(text("SELECT 1 FROM postings WHERE uniq_key=:uniq_key"), params).fetchone()
-
-        if exists:
-            conn.execute(text("""
-                UPDATE postings SET
-                    source=:source, agency=:agency, gubun=:gubun, post_type=:post_type, title=:title,
-                    dept=:dept, manager=:manager, reg_date=:reg_date, due_date=:due_date, budget=:budget,
-                    attach=:attach, views=:views, url=:url, grade=:grade, category=:category,
-                    matched_keywords=:matched_keywords, recommended_solution=:recommended_solution,
-                    track=:track, track_reason=:track_reason,
-                    ai_priority_score=:ai_priority_score, ai_priority_reason=:ai_priority_reason,
-                    dedup_hash=:dedup_hash, status='진행중', updated_at=:now
-                WHERE uniq_key=:uniq_key
-            """), params)
-            return "updated"
-        else:
-            conn.execute(text("""
-                INSERT INTO postings (
-                    uniq_key, source, agency, gubun, post_type, title, dept, manager,
-                    reg_date, due_date, budget, attach, views, url,
-                    grade, category, matched_keywords, recommended_solution,
-                    track, track_reason, ai_priority_score, ai_priority_reason, dedup_hash,
-                    status, created_at, updated_at
-                ) VALUES (
-                    :uniq_key, :source, :agency, :gubun, :post_type, :title, :dept, :manager,
-                    :reg_date, :due_date, :budget, :attach, :views, :url,
-                    :grade, :category, :matched_keywords, :recommended_solution,
-                    :track, :track_reason, :ai_priority_score, :ai_priority_reason, :dedup_hash,
-                    '진행중', :now, :now
-                )
-            """), params)
-            return "new"
+        for i in range(0, len(keys), 500):
+            stmt = text("DELETE FROM postings WHERE uniq_key IN :ks").bindparams(bindparam("ks", expanding=True))
+            conn.execute(stmt, {"ks": keys[i:i + 500]})
+        conn.execute(INSERT_SQL, list(params.values()))
 
 
 def mark_expired(engine):
@@ -273,6 +279,7 @@ def export_to_excel(engine):
             agency AS 기관, track AS 분류, track_reason AS AI구분근거,
             post_type AS 공고유형, gubun AS 세부구분, title AS 제목,
             dept AS 담당부서, manager AS 담당자, reg_date AS 등록일, due_date AS 마감일,
+            budget AS 예산, ai_oneline AS 한줄요약,
             grade AS 등급, category AS 카테고리, recommended_solution AS 추천솔루션,
             matched_keywords AS 매칭키워드, ai_priority_score AS AI연관도점수,
             ai_priority_reason AS AI연관도근거, status AS 상태, url AS 원문링크
@@ -296,6 +303,8 @@ def _build_ai_info_block(rec: dict, agency: str) -> str:
         f"기관: {rec.get('agency', agency)}\n"
         f"부서: {rec.get('dept', '')}\n"
         f"공고유형(원본 구분값): {rec.get('gubun', '')}\n"
+        f"접수 마감일: {rec.get('due_date', '') or '미표기'}\n"
+        f"예산(원): {rec.get('budget', '') or '미표기'}\n"
         f"본문 일부: {str(rec.get('content', ''))[:1000]}"
     )
 
@@ -304,20 +313,23 @@ def collect_and_process():
     engine = init_db()
     new_count = updated_count = skipped_count = duplicate_count = ai_called_count = 0
 
-    results_by_agency = run_all_collectors(limit=10)
+    results_by_agency = run_all_collectors(limit=COLLECT_LIMIT)
     total_records = sum(len(v) for v in results_by_agency.values())
-    processed = 0
-
     print(f"\n[1단계] 총 {total_records}건 수집 완료. 등급판정/중복확인 진행 중...\n")
 
-    ready_records = []           # 바로 DB 저장 가능한 레코드 (재사용 or 이번에 AI 불필요)
-    pending_ai = []               # [(uniq_key, info_block), ...] - 새로 AI 분석이 필요한 건
-    rec_map = {}                  # uniq_key -> rec (AI 결과를 나중에 채워 넣기 위함)
+    existing_by_hash, existing_by_key = load_existing_index(engine)
+    seen_hashes = set()          # 이번 수집분 안에서의 중복 방지
+    ready_records, pending_ai, rec_map = [], [], {}
 
+    today_str = datetime.now().strftime("%Y-%m-%d")
     for agency, records in results_by_agency.items():
         for rec in records:
-            processed += 1
             if not rec.get("title"):
+                skipped_count += 1
+                continue
+            # 이미 마감된 공고·일반 보도자료는 저장·AI 분석하지 않음 (비용 절감)
+            due = str(rec.get("due_date") or "")
+            if (len(due) == 10 and due < today_str) or is_mois_noise(rec.get("agency", agency), rec["title"]):
                 skipped_count += 1
                 continue
 
@@ -335,85 +347,104 @@ def collect_and_process():
                 rec.get("reg_date", ""), rec.get("due_date", "")
             )
             rec["dedup_hash"] = dedup_hash
-            current_uniq_key = make_uniq_key(rec)
-            rec["_uniq_key"] = current_uniq_key
+            key = make_uniq_key(rec)
+            rec["_uniq_key"] = key
 
-            existing = find_existing_by_dedup_hash(engine, dedup_hash)
-
-            if existing and existing[0] != current_uniq_key:
+            if dedup_hash in seen_hashes:
                 duplicate_count += 1
-                print(f"  [{processed}/{total_records}] 중복 제외: {rec['title'][:40]}")
+                continue
+            seen_hashes.add(dedup_hash)
+
+            existing = existing_by_hash.get(dedup_hash)
+            if existing and existing[0] != key:
+                duplicate_count += 1
                 continue
 
-            # 기준을 track(문자열) 대신 ai_priority_score(숫자)로 바꿈:
-            # AI 분석이 "실패"했던 건은 score가 None이라서 여기 안 걸리고 다시 AI 분석 대상으로 감.
-            if existing and existing[0] == current_uniq_key and existing[4] is not None:
-                rec["track"] = existing[2]
-                rec["track_reason"] = existing[3]
-                rec["ai_priority_score"] = existing[4]
-                rec["ai_priority_reason"] = existing[5]
-                print(f"  [{processed}/{total_records}] 기존 AI 분석 재사용: {rec['title'][:40]}")
+            # 기존 AI 결과가 있고 요약까지 채워져 있으면 재사용 (AI 비용 0)
+            if existing and existing[4] is not None and existing[7]:
+                rec["track"], rec["track_reason"] = existing[2], existing[3]
+                rec["ai_priority_score"], rec["ai_priority_reason"] = existing[4], existing[5]
+                rec["ai_oneline"], rec["ai_summary"] = existing[6], existing[7]
                 ready_records.append(rec)
             else:
-                pending_ai.append((current_uniq_key, _build_ai_info_block(rec, agency)))
-                rec_map[current_uniq_key] = rec
+                pending_ai.append((key, _build_ai_info_block(rec, agency)))
+                rec_map[key] = rec
 
     ai_total = len(pending_ai)
-    print(
-        f"\n[2단계] 신규 AI 분석 대상 {ai_total}건. "
-        f"동시 {AI_MAX_CONCURRENCY}건씩, 분당 최대 {AI_RPM_LIMIT}건 속도로 병렬 처리합니다...\n"
-    )
+    print(f"\n[2단계] 신규 AI 분석 {ai_total}건 (모델 {MODEL_NAME}, 동시 {AI_MAX_CONCURRENCY}건, 분당 {AI_RPM_LIMIT}건)\n")
 
     ai_results = {}
-    if ai_total > 0 and is_gemini_ready():
-        done_counter = {"n": 0}
+    if ai_total and is_ai_ready():
+        done = {"n": 0}
 
-        def _progress(key, result):
-            done_counter["n"] += 1
-            title = rec_map[key].get("title", "")[:40]
+        def _progress(k, result):
+            done["n"] += 1
+            title = rec_map[k].get("title", "")[:40]
             if result and not result.get("error"):
-                print(f"  [{done_counter['n']}/{ai_total}] AI 분석 완료: {result['track']} / {result['score']}점 - {title}")
+                print(f"  [{done['n']}/{ai_total}] {result['track']} / {result['score']}점 - {title}")
             else:
-                err = result.get("error", "알수없음") if result else "알수없음"
-                print(f"  [{done_counter['n']}/{ai_total}] AI 분석 실패: {err} - {title}")
+                print(f"  [{done['n']}/{ai_total}] 실패: {(result or {}).get('error', '알수없음')} - {title}")
 
         ai_results = asyncio.run(analyze_postings_batch(pending_ai, progress_cb=_progress))
         ai_called_count = ai_total
-    elif ai_total > 0:
-        print("  [경고] Gemini API 미설정으로 AI 분석을 건너뜁니다. 기관 기본값으로 임시 분류됩니다.")
+    elif ai_total:
+        print("  [경고] ANTHROPIC_API_KEY 미설정 → AI 분석 생략, 기관 기본값으로 임시 분류")
 
-    for uniq_key, rec in rec_map.items():
-        ai_result = ai_results.get(uniq_key)
-        if ai_result and not ai_result.get("error"):
-            rec["track"] = ai_result["track"]
-            rec["track_reason"] = ai_result["track_reason"]
-            rec["ai_priority_score"] = ai_result["score"]
-            rec["ai_priority_reason"] = ai_result["score_reason"]
+    for k, rec in rec_map.items():
+        r = ai_results.get(k)
+        if r and not r.get("error"):
+            rec["track"], rec["track_reason"] = r["track"], r["track_reason"]
+            rec["ai_priority_score"], rec["ai_priority_reason"] = r["score"], r["score_reason"]
+            rec["ai_oneline"], rec["ai_summary"] = r["oneline"], r["summary"]
         else:
-            err_msg = ai_result.get("error", "Gemini 미설정") if ai_result else "Gemini 미설정"
-            rec["track"] = AGENCY_TRACK_FALLBACK.get(rec.get("agency", ""), "BIZ")
-            rec["track_reason"] = f"AI 분석 실패({err_msg})로 기관 기본값으로 임시 분류됨"
-            rec["ai_priority_score"] = None
-            rec["ai_priority_reason"] = "AI 분석 대기 중"
+            err_msg = (r or {}).get("error", "API 키 미설정")
+            old = existing_by_key.get(k)
+            if old and old[4] is not None:      # 예전 AI 결과가 있으면 지우지 않고 유지
+                rec["track"], rec["track_reason"] = old[2], old[3]
+                rec["ai_priority_score"], rec["ai_priority_reason"] = old[4], old[5]
+                rec["ai_oneline"], rec["ai_summary"] = old[6] or "", old[7] or ""
+            else:
+                rec["track"] = AGENCY_TRACK_FALLBACK.get(rec.get("agency", ""), "BIZ")
+                rec["track_reason"] = f"AI 분석 실패({err_msg})로 기관 기본값으로 임시 분류됨"
+                rec["ai_priority_score"] = None
+                rec["ai_priority_reason"] = "AI 분석 대기 중"
         ready_records.append(rec)
 
     print(f"\n[3단계] DB 저장 중... (총 {len(ready_records)}건)\n")
     for rec in ready_records:
-        status = upsert_posting(engine, rec)
-        if status == "new":
-            new_count += 1
-        elif status == "updated":
+        if rec["_uniq_key"] in existing_by_key:
             updated_count += 1
-
+        else:
+            new_count += 1
+    upsert_postings(engine, ready_records, existing_by_key)
     mark_expired(engine)
-    export_to_excel(engine)
+
+    try:
+        export_to_excel(engine)
+    except Exception as e:                     # 엑셀은 부가 산출물 — 실패해도 수집 결과에는 영향 없음
+        print(f"[경고] 엑셀 저장 실패(건너뜀): {e}")
+
+    # [4단계] 조달청 낙찰·계약 결과 (시장 정보) — 실패해도 위 작업에는 영향 없음
+    #   처음 실행(저장된 결과 50건 미만)이면 최근 1년치를 한 번 채워 재발주 알림에 활용
+    try:
+        done_flag, _ = load_cache("procurement_backfill_done")
+        backfill = 365 if (not done_flag and count_results() < 50) else 0
+        if backfill:
+            print("[4단계] 낙찰·계약 최초 실행 — 최근 1년치 자사 관련 사업을 함께 조회합니다.")
+        saved = save_results(fetch_g2b_results(backfill_days=backfill))
+        print(f"[4단계] 낙찰·계약 결과 {saved}건 저장")
+        if backfill and saved:
+            save_cache("procurement_backfill_done", {"date": today_str, "saved": saved})
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[4단계] 낙찰·계약 수집 실패(건너뜀): {e}")
 
     print(
-        f"\n신규 {new_count}건 / 갱신 {updated_count}건 / "
-        f"제목없음 제외 {skipped_count}건 / 중복 제외 {duplicate_count}건 / "
-        f"AI 신규 분석 {ai_called_count}건 처리 완료"
+        f"\n신규 {new_count}건 / 갱신 {updated_count}건 / 제외(제목없음·마감·보도자료) {skipped_count}건 / "
+        f"중복 제외 {duplicate_count}건 / AI 신규 분석 {ai_called_count}건 처리 완료"
     )
 
 
 if __name__ == "__main__":
     collect_and_process()
+    sys.exit(0)

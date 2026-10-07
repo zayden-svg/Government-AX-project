@@ -1,45 +1,91 @@
 import os
 import re
 import json
+import time
+import asyncio
 
 from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    import google.generativeai as genai
+    import anthropic
 except ImportError:
-    genai = None
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-
-_model = None
+    anthropic = None
 
 
-def is_gemini_ready():
-    return bool(GEMINI_API_KEY) and genai is not None
-
-
-def _get_model():
-    global _model
-    if not is_gemini_ready():
-        return None
-    if _model is None:
-        genai.configure(api_key=GEMINI_API_KEY)
-        _model = genai.GenerativeModel(MODEL_NAME)
-    return _model
-
-
-def _call(prompt, json_mode=True):
-    model = _get_model()
-    if model is None:
-        return None, "Gemini API 키가 설정되지 않았습니다."
+def _read_secret(name, default=""):
+    """환경변수 → Streamlit secrets 순서로 값을 찾는다 (GitHub Actions / Streamlit Cloud 겸용)."""
+    val = os.getenv(name, "").strip()
+    if val:
+        return val
     try:
-        cfg = {"response_mime_type": "application/json"} if json_mode else {}
-        resp = model.generate_content(prompt, generation_config=cfg)
-        return (resp.text or "").strip(), None
+        import streamlit as st
+        return str(st.secrets.get(name, default)).strip()
+    except Exception:
+        return default
+
+
+ANTHROPIC_API_KEY = _read_secret("ANTHROPIC_API_KEY")
+# 대량 분류·요약용 기본 모델: 가장 빠르고 저렴한 Haiku. 바꾸려면 CLAUDE_MODEL 환경변수만 수정.
+MODEL_NAME = _read_secret("CLAUDE_MODEL") or "claude-haiku-4-5"
+MAX_TOKENS = 2048
+
+# main.py 일괄 분석용 동시성/속도 제한 (Claude 콘솔 Limits 화면의 등급에 맞춰 조정)
+AI_MAX_CONCURRENCY = int(_read_secret("AI_MAX_CONCURRENCY") or 4)
+AI_RPM_LIMIT = int(_read_secret("AI_RPM_LIMIT") or 30)
+
+SYSTEM_PROMPT = (
+    "너는 에스티씨랩(STCLab) 공공사업부를 돕는 공공 IT 분석가다. "
+    "주어진 정보에 없는 내용은 절대 지어내지 않는다. "
+    "JSON을 요구받으면 설명·머리말·코드블록 없이 JSON만 출력한다."
+)
+
+_client = None
+_async_client = None
+
+
+def is_ai_ready():
+    return bool(ANTHROPIC_API_KEY) and anthropic is not None
+
+
+def _get_client():
+    global _client
+    if not is_ai_ready():
+        return None
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, max_retries=3, timeout=60)
+    return _client
+
+
+def _get_async_client():
+    global _async_client
+    if not is_ai_ready():
+        return None
+    if _async_client is None:
+        _async_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY, max_retries=3, timeout=60)
+    return _async_client
+
+
+def _resp_text(resp):
+    return "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", "") == "text").strip()
+
+
+def _call(prompt, json_mode=True, max_tokens=MAX_TOKENS):
+    """동기 호출. 반환: (텍스트, 오류메시지)"""
+    client = _get_client()
+    if client is None:
+        return None, "Claude API 키(ANTHROPIC_API_KEY)가 설정되지 않았습니다."
+    try:
+        suffix = "\n\n반드시 JSON만 출력해라." if json_mode else ""
+        resp = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=max_tokens,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt + suffix}],
+        )
+        return _resp_text(resp), None
     except Exception as e:
-        return None, str(e)
+        return None, f"{type(e).__name__}: {e}"
 
 
 def _parse_json(text, fallback):
@@ -267,27 +313,19 @@ def match_titles_to_product(product_name, product_desc, titles, _err_default=Non
     실질적으로 연관 있는 제목만 추려서 반환, 없으면 빈 배열."""
     if not titles:
         return [], None
-    model = _get_model()
-    if model is None:
-        return [], "Gemini API가 설정되지 않았습니다."
     prompt = (
         f"다음은 공공 IT 공고/과제 제목 목록입니다.\n"
         f"'{product_name}' ({product_desc})과 실질적으로 연관된 공고 제목만 "
         f"아래 목록에 있는 문자열 그대로 골라 JSON 배열로 반환하세요.\n"
-        f"억지로 끼워맞추지 말고, 연관 있는 게 전혀 없으면 빈 배열 []을 반환하세요.\n"
-        f"반드시 JSON 배열만 출력하고 다른 설명은 넣지 마세요.\n\n"
+        f"억지로 끼워맞추지 말고, 연관 있는 게 전혀 없으면 빈 배열 []을 반환하세요.\n\n"
         + "\n".join(f"- {t}" for t in titles[:150])
     )
-    try:
-        resp = model.generate_content(prompt)
-        text = resp.text.strip()
-        text = re.sub(r"^```json\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
-        result = json.loads(text)
-        if isinstance(result, list):
-            return [str(x) for x in result], None
-        return [], None
-    except Exception as e:
-        return [], str(e)
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    result = _parse_json(text, [])
+    return ([str(x) for x in result], None) if isinstance(result, list) else ([], None)
+
 
 def generate_opportunity_bullets(biz_titles, rnd_titles):
     biz_text = "\n".join(f"- {t}" for t in biz_titles[:30])
@@ -377,8 +415,8 @@ def match_titles_to_group(group_name: str, group_desc: str, titles: list):
     """
     if not titles:
         return [], None
-    if not is_gemini_ready():
-        return [], "Gemini API 키가 설정되지 않았습니다."
+    if not is_ai_ready():
+        return [], "Claude API 키가 설정되지 않았습니다."
 
     prompt = f"""다음은 공공 IT 공고/과제 제목 목록입니다.
 '{group_name}' ({group_desc})와(과) 실질적으로 연관된 항목만 골라,
@@ -390,20 +428,14 @@ def match_titles_to_group(group_name: str, group_desc: str, titles: list):
 
 출력 형식: ["제목1", "제목2", ...] 형태의 JSON 배열만 출력하세요."""
 
-    try:
-        # ↓↓↓ 아래 3줄을 기존 generate_opportunity_bullets 함수에서 쓰는
-        #     모델 호출 방식(예: model.generate_content(prompt) 등)으로 그대로 교체해줘
-        model = _get_model()
-        resp = model.generate_content(prompt)
-        raw = resp.text.strip()
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    result = _parse_json(text, None)
+    if isinstance(result, list):
+        return [str(t) for t in result], None
+    return [], "AI 응답 형식 오류"
 
-        raw = re.sub(r"^```(json)?|```$", "", raw, flags=re.MULTILINE).strip()
-        result = json.loads(raw)
-        if isinstance(result, list):
-            return [str(t) for t in result], None
-        return [], "AI 응답 형식 오류"
-    except Exception as e:
-        return [], str(e)
 
 # ------------------------------------------------------------
 # 11. 뉴스 제목 쉬운말 변환 — 초등학생도 이해 가능한 수준으로 압축
@@ -414,10 +446,12 @@ def simplify_news_titles(items):
     if not items:
         return [], None
     lines = "\n".join(f"- {it.get('title','')}" for it in items)
-    prompt = f"""아래 뉴스 제목들을 초등학교 5~6학년도 바로 이해할 수 있는
-아주 쉬운 한국어 한 문장으로 바꿔라. 전문 용어는 쉬운 말로 풀고,
-원래 의미는 바꾸지 말고 20~35자 내외로 압축해라.
-입력 제목을 "title" 필드에 원문 그대로 포함하고, 쉬운 문장은 "simple" 필드에 적어라.
+    prompt = f"""아래 뉴스 제목들을 누구나 바로 이해할 수 있는 쉬운 한국어 한 문장으로 다시 써라.
+규칙:
+- 사실을 바꾸거나 부풀리지 마라. 제목에 없는 감정·평가·비유를 넣지 마라.
+- 숫자·기관명·회사명·제품명은 그대로 남겨라.
+- 어려운 전문용어만 쉬운 말로 풀고, 25~40자로 맞춰라.
+- 입력 제목을 "title"에 원문 그대로, 쉬운 문장을 "simple"에 적어라.
 
 [뉴스 목록]
 {lines}
@@ -428,4 +462,100 @@ JSON 배열로만 출력: [{{"title": "...", "simple": "..."}}]
     if err:
         return [], err
     return _parse_json(text, []), None
-    
+
+
+# ------------------------------------------------------------
+# 12. [신규] 공고 일괄 분석 — main.py 전용 (수집 직후 1회만 실행, 결과는 DB에 저장)
+#     한 번 호출로 사업구분·연관도·한줄요약·상세요약을 모두 받아
+#     대시보드가 열릴 때마다 AI를 다시 부르지 않도록 한다.
+# ------------------------------------------------------------
+ANALYZE_PROMPT = """아래 공공 공고 1건을 분석해라.
+
+[자사 솔루션]
+- NF(넷퍼넬): 웹 접속 대기열·지연접속. 수강신청·예약·접수·티켓팅·지원금 신청 등 접속 폭주 대응
+- BM/MB(봇매니저·엠버스터): 매크로·봇 차단. 예매·수강신청·예약 공정성, 부정접속 방지
+- NFA(넷퍼넬API): API 트래픽 분산·제어
+- LT(로드테스터): 부하·성능 테스트
+
+[판단 기준]
+- track: "BIZ"(입찰·용역·구매 등 수주 대상 사업) 또는 "RND"(정부 연구개발 과제·지원사업 공모)
+- score: 자사 솔루션과의 연관도 0~100
+  · 80+ : 대량 접속·예약·접수·수강신청·티켓·선착순·매크로 차단·부하테스트가 사업 범위에 직접 포함
+  · 40~79 : 홈페이지·포털·통합예약·정보시스템 구축/고도화처럼 접속 폭주 대비가 필요할 수 있는 웹 사업
+  · 0~39 : 일반 IT(데이터·AI 모델·인프라)지만 접속 폭주와 무관한 사업
+  · 0~15 : 보도자료·포상·행사·교육·인력 모집·성과 공모 등 사업이 아닌 글
+- oneline: 무엇을 하는 사업인지 20자 내외 한 줄
+- summary: 초등학생도 이해하도록 쉬운 말 1~2문장. 금액·마감일·기관명이 정보에 있으면 포함
+
+[공고 정보]
+{info}
+
+JSON 형식: {{"track": "BIZ", "track_reason": "한 줄 근거", "score": 0, "score_reason": "한 줄 근거", "oneline": "...", "summary": "..."}}"""
+
+
+def _normalize_analysis(obj):
+    if not isinstance(obj, dict):
+        return {"error": "AI 응답 형식 오류"}
+    track = str(obj.get("track", "")).upper().strip()
+    if track not in ("BIZ", "RND"):
+        track = "RND" if "R" in track else "BIZ"
+    try:
+        score = max(0, min(100, int(float(obj.get("score", 0)))))
+    except Exception:
+        score = 0
+    return {
+        "track": track,
+        "track_reason": str(obj.get("track_reason", "")).strip()[:300],
+        "score": score,
+        "score_reason": str(obj.get("score_reason", "")).strip()[:300],
+        "oneline": str(obj.get("oneline", "")).strip()[:80],
+        "summary": str(obj.get("summary", "")).strip()[:600],
+    }
+
+
+async def analyze_postings_batch(pending, progress_cb=None):
+    """pending: [(uniq_key, info_block), ...]
+    반환: {uniq_key: {"track","track_reason","score","score_reason","oneline","summary"} 또는 {"error": ...}}"""
+    if not is_ai_ready():
+        return {k: {"error": "Claude API 키 미설정"} for k, _ in pending}
+    # 실행할 때마다 새 클라이언트 (asyncio.run을 여러 번 불러도 연결이 꼬이지 않도록)
+    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY, max_retries=4, timeout=60)
+
+    sem = asyncio.Semaphore(AI_MAX_CONCURRENCY)
+    gap = 60.0 / max(AI_RPM_LIMIT, 1)
+    lock = asyncio.Lock()
+    last_sent = {"t": 0.0}
+    results = {}
+
+    async def _throttle():
+        async with lock:
+            wait = last_sent["t"] + gap - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            last_sent["t"] = time.monotonic()
+
+    async def _one(key, info):
+        async with sem:
+            await _throttle()
+            try:
+                resp = await client.messages.create(
+                    model=MODEL_NAME,
+                    max_tokens=700,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": ANALYZE_PROMPT.format(info=info)}],
+                )
+                res = _normalize_analysis(_parse_json(_resp_text(resp), None))
+            except Exception as e:
+                res = {"error": f"{type(e).__name__}: {e}"[:200]}
+            results[key] = res
+            if progress_cb:
+                progress_cb(key, res)
+
+    try:
+        await asyncio.gather(*(_one(k, info) for k, info in pending))
+    finally:
+        try:
+            await client.close()
+        except Exception:
+            pass
+    return results

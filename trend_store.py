@@ -69,8 +69,8 @@ def save_trend_snapshot(keywords, snapshot_date=None):
     engine = get_engine()
     rows = [{
         "snapshot_date": snapshot_date,
-        "keyword": kw["keyword"],
-        "category": kw.get("category", "일반동향"),
+        "keyword": str(kw.get("keyword", ""))[:100],
+        "category": str(kw.get("category") or "일반동향")[:20],  # DB 컬럼 20자 제한 초과 시 저장 실패 방지
         "count": kw.get("count", 0),
         "importance": kw.get("importance", 0),
         "reason": kw.get("reason", ""),

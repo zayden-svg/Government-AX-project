@@ -1,10 +1,19 @@
+# 라이트·다크 두 테마를 모두 정의하면 사용자가 ⋮ 메뉴 → Settings에서 전환 가능
+# (위젯 색을 CSS로 덮어쓰지 않아도 Streamlit이 자동으로 맞춰줌)
 [theme]
-base = "light"
+font = "sans serif"
+
+[theme.light]
 primaryColor = "#2D5BFF"
 backgroundColor = "#FAFBFD"
 secondaryBackgroundColor = "#F6F8FB"
 textColor = "#191F28"
-font = "sans serif"
+
+[theme.dark]
+primaryColor = "#5B9BFF"
+backgroundColor = "#15171C"
+secondaryBackgroundColor = "#1C1F26"
+textColor = "#F0F2F5"
 
 [client]
-toolbarMode = "minimal"
+toolbarMode = "auto"
