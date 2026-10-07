@@ -1603,7 +1603,7 @@ with main_tab_dash:
         else:
             for _, row in priority_df.iterrows():
                 score = row.get(COL_AI_SCORE, -1)
-                due = row[COL_DUE_DATE] if pd.notna(row[COL_DUE_DATE]) else "미정"
+                due = (str(row[COL_DUE_DATE]).strip() if pd.notna(row[COL_DUE_DATE]) else "") or "미정"
 
                 with st.container(border=True):
                     st.markdown(f"[{row[COL_TITLE]}]({row[COL_URL]})")
@@ -1697,6 +1697,12 @@ with main_tab_news:
     st.session_state["all_titles_for_digest"] = all_titles_for_digest
     st.session_state["all_items_pool_cache"] = all_items_pool
 
+    def _md_lite(txt):
+        """AI 문장 속 **굵게** 표시를 실제 굵은 글씨로 (별표가 그대로 보이던 문제), 줄바꿈 유지"""
+        h = escape(str(txt or ""))
+        h = re.sub(r"\*\*(.+?)\*\*", lambda m: f'<b style="color:{C["text"]};">{m.group(1)}</b>', h)
+        return h.replace("\n\n", "<br><br>").replace("\n", "<br>")
+
     def _digest_box(txt):
         # AI가 본문 앞에 '# 오늘의 IT 뉴스 종합 분석' 같은 제목을 붙이면 제목이 두 번 나오고 간격이 벌어짐 → 제거
         txt = re.sub(r"^\s*(?:#{1,6}[^\n]*\n+|\*\*[^\n]*종합\s*분석[^\n]*\*\*\s*\n+)+", "", str(txt or "")).strip()
@@ -1705,7 +1711,7 @@ with main_tab_news:
             f'''<div style="margin:6px 0 4px;">
                 <div style="font-size:15px;font-weight:800;color:{C['text']};margin:0 0 6px;">🤖 오늘의 IT 뉴스 종합분석</div>
                 <div style="background:{C['success_bg']};border:1px solid {C['success_border']};border-radius:10px;
-                            padding:12px 16px;font-size:14px;line-height:1.75;color:{C['text_body']};">{escape(str(txt))}</div>
+                            padding:12px 16px;font-size:14px;line-height:1.75;color:{C['text_body']};">{_md_lite(txt)}</div>
             </div>''',
             unsafe_allow_html=True,
         )
