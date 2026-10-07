@@ -16,6 +16,15 @@ NF_HIGH_SCORE = 60          # NF 목록에 자동 포함할 AI 연관도 기준
 RND_DOMAIN_MIN_SCORE = 60     # R&D는 도메인(AI·데이터·보안 등) 단어만 걸린 경우 연관도 60점 이상만 (단어만 같은 과제 제외)
 
 
+# AI 폴백으로 고른 공고도 제목에 아래 '제품 맥락' 단어가 하나는 있어야 인정 (예: AI 교육 플랫폼 → NFA 아님)
+AI_PICK_CONTEXT = {
+    "넷퍼넬 (NF)": r"예약|예매|접수|신청|포털|홈페이지|티켓|투표|청약|수강|선착순|대국민",
+    "넷퍼넬API (NFA)": r"API|api|챗봇|LLM|에이전트|연계|게이트웨이",
+    "봇매니저 (BM)": r"매크로|(?<![챗로])봇|부정|암표|예매|예약|티켓|크리덴셜|어뷰징|스크래핑",
+    "로드테스터 (LT)": r"성능|부하|스트레스|테스트|장애",
+}
+
+
 def _mask(df, keywords, cols=("title", "matched_keywords")):
     if df is None or df.empty or not keywords:
         return None
@@ -53,6 +62,9 @@ def match_product(pname, biz_df, rnd_df, news_items, score_col="_score", ai_titl
             hits = df[df.index.isin(hits.index) | df.index.isin(hi.index)]
         if hits.empty and ai_titles.get(f"{label}_{pname}"):     # 키워드 0건이면 아침 배치 AI가 문맥으로 고른 결과
             hits = df[df["title"].astype(str).isin([str(t) for t in ai_titles[f"{label}_{pname}"]])]
+            ctx = AI_PICK_CONTEXT.get(pname)
+            if ctx is not None and not hits.empty:          # AI가 'AI·보안' 단어만 보고 고른 공고 걸러내기 (제품 맥락 단어 필수)
+                hits = hits[hits["title"].astype(str).str.contains(ctx, na=False)]
         if score_col in hits.columns:
             hits = hits.sort_values(score_col, ascending=False)
         return hits
