@@ -89,7 +89,7 @@ SOLUTION_NEWS_KEYWORDS = ["넷퍼넬", "봇매니저", "MBUSTER", "부하테스�
 # 경쟁사
 # ------------------------------------------------------------
 COMPETITOR_DEFAULT = ["DynaPath", "다이나패스", "다이내패스", "EverSafe", "에버세이프",
-                      "엑스큐", "xQueue", "소프트베이스", "큐잇", "Queue-it", "데브와이", "메가펜스"]
+                      "엑스큐", "xQueue", "소프트베이스", "큐잇", "Queue-it", "데브와이", "메가펜스","에버스핀"]
 COMPETITOR_ALIASES = {
     "dynapath": ["dynapath", "다이나패스", "다이내패스"],
     "eversafe": ["eversafe", "에버세이프"],
