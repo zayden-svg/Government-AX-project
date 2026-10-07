@@ -308,6 +308,61 @@ JSON 배열로만 출력.
 
 
 # ------------------------------------------------------------
+# 6-1. 사업부 / R&D 별 브리핑 요약 (PDF 요약본용) — 헤드라인 · 동향 카드 · Action Item
+# ------------------------------------------------------------
+def generate_track_brief(track_label, item_lines, news_titles, guide_lines):
+    """track_label: '사업부' 또는 'R&D'. 반환: ({headline, points, issues, actions}, 오류)"""
+    from datetime import date as _date
+    items_txt = "\n".join(f"- {x}" for x in item_lines[:30]) or "- (항목 없음)"
+    news_txt = "\n".join(f"- {x}" for x in news_titles[:12]) or "- (뉴스 없음)"
+    guide_txt = "\n".join(f"- {x}" for x in guide_lines[:12]) or "- (없음)"
+    owner_hint = ("사업부 영업 / 사업부 제안 / 사업부 기술지원" if track_label == "사업부"
+                  else "R&D 기획 / R&D 연구 / 사업부 연계")
+    prompt = f"""너는 에스티씨랩 공공사업팀의 데일리 브리핑 작성자다. 아래 [{track_label}] 공고·과제와 뉴스만 근거로 {track_label} 담당자용 요약을 써라.
+오늘 날짜: {_date.today().isoformat()}
+{BRIEFING_RULES}
+
+[출력]
+- headline: 오늘 {track_label}에서 가장 중요한 흐름 한 줄 (25자 내외)
+- points: 오늘의 헤드라인 3개. 각 항목은 사실 1문장(기관·사업명·예산·마감 구체값) + 필요하면 짧은 해석. 60자 내외.
+  가장 중요한 단어 1~2개는 **굵게** 표시.
+- issues: 동향 카드 3개. 각 카드
+  · tag: "분류 — 대표 기관" (예: "정책·제도 — 행정안전부", "발주 — 한국교육학술정보원")
+  · title: 한 줄 제목
+  · summary: 사실 1~2문장
+  · impact: 우리 사업 영향 1문장 (해석이면 끝에 "(추정)")
+  · products: 관련 제품 약어 배열 (NF, NFA, BM, LT 중), 없으면 []
+  · pri: "red"(매우 중요·마감 임박) | "orange"(중요) | "amber"(보통) | "green"(참고)
+- actions: 오늘의 Action Item 3~5개. 각 항목
+  · action: 담당자가 바로 할 구체 행동 1문장 (사업명·기관 포함)
+  · owner: 담당 ({owner_hint} 중 하나)
+  · due: 기한 ("10/13까지"처럼 목록의 마감일 기준, 마감이 없으면 "상시")
+- 마감이 이미 지난 항목은 쓰지 않는다. 마감이 가까운 순으로 우선한다.
+
+[{track_label} 공고·과제]
+{items_txt}
+
+[관련 뉴스]
+{news_txt}
+
+[제품별 대응 가이드 요약]
+{guide_txt}
+
+JSON 객체로만 출력: {{"headline": "...", "points": ["..."], "issues": [{{"tag": "...", "title": "...", "summary": "...", "impact": "...", "products": [], "pri": "orange"}}], "actions": [{{"action": "...", "owner": "...", "due": "..."}}]}}
+"""
+    text, err = _call(prompt, json_mode=True, max_tokens=3500)
+    if err:
+        return None, err
+    obj = _parse_json(text, None)
+    if not isinstance(obj, dict):
+        return None, "AI 응답 형식 오류"
+    obj["points"] = [str(p).strip() for p in (obj.get("points") or []) if str(p).strip()][:3]
+    obj["issues"] = [i for i in (obj.get("issues") or []) if isinstance(i, dict) and i.get("title")][:4]
+    obj["actions"] = [a for a in (obj.get("actions") or []) if isinstance(a, dict) and a.get("action")][:5]
+    return obj, None
+
+
+# ------------------------------------------------------------
 # 6-2. 제품별 대응 가이드 — 관련 이슈 / 우리 사업 영향 / 지금 할 일
 # ------------------------------------------------------------
 def generate_product_guide(product_blocks):

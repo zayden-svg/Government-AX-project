@@ -18,11 +18,13 @@ from common import (
 from ai_utils import (
     is_ai_ready, recommend_keywords, generate_headline, generate_key_issues,
     generate_news_digest, simplify_news_titles, match_titles_to_product, generate_product_guide,
+    generate_track_brief,
 )
 from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product, item_line
 from news_pool import build_pool, fetch_keyword_news, SOURCES
 from postings_data import load_active_postings
-from store import save_cache
+from store import save_cache, load_cache
+from procurement_store import load_reorder_candidates
 from trend_store import load_latest_trend
 
 # 대시보드(app.py)가 읽는 키 이름 — 바꾸면 app.py도 같이 바꿔야 함
@@ -37,6 +39,7 @@ K_DIGEST = "news_digest"
 K_PRODUCT_AI = "product_ai_match"
 K_PRODUCT_GUIDE = "product_guide"
 K_META = "briefing_meta"
+K_TRACK_BRIEF = "track_brief"          # 사업부·R&D별 헤드라인·동향·Action Item (PDF 요약본용)
 
 
 def _title_key(t):
@@ -70,6 +73,7 @@ def run():
     ai_ok = is_ai_ready()
     print(f"[브리핑] 시작 {started:%Y-%m-%d %H:%M} · Claude API {'사용' if ai_ok else '미설정(뉴스 수집만 진행)'}")
 
+    hl = iss = gd = tbs = None
     df = _step("공고 불러오기", load_active_postings, results)
     if df is None:
         df = pd.DataFrame()
@@ -204,6 +208,30 @@ def run():
             if gd:
                 save_cache(K_PRODUCT_GUIDE, gd)
 
+            # 7-2) 사업부 / R&D별 요약 — PDF 요약본의 헤드라인 · 동향 · Action Item
+            def _track_briefs():
+                out = {}
+                guide = gd or load_cache(K_PRODUCT_GUIDE)[0] or {}
+                guide_lines = [f"{c}: {g.get('issue', '')} / 할 일: {'; '.join(g.get('actions') or [])}"
+                               for c, g in guide.items() if isinstance(g, dict) and not g.get("none")]
+                news_titles = [it.get("title", "") for it in sorted(pool_default, key=lambda x: -x.get("_score", -1))[:12]]
+                for track, label in (("BIZ", "사업부"), ("RND", "R&D")):
+                    sub = df[df["_track"] == track]
+                    if sub.empty:
+                        continue
+                    soon = sub[sub["_due"].notna() & (sub["_due"] <= today + timedelta(days=14))].sort_values("_score", ascending=False)
+                    picked = pd.concat([sub.sort_values("_score", ascending=False).head(18), soon.head(10)]).drop_duplicates("uniq_key")
+                    lines = [item_line(r, "사업" if track == "BIZ" else "R&D") for r in picked.to_dict("records")]
+                    obj, err = generate_track_brief(label, lines, news_titles, guide_lines)
+                    if obj:
+                        out[track] = obj
+                    elif err:
+                        print(f"  [경고] {label} 요약 실패: {err}")
+                return out
+            tbs = _step("사업부·R&D 요약", _track_briefs, results)
+            if tbs:
+                save_cache(K_TRACK_BRIEF, tbs)
+
         # 8) 오늘의 뉴스 종합분석
         def _digest():
             titles = [it.get("title", "") for it in sorted(pool_default, key=lambda x: -x.get("_score", -1))[:40]]
@@ -216,6 +244,18 @@ def run():
         dg = _step("뉴스 요약", _digest, results)
         if dg:
             save_cache(K_DIGEST, dg)
+
+    # 9) 사업부 / R&D 브리핑 PDF — 크롬으로 만들어 저장 (대시보드 'PDF' 버튼에서 내려받기)
+    if df is not None and not df.empty:
+        def _pdfs():
+            from briefing_pdf import build_pdfs, K_PDF
+            reorder = load_reorder_candidates(horizon_days=180, include_solution=True)
+            res = build_pdfs(df, tbs or load_cache(K_TRACK_BRIEF)[0], gd or load_cache(K_PRODUCT_GUIDE)[0],
+                             iss or load_cache(K_ISSUES)[0], hl or load_cache(K_HEADLINE)[0], reorder)
+            for track, v in res.items():
+                save_cache(K_PDF[track], v)
+            return {k: v["size"] for k, v in res.items()}
+        _step("브리핑 PDF", _pdfs, results)
 
     finished = datetime.now()
     save_cache(K_META, {"started": started.strftime("%Y-%m-%d %H:%M"),

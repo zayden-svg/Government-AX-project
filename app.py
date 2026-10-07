@@ -1,5 +1,6 @@
 import common  # noqa: F401  (한국시간 고정 — 다른 모듈보다 먼저)
 
+import base64
 import re
 import json
 from datetime import datetime, timedelta
@@ -102,6 +103,17 @@ def _tc(light_hex, dark_hex):
     return dark_hex if THEME == "dark" else light_hex
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def load_briefing_pdfs():
+    """아침 배치가 저장한 사업부·R&D PDF {"BIZ": {...}, "RND": {...}} — 없으면 빈 dict"""
+    keys = {"BIZ": "briefing_pdf_biz", "RND": "briefing_pdf_rnd"}
+    try:
+        got = load_cache_many(list(keys.values()))
+    except Exception:
+        return {}
+    return {t: (got.get(k) or (None, None))[0] for t, k in keys.items() if (got.get(k) or (None, None))[0]}
+
+
 def _toggle_theme():
     st.session_state.dark_mode = not st.session_state.dark_mode
     st.query_params["theme"] = "dark" if st.session_state.dark_mode else "light"   # 새로고침해도 유지
@@ -111,8 +123,23 @@ def _toggle_theme():
 with st.container(key="gt_topbar"):
     tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([7.0, 1.6, 1.6, 1.6])
 with tcol_pdf:
-    pdf_top_slot = st.empty()
-    pdf_top_slot.button("📄 PDF 준비 중", key="pdf_wait_btn", disabled=True, use_container_width=True)
+    # 📄 PDF — 사업부 / R&D 브리핑 요약본 (아침 배치가 크롬으로 만든 PDF를 내려받기만 함)
+    _pdfs = load_briefing_pdfs()
+    with st.popover("📄 PDF", use_container_width=True):
+        st.markdown("**브리핑 PDF 요약본**")
+        st.caption("핵심 요약 → 동향 → 주요사업·예정사업(주요과제) → 제품별 대응 가이드 → Action Item → 마감임박 워치리스트")
+        for _trk, _lbl in (("BIZ", "💼 사업부 PDF 받기"), ("RND", "🔬 R&D PDF 받기")):
+            _v = _pdfs.get(_trk)
+            if _v and _v.get("b64"):
+                st.download_button(_lbl, data=base64.b64decode(_v["b64"]), file_name=_v.get("filename") or f"briefing_{_trk}.pdf",
+                                   mime="application/pdf", use_container_width=True, key=f"pdf_dl_{_trk}",
+                                   type="primary" if _trk == "BIZ" else "secondary")
+            else:
+                st.button(f"{_lbl} — 내일 아침 생성", key=f"pdf_wait_{_trk}", disabled=True, use_container_width=True)
+        _gen = next((v.get("generated") for v in _pdfs.values() if v), None)
+        st.caption(f"매일 아침 8시 자동 생성 · 최근 생성 {_gen}" if _gen else "매일 아침 8시 자동 생성")
+        pdf_top_slot = st.empty()          # 새 PDF가 아직 없을 때만 이전 양식(전체 요약)을 여기에 표시
+NEED_OLD_PDF = not all((_pdfs.get(t) or {}).get("b64") for t in ("BIZ", "RND"))
 with tcol_mail:
     # ------------------------------------------------------------
     # 📧 메일 알림 — 메일 주소만 넣고 Enter(또는 '등록')하면 끝 (사내 메일만)
@@ -453,6 +480,7 @@ st.markdown(
     .gt-table td {{ font-size:12.5px; color:{C['text_body']}; padding:9px 8px; border-top:1px solid {C['row_border']};
         text-align:center; vertical-align:middle; word-break:keep-all; overflow-wrap:anywhere; line-height:1.45; }}
     .gt-table td.l {{ text-align:left; }}
+    .gt-table thead th {{ position: sticky; top: 0; z-index: 1; }}
     .gt-table tr:hover td {{ background:{C['surface2']}; }}
     .gt-table a {{ color:{C['text']}; font-weight:700; text-decoration:none; }}
     .gt-table a:hover {{ color:{C['accent']}; text-decoration:underline; }}
@@ -599,6 +627,27 @@ def format_budget_eok(value):
     if man >= 1:
         return f"{int(round(man)):,}만원"
     return f"{int(num):,}원"
+
+
+def due_cell_html(due_raw):
+    """표의 마감 칸: 'MM-DD' + 아래 작은 글씨 D-n (3일 이내 빨강, 7일 이내 주황)"""
+    d = pd.to_datetime(str(due_raw or "")[:10], errors="coerce")
+    if pd.isna(d):
+        return f'<span style="color:{C["text_muted"]};">미정</span>'
+    left = (d.normalize() - pd.Timestamp(datetime.now().date())).days
+    dday = "D-DAY" if left == 0 else (f"D-{left}" if left > 0 else "마감")
+    color = C["danger_text"] if 0 <= left <= 3 else (C["warn_text"] if 0 <= left <= 7 else C["text_muted"])
+    return f'{d.strftime("%m-%d")}<span class="gt-sub" style="color:{color};font-weight:700;">{dday}</span>'
+
+
+def budget_cell_html(r):
+    """표의 예산 칸: '5.1억' + 아래 작은 글씨 금액 구분(지원규모·상금 등)"""
+    b = format_budget_eok(r.get("budget"))
+    if not b:
+        return f'<span style="color:{C["text_muted"]};">미정</span>'
+    label = str(r.get("budget_label") or "")
+    sub = f'<span class="gt-sub">{escape(label)}</span>' if label and label not in ("사업금액", "사업예산", "배정예산", "예산액", "추정가격") else ""
+    return escape(b) + sub
 
 
 # === 신규: budget 컬럼이 비어있을 때 content(본문) 텍스트에서 금액을 직접 찾아내는 폴백 ===
@@ -1594,32 +1643,26 @@ with main_tab_dash:
     tab_detail, tab_summary = st.tabs(["📑 상세보기", "⭐ AI핵심요약"])
 
     def _full_list_table_html(table_df):
+        """상세보기: 통합보기 주요사업 표와 같은 순서·모양 — 사업명 | 주관기관 | 공고기관 | 지역 | 예산 | 마감 | 연관도"""
         if table_df.empty:
             return f'<div style="padding:16px;color:{C["text_muted"]};">조건에 맞는 공고가 없습니다.</div>'
-
-        head = (
-            f'<div style="display:grid;grid-template-columns:2.6fr 1fr 1fr 0.7fr 0.9fr 0.9fr 1fr;'
-            f'background:{C["navy"]};color:{C["navy_text"]};font-size:11px;font-weight:700;">'
-            f'<div style="padding:9px 12px;">공고명/과제명</div><div style="padding:9px 12px;">주관기관</div>'
-            f'<div style="padding:9px 12px;">공고기관</div><div style="padding:9px 12px;">지역</div><div style="padding:9px 12px;">마감일</div>'
-            f'<div style="padding:9px 12px;">예산</div><div style="padding:9px 12px;">AI연관도</div></div>'
-        )
         body = ""
         for _, r in table_df.iterrows():
-            budget_txt = format_budget_eok(r.get(COL_BUDGET)) if COL_BUDGET in table_df.columns else None
             body += (
-                f'<div style="display:grid;grid-template-columns:2.6fr 1fr 1fr 0.7fr 0.9fr 0.9fr 1fr;'
-                f'border-bottom:1px solid {C["row_border"]};background:{C["surface"]};">'
-                f'<div style="padding:9px 12px;"><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" '
-                f'style="color:{C["text"]};font-weight:600;font-size:12px;text-decoration:none;">{escape(str(r[COL_TITLE]))}</a></div>'
-                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get("_org") or r.get(COL_AGENCY) or "-"))}</div>'
-                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get(COL_AGENCY,"-") or "-"))}</div>'
-                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get("_region_label") or "-"))}</div>'
-                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r[COL_DUE_DATE] or "미정"))}</div>'
-                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{budget_txt or "-"}</div>'
-                f'<div style="padding:9px 12px;">{score_badge_html(r.get(COL_AI_SCORE,-1))}</div></div>'
+                f'<tr><td class="l"><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" title="원문 공고 열기">'
+                f'{escape(str(r[COL_TITLE]))}</a></td>'
+                f'<td>{escape(str(r.get("_org") or r.get(COL_AGENCY) or "-"))}</td>'
+                f'<td>{escape(str(r.get(COL_AGENCY) or "-"))}</td>'
+                f'<td>{escape(str(r.get("_region_label") or "-"))}</td>'
+                f'<td>{budget_cell_html(r)}</td>'
+                f'<td>{due_cell_html(r.get(COL_DUE_DATE))}</td>'
+                f'<td>{score_badge_html(r.get(COL_AI_SCORE, -1))}</td></tr>'
             )
-        return f'<div style="border:1px solid {C["border"]};border-radius:10px;overflow:hidden;max-height:640px;overflow-y:auto;">{head}{body}</div>'
+        cols = "".join(f'<col style="width:{w}%">' for w in (33, 13, 13, 8, 10, 8, 15))
+        head = "".join(f"<th>{h}</th>" for h in ("사업명", "주관기관", "공고기관", "지역", "예산", "마감", "연관도"))
+        return (f'<div style="max-height:640px;overflow-y:auto;border-radius:10px;">'
+                f'<table class="gt-table"><colgroup>{cols}</colgroup><thead><tr>{head}</tr></thead>'
+                f'<tbody>{body}</tbody></table></div>')
 
     with tab_detail:
         st.markdown(_full_list_table_html(display_df), unsafe_allow_html=True)
@@ -2397,22 +2440,8 @@ with main_tab_integrated:
     # ----------------------------------------------------------------
     # Ⅲ. 주요 사업/과제 (현황표)
     # ----------------------------------------------------------------
-    def _due_cell(due_raw):
-        d = pd.to_datetime(str(due_raw or "")[:10], errors="coerce")
-        if pd.isna(d):
-            return f'<span style="color:{C["text_muted"]};">미정</span>'
-        left = (d.normalize() - pd.Timestamp(now_dt.date())).days
-        dday = "D-DAY" if left == 0 else (f"D-{left}" if left > 0 else "마감")
-        color = C["danger_text"] if 0 <= left <= 3 else (C["warn_text"] if 0 <= left <= 7 else C["text_muted"])
-        return f'{d.strftime("%m-%d")}<span class="gt-sub" style="color:{color};font-weight:700;">{dday}</span>'
-
-    def _budget_cell(r):
-        b = format_budget_eok(r.get(COL_BUDGET))
-        if not b:
-            return f'<span style="color:{C["text_muted"]};">미정</span>'
-        label = str(r.get("budget_label") or "")
-        sub = f'<span class="gt-sub">{escape(label)}</span>' if label and label not in ("사업금액", "사업예산", "배정예산", "예산액", "추정가격") else ""
-        return escape(b) + sub
+    _due_cell = due_cell_html
+    _budget_cell = budget_cell_html
 
     def _biz_rnd_table_html(sub_df, empty_msg):
         """사업명 | 기관 | 지역 | 예산 | 마감 | 연관도 — 머리글 전체·본문(사업명 제외) 가운데 정렬"""
@@ -2577,66 +2606,67 @@ with main_tab_integrated:
     # ----------------------------------------------------------------
     # PDF 다운로드 — PDF 리포트용 데이터는 화면 노출 여부와 무관하게 내부적으로 계산
     # ----------------------------------------------------------------
-    action_df_for_pdf = df[
-        (df["_due_date_parsed"].notna()
-         & (df["_due_date_parsed"] >= pd.Timestamp(now_dt.date()))
-         & (df["_due_date_parsed"] <= pd.Timestamp(now_dt.date()) + timedelta(days=3)))
-        | (df[COL_AI_SCORE] >= 80)
-    ].copy().sort_values([COL_AI_SCORE, "_due_date_parsed"], ascending=[False, True]).head(8)
+    if NEED_OLD_PDF:      # 새 사업부·R&D PDF가 아직 없을 때만 이전 양식으로 대체
+        action_df_for_pdf = df[
+            (df["_due_date_parsed"].notna()
+             & (df["_due_date_parsed"] >= pd.Timestamp(now_dt.date()))
+             & (df["_due_date_parsed"] <= pd.Timestamp(now_dt.date()) + timedelta(days=3)))
+            | (df[COL_AI_SCORE] >= 80)
+        ].copy().sort_values([COL_AI_SCORE, "_due_date_parsed"], ascending=[False, True]).head(8)
 
-    kpi_for_pdf = [
-        ("오늘 신규 공고", f"{len(today_new_df)}건"),
-        ("대응필요(60점+)", f"{need_action_n}건"),
-        ("D-14 이내 마감", f"{due_soon14_n}건"),
-        ("R&D 과제", f"{len(rnd_df)}건"),
-    ]
-    _, headline_payload = st.session_state.get(f"integrated_headline_{now_dt.date().isoformat()}", (None, None))
-    headline_txt = headline_payload.get("headline", "") if isinstance(headline_payload, dict) else ""
-    subtext_txt = headline_payload.get("subtext", "") if isinstance(headline_payload, dict) else ""
+        kpi_for_pdf = [
+            ("오늘 신규 공고", f"{len(today_new_df)}건"),
+            ("대응필요(60점+)", f"{need_action_n}건"),
+            ("D-14 이내 마감", f"{due_soon14_n}건"),
+            ("R&D 과제", f"{len(rnd_df)}건"),
+        ]
+        _, headline_payload = st.session_state.get(f"integrated_headline_{now_dt.date().isoformat()}", (None, None))
+        headline_txt = headline_payload.get("headline", "") if isinstance(headline_payload, dict) else ""
+        subtext_txt = headline_payload.get("subtext", "") if isinstance(headline_payload, dict) else ""
 
-    _, issues_payload = st.session_state.get(f"integrated_issues_{now_dt.date().isoformat()}", (None, None))
-    issues_for_pdf = issues_payload if isinstance(issues_payload, list) else []
+        _, issues_payload = st.session_state.get(f"integrated_issues_{now_dt.date().isoformat()}", (None, None))
+        issues_for_pdf = issues_payload if isinstance(issues_payload, list) else []
 
-    opp_biz_for_pdf = [{"text": f"{r[COL_TITLE]} ({r[COL_AGENCY]})"} for _, r in biz_df.sort_values(COL_AI_SCORE, ascending=False).head(5).iterrows()]
-    opp_rnd_for_pdf = [{"text": f"{r[COL_TITLE]} ({r[COL_AGENCY]})"} for _, r in rnd_df.sort_values(COL_AI_SCORE, ascending=False).head(5).iterrows()]
+        opp_biz_for_pdf = [{"text": f"{r[COL_TITLE]} ({r[COL_AGENCY]})"} for _, r in biz_df.sort_values(COL_AI_SCORE, ascending=False).head(5).iterrows()]
+        opp_rnd_for_pdf = [{"text": f"{r[COL_TITLE]} ({r[COL_AGENCY]})"} for _, r in rnd_df.sort_values(COL_AI_SCORE, ascending=False).head(5).iterrows()]
 
-    urgent_for_pdf = []
-    for _, r in action_df_for_pdf.head(8).iterrows():
-        d_left_txt = "-"
-        if pd.notna(r["_due_date_parsed"]):
-            d_left = (r["_due_date_parsed"] - pd.Timestamp(now_dt.date())).days
-            d_left_txt = f"D-{d_left}" if d_left > 0 else ("D-DAY" if d_left == 0 else "-")
-        urgent_for_pdf.append({
-            "dday": d_left_txt,
-            "title": r[COL_TITLE],
-            "agency": r[COL_AGENCY],
-            "due": r[COL_DUE_DATE] if pd.notna(r[COL_DUE_DATE]) else "미정",
-            "score": r.get(COL_AI_SCORE, -1),
-        })
-
-    trend_for_pdf = []
-    hist7 = load_trend_history(days=7)
-    if not hist7.empty:
-        top5 = (
-            hist7.sort_values("snapshot_date").groupby("keyword", as_index=False).last()
-            .sort_values("importance", ascending=False).head(5)
-        )
-        for _, r in top5.iterrows():
-            trend_for_pdf.append({
-                "date": r["snapshot_date"], "keyword": r["keyword"],
-                "category": r.get("category", "일반동향"), "importance": r["importance"],
+        urgent_for_pdf = []
+        for _, r in action_df_for_pdf.head(8).iterrows():
+            d_left_txt = "-"
+            if pd.notna(r["_due_date_parsed"]):
+                d_left = (r["_due_date_parsed"] - pd.Timestamp(now_dt.date())).days
+                d_left_txt = f"D-{d_left}" if d_left > 0 else ("D-DAY" if d_left == 0 else "-")
+            urgent_for_pdf.append({
+                "dday": d_left_txt,
+                "title": r[COL_TITLE],
+                "agency": r[COL_AGENCY],
+                "due": r[COL_DUE_DATE] if pd.notna(r[COL_DUE_DATE]) else "미정",
+                "score": r.get(COL_AI_SCORE, -1),
             })
 
-    pdf_bytes = build_daily_report_pdf(
-        kpi_for_pdf, headline=headline_txt, subtext=subtext_txt,
-        issues=issues_for_pdf, opp_biz=opp_biz_for_pdf, opp_rnd=opp_rnd_for_pdf,
-        urgent_rows=urgent_for_pdf, trend_rows=trend_for_pdf,
-    )
-    pdf_top_slot.download_button(
-        "📄 PDF",
-        data=pdf_bytes,
-        file_name=f"gov_tracker_briefing_{now_dt:%Y%m%d}.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-        key="pdf_download_top",
-    )
+        trend_for_pdf = []
+        hist7 = load_trend_history(days=7)
+        if not hist7.empty:
+            top5 = (
+                hist7.sort_values("snapshot_date").groupby("keyword", as_index=False).last()
+                .sort_values("importance", ascending=False).head(5)
+            )
+            for _, r in top5.iterrows():
+                trend_for_pdf.append({
+                    "date": r["snapshot_date"], "keyword": r["keyword"],
+                    "category": r.get("category", "일반동향"), "importance": r["importance"],
+                })
+
+        pdf_bytes = build_daily_report_pdf(
+            kpi_for_pdf, headline=headline_txt, subtext=subtext_txt,
+            issues=issues_for_pdf, opp_biz=opp_biz_for_pdf, opp_rnd=opp_rnd_for_pdf,
+            urgent_rows=urgent_for_pdf, trend_rows=trend_for_pdf,
+        )
+        pdf_top_slot.download_button(
+            "📄 전체 요약 PDF (이전 양식)",
+            data=pdf_bytes,
+            file_name=f"gov_tracker_briefing_{now_dt:%Y%m%d}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="pdf_download_top",
+        )
