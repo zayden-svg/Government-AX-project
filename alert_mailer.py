@@ -1,6 +1,6 @@
 # alert_mailer.py
 # 매일 아침 자동수집이 끝난 뒤 실행 — 메일 알림 등록자에게 '오늘의 영업 기회' 메일 발송
-#   ① 오늘 새로 수집된 공고 중 AI 연관도 N점(기본 70) 이상 — 등록자가 고른 지역만
+#   ① 오늘 새로 수집된 공고 중 AI 연관도 N점(기본 50) 이상 (막 등록한 사람은 진행 중 공고로 첫 메일)
 #   ② 경쟁사 수주 사업의 재발주 예상(향후 90일) — 다음 발주 전에 선제 영업
 # 필요한 Secrets: SMTP_USER, SMTP_PASSWORD  (선택: SMTP_HOST, SMTP_PORT, MAIL_FROM, DASHBOARD_URL)
 import smtplib
@@ -30,7 +30,7 @@ def _fmt_money(v):
     return f"{n / 1e8:.1f}억" if n >= 1e7 else f"{n / 1e4:,.0f}만원"
 
 
-def build_mail_html(sub, new_rows, reorder_rows, dashboard_url):
+def build_mail_html(sub, new_rows, reorder_rows, dashboard_url, welcome=False):
     regions_txt = ", ".join(sub["regions"]) if sub["regions"] else "전체 지역"
     if sub["regions"] and sub["include_national"]:
         regions_txt += f" + {NATIONAL_LABEL}"
@@ -62,10 +62,10 @@ def build_mail_html(sub, new_rows, reorder_rows, dashboard_url):
     <div style="font-family:'Malgun Gothic',Apple SD Gothic Neo,sans-serif;max-width:760px;color:#191F28;">
       <div style="background:#191F28;border-radius:10px;padding:16px 20px;color:#fff;">
         <div style="font-size:11px;letter-spacing:.1em;color:#9DB4FF;">GOV-TRACKER · 오늘의 영업 기회</div>
-        <div style="font-size:20px;font-weight:800;margin-top:4px;">신규 고연관 공고 {len(new_rows)}건</div>
+        <div style="font-size:20px;font-weight:800;margin-top:4px;">{'메일 알림 등록 완료 — ' if welcome else ''}{'진행 중' if welcome else '신규'} 고연관 공고 {len(new_rows)}건</div>
         <div style="font-size:12px;color:#C9D4E2;margin-top:4px;">기준: AI 연관도 {sub['min_score']}점 이상 · {escape(regions_txt)}</div>
       </div>
-      <h3 style="font-size:15px;margin:20px 0 8px;">① 오늘 새로 올라온 고연관 공고</h3>
+      <h3 style="font-size:15px;margin:20px 0 8px;">{'① 지금 진행 중인 고연관 공고 (앞으로 매일 아침 새 공고만 보내드립니다)' if welcome else '① 오늘 새로 올라온 고연관 공고'}</h3>
       {new_html}
       {'<h3 style="font-size:15px;margin:24px 0 8px;">② 경쟁사 수주 사업 — 재발주 예상 (향후 90일)</h3>' + reorder_html if reorder_html else ''}
       <p style="margin-top:22px;font-size:13px;"><a href="{escape(dashboard_url)}" style="color:#2D5BFF;">대시보드에서 전체 보기 →</a></p>
@@ -94,9 +94,54 @@ def send_mail(to_addr, subject, html):
         s.sendmail(sender, [to_addr], msg.as_string())
 
 
+def smtp_ready():
+    """메일 발송 계정(SMTP_USER·SMTP_PASSWORD)이 등록돼 있는지"""
+    return bool(read_secret("SMTP_USER") and read_secret("SMTP_PASSWORD"))
+
+
+def _pick_rows(df, sub, new_only=True, limit=20):
+    """구독자 조건(점수·지역)에 맞는 공고. new_only=False면 오늘 신규가 아니어도 진행 중 공고 전체에서 고름"""
+    if df is None or df.empty:
+        return []
+    cand = df
+    if new_only:
+        cand = cand[cand["_created"].dt.date == datetime.now().date()]
+    cand = cand[cand["_score"] >= sub["min_score"]].sort_values("_score", ascending=False)
+    return [r for r in cand.to_dict("records")
+            if match_regions(r["_regions"], sub["regions"], sub["include_national"])][:limit]
+
+
+def _reorder_rows():
+    reorder = load_reorder_candidates(horizon_days=90, include_solution=False)
+    if not reorder.empty:
+        reorder = reorder[reorder["d_day"] >= 0]          # 메일에는 앞으로 다가올 건만
+    return reorder.head(10).to_dict("records") if not reorder.empty else []
+
+
+def _is_new_subscriber(sub):
+    """어제 이후 등록한 사람 — 첫 메일은 오늘 신규가 없어도 진행 중 공고로 보냄"""
+    try:
+        created = datetime.strptime(str(sub.get("created_at") or "")[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    return (datetime.now().date() - created).days <= 1
+
+
+def send_welcome(sub):
+    """메일 알림 등록 직후 1회: 지금 진행 중인 고연관 공고로 '등록 완료' 메일 발송 (대시보드에서 호출)"""
+    df = load_active_postings()
+    rows = _pick_rows(df, sub, new_only=False, limit=10)
+    reorder_rows = _reorder_rows()
+    dashboard_url = read_secret("DASHBOARD_URL") or DASHBOARD_URL_DEFAULT
+    subject = f"[Gov-Tracker] 메일 알림 등록 완료 · 진행 중 고연관 공고 {len(rows)}건"
+    send_mail(sub["email"], subject, build_mail_html(sub, rows, reorder_rows, dashboard_url, welcome=True))
+    return len(rows)
+
+
 def run(dry_run=False):
-    if not dry_run and not (read_secret("SMTP_USER") and read_secret("SMTP_PASSWORD")):
-        print("[메일] SMTP_USER / SMTP_PASSWORD 미설정 → 메일 발송을 건너뜁니다.")
+    if not dry_run and not smtp_ready():
+        print("[메일] SMTP_USER / SMTP_PASSWORD 미설정 → 메일 발송을 건너뜁니다. "
+              "(GitHub Secrets에 등록하면 다음 실행부터 발송)")
         return 0
     subs = list_subscribers(active_only=True)
     if not subs:
@@ -105,26 +150,21 @@ def run(dry_run=False):
 
     df = load_active_postings()
     today = datetime.now().date()
-    new_df = df[df["_created"].dt.date == today] if not df.empty else df
-    reorder = load_reorder_candidates(horizon_days=90, include_solution=False)
-    if not reorder.empty:
-        reorder = reorder[reorder["d_day"] >= 0]          # 메일에는 앞으로 다가올 건만
-    reorder_rows = reorder.head(10).to_dict("records") if not reorder.empty else []
+    reorder_rows = _reorder_rows()
     dashboard_url = read_secret("DASHBOARD_URL") or DASHBOARD_URL_DEFAULT
 
     sent = 0
     for sub in subs:
-        rows = []
-        if not new_df.empty:
-            cand = new_df[new_df["_score"] >= sub["min_score"]].sort_values("_score", ascending=False)
-            rows = [r for r in cand.to_dict("records")
-                    if match_regions(r["_regions"], sub["regions"], sub["include_national"])][:20]
+        rows = _pick_rows(df, sub, new_only=True)
+        welcome = False
+        if not rows and _is_new_subscriber(sub):
+            rows, welcome = _pick_rows(df, sub, new_only=False, limit=10), True
         if not rows and not reorder_rows:
             print(f"[메일] {sub['email']}: 보낼 내용 없음 → 생략")
             continue
-        subject = f"[Gov-Tracker] {today:%m/%d} 신규 고연관 공고 {len(rows)}건" + \
-                  (f" · 재발주 예상 {len(reorder_rows)}건" if reorder_rows else "")
-        html = build_mail_html(sub, rows, reorder_rows, dashboard_url)
+        subject = (f"[Gov-Tracker] {today:%m/%d} {'진행 중' if welcome else '신규'} 고연관 공고 {len(rows)}건"
+                   + (f" · 재발주 예상 {len(reorder_rows)}건" if reorder_rows else ""))
+        html = build_mail_html(sub, rows, reorder_rows, dashboard_url, welcome=welcome)
         if dry_run:
             print(f"[메일·테스트] {sub['email']}: {subject}")
             sent += 1

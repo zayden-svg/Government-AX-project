@@ -12,7 +12,7 @@ import streamlit as st
 from common import (
     PRODUCT_KEYWORDS, INTEGRATED_RND_DOMAINS, PRODUCT_TO_DOMAIN, PROCUREMENT_BOOST_KEYWORDS,
     COMPETITOR_DEFAULT, is_competitor_match, procurement_boost_score, is_mois_noise,
-    detect_regions, region_label, ALL_REGIONS, NATIONAL_LABEL,
+    detect_regions, region_label,
     DEFAULT_NEWS_KEYWORDS, SOLUTION_NEWS_KEYWORDS, ALERT_MIN_SCORE_DEFAULT, validate_email,
     is_closed, family_key, owner_org, competitor_variants, source_rank,
 )
@@ -34,6 +34,14 @@ from procurement_store import load_results, load_reorder_candidates
 from store import (
     load_cache_many, upsert_subscriber, delete_subscriber, get_subscriber, count_subscribers,
 )
+try:
+    from alert_mailer import smtp_ready, send_welcome     # 메일 알림 등록 직후 확인 메일
+except Exception:                                          # 메일 모듈 문제로 대시보드가 멈추지 않도록
+    def smtp_ready():
+        return False
+
+    def send_welcome(sub):
+        return 0
 from briefing_batch import (
     K_NEWS_DEFAULT, K_NEWS_SRC10, K_NEWS_SOLUTION, K_NEWS_SIMPLE, K_REC_KEYWORDS,
     K_HEADLINE, K_ISSUES, K_DIGEST, K_PRODUCT_AI, K_PRODUCT_GUIDE, K_META,
@@ -65,10 +73,6 @@ if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = (_q == "dark") if _q in ("dark", "light") else _system_theme()
 
 
-def _on_theme_change():
-    st.query_params["theme"] = "dark" if st.session_state.dark_mode else "light"   # 새로고침해도 유지
-
-
 THEME = "dark" if st.session_state.dark_mode else "light"
 
 LIGHT = dict(
@@ -98,30 +102,28 @@ def _tc(light_hex, dark_hex):
     return dark_hex if THEME == "dark" else light_hex
 
 
-tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([6.2, 1.5, 1.3, 1.7])
+def _toggle_theme():
+    st.session_state.dark_mode = not st.session_state.dark_mode
+    st.query_params["theme"] = "dark" if st.session_state.dark_mode else "light"   # 새로고침해도 유지
+
+
+# 오른쪽 위 버튼 3개 (메일 알림 · PDF · 다크모드) — 같은 크기·같은 모양 (.st-key-gt_topbar CSS)
+with st.container(key="gt_topbar"):
+    tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([7.4, 1.5, 1.5, 1.5])
 with tcol_pdf:
     pdf_top_slot = st.empty()
-    pdf_top_slot.markdown(
-        f"<div style='text-align:center;font-size:11px;color:{C['text_muted']};padding-top:9px;'>📄 PDF 준비 중...</div>",
-        unsafe_allow_html=True,
-    )
+    pdf_top_slot.button("📄 PDF 준비 중", key="pdf_wait_btn", disabled=True, use_container_width=True)
 with tcol_mail:
     # ------------------------------------------------------------
-    # 📧 메일 알림 등록 — 매일 아침 연관도 높은 신규 공고를 메일로 받기 (사내 메일만)
+    # 📧 메일 알림 — 메일 주소만 넣고 Enter(또는 '등록')하면 끝 (사내 메일만)
     # ------------------------------------------------------------
     with st.popover("📧 메일 알림", use_container_width=True):
         st.markdown("**매일 아침 새 공고 메일 받기**")
-        st.caption("메일 주소만 넣고 Enter 또는 '등록'을 누르면 끝입니다. "
-                   "매일 아침 8시 수집이 끝나면 AI 연관도 기준 이상인 신규 공고와 재발주 예상을 보내드립니다.")
+        st.caption("메일 주소만 넣고 Enter를 누르면 등록됩니다. 매일 아침 8시 수집 후 "
+                   f"AI 연관도 {ALERT_MIN_SCORE_DEFAULT}점 이상 신규 공고와 재발주 예상을 보내드립니다.")
         with st.form("alert_form", clear_on_submit=False, border=False):
-            mail_input = st.text_input("이메일", key="alert_email", placeholder="name@stclab.com")
-            with st.expander("세부 조건 (선택 — 그대로 두면 전체 지역 · 50점 이상)"):
-                mail_regions = st.multiselect("받을 지역 (비우면 전체)", ALL_REGIONS, key="alert_regions",
-                                              placeholder="전체 지역")
-                mail_national = st.checkbox(f"지역이 안 적힌 공고({NATIONAL_LABEL})도 받기", value=True,
-                                            key="alert_national")
-                mail_score = st.slider("AI 연관도 기준(점 이상)", 40, 95, value=ALERT_MIN_SCORE_DEFAULT, step=5,
-                                       key="alert_score")
+            mail_input = st.text_input("이메일", key="alert_email", placeholder="name@stclab.com",
+                                       label_visibility="collapsed")
             mb1, mb2 = st.columns(2)
             with mb1:
                 mail_save = st.form_submit_button("등록", type="primary", use_container_width=True)
@@ -133,9 +135,17 @@ with tcol_mail:
                 st.error(mail_err)
             elif mail_save:
                 try:
-                    res = upsert_subscriber(mail_email, mail_regions, mail_national, mail_score)
-                    st.success(f"{mail_email} 등록 완료 — 내일 아침부터 메일이 갑니다." if res == "created"
-                               else f"{mail_email} 은(는) 이미 등록돼 있어 조건만 새로 저장했습니다.")
+                    res = upsert_subscriber(mail_email, [], True, ALERT_MIN_SCORE_DEFAULT)
+                    _new = res == "created"
+                    st.success(f"{mail_email} {'등록 완료' if _new else '이미 등록된 주소입니다'}.")
+                    if smtp_ready():
+                        try:
+                            _n = send_welcome(get_subscriber(mail_email))
+                            st.info(f"📨 확인 메일을 방금 보냈습니다 (진행 중 고연관 공고 {_n}건). 받은편지함을 확인해 주세요.")
+                        except Exception as e:
+                            st.warning(f"등록은 됐지만 확인 메일 발송에 실패했습니다: {type(e).__name__}")
+                    else:
+                        st.info("내일 아침 8시 자동수집 후 첫 메일이 발송됩니다.")
                 except Exception as e:
                     st.error(f"저장 실패: {e}")
             else:
@@ -148,13 +158,12 @@ with tcol_mail:
                 except Exception as e:
                     st.error(f"해제 실패: {e}")
         try:
-            st.caption(f"현재 등록 {count_subscribers()}명 · 매일 아침 8시 자동수집 후 발송")
+            st.caption(f"현재 등록 {count_subscribers()}명 · 사내 메일(@stclab.com)만 등록 가능")
         except Exception:
             pass
-
-
 with tcol_dark:
-    st.toggle("🌙 다크모드", key="dark_mode", on_change=_on_theme_change)
+    st.button("☀️ 라이트모드" if st.session_state.dark_mode else "🌙 다크모드", key="theme_btn",
+              on_click=_toggle_theme, use_container_width=True)
 
 # ------------------------------------------------------------
 # 화면 CSS — 라이트·다크 모두 같은 규칙에 색 토큰(C)만 바꿔 적용 (위젯까지 전부 덮어 칠함)
@@ -406,6 +415,34 @@ st.markdown(
     div[data-testid="stPopover"] button p {{ color: inherit !important; font-size: inherit !important; font-weight: inherit !important; }}
     .gt-popover-item {{ padding:10px 6px; border-bottom:1px solid {C['row_border']}; line-height:1.6; }}
     .gt-popover-item:last-child {{ border-bottom:none; }}
+
+    /* 오른쪽 위 버튼 3개(메일 알림 · PDF · 다크모드) — 크기·테두리·글자 모두 동일한 버튼 모양 */
+    .st-key-gt_topbar [data-testid="stHorizontalBlock"] {{ align-items: center !important; }}
+    .st-key-gt_topbar div[data-testid="stPopover"] button,
+    .st-key-gt_topbar .stDownloadButton button,
+    .st-key-gt_topbar .stButton button {{
+        width: 100% !important; height: 40px !important; min-height: 40px !important; padding: 0 10px !important;
+        display: flex !important; align-items: center !important; justify-content: center !important; gap: 4px !important;
+        background: {_SEC_BTN_BG} !important; border: 1px solid {_SEC_BTN_BORDER} !important; border-radius: 8px !important;
+        color: {_SEC_BTN_TXT} !important; font-size: 13.5px !important; font-weight: 700 !important; line-height: 1 !important;
+        text-align: center !important; text-decoration: none !important; white-space: nowrap !important;
+        box-shadow: none !important; opacity: 1 !important; transition: border-color .15s ease, color .15s ease;
+    }}
+    .st-key-gt_topbar div[data-testid="stPopover"] button *,
+    .st-key-gt_topbar .stDownloadButton button *,
+    .st-key-gt_topbar .stButton button * {{
+        color: inherit !important; font-size: 13.5px !important; font-weight: 700 !important; margin: 0 !important;
+        white-space: nowrap !important; text-decoration: none !important;
+    }}
+    .st-key-gt_topbar div[data-testid="stPopover"] button:hover,
+    .st-key-gt_topbar .stDownloadButton button:hover,
+    .st-key-gt_topbar .stButton button:not(:disabled):hover {{
+        border-color: {C['accent']} !important; color: {C['accent']} !important; text-decoration: none !important;
+    }}
+    .st-key-gt_topbar .stButton button:disabled {{ color: {C['text_muted']} !important; cursor: progress !important; }}
+    /* 메일 알림 버튼의 펼침 화살표 숨김 — PDF·다크모드 버튼과 똑같은 모양 */
+    .st-key-gt_topbar div[data-testid="stPopover"] button [data-testid="stIconMaterial"],
+    .st-key-gt_topbar div[data-testid="stPopover"] button svg {{ display: none !important; }}
 
     /* 표 (통합보기 Ⅲ · 낙찰결과) */
     .gt-table {{ width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;
