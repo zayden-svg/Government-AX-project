@@ -12,6 +12,7 @@ PRODUCT_TITLES = {   # 화면 제목 (제품 약어 · 이름 · 한 줄 설명)
     "BM": ("BotManager / MBUSTER", "매크로·봇 탐지 차단 · 부정접속 방어"),
     "LT": ("LoadTester", "웹·앱 부하테스트(성능 검증)"),
 }
+NF_HIGH_SCORE = 60          # NF 목록에 자동 포함할 AI 연관도 기준
 RND_DOMAIN_MIN_SCORE = 60     # R&D는 도메인(AI·데이터·보안 등) 단어만 걸린 경우 연관도 60점 이상만 (단어만 같은 과제 제외)
 
 
@@ -46,6 +47,10 @@ def match_product(pname, biz_df, rnd_df, news_items, score_col="_score", ai_titl
             if dm is not None and score_col in df.columns:
                 extra = df[dm & (df[score_col] >= RND_DOMAIN_MIN_SCORE)]
                 hits = df[df.index.isin(hits.index) | df.index.isin(extra.index)]
+        if pname == "넷퍼넬 (NF)" and score_col in df.columns:
+            # 대표 제품 NF: 제목에 단어가 없어도 AI 연관도 60점 이상(접속 폭주 대비가 필요한 웹 서비스)이면 포함
+            hi = df[df[score_col] >= NF_HIGH_SCORE]
+            hits = df[df.index.isin(hits.index) | df.index.isin(hi.index)]
         if hits.empty and ai_titles.get(f"{label}_{pname}"):     # 키워드 0건이면 아침 배치 AI가 문맥으로 고른 결과
             hits = df[df["title"].astype(str).isin([str(t) for t in ai_titles[f"{label}_{pname}"]])]
         if score_col in hits.columns:

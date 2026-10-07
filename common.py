@@ -133,12 +133,17 @@ NON_IT_WORDS = ["정수기", "차입", "청소용역", "미화용역", "경비�
                 "피복", "조경", "방역소독", "승강기", "복사용지"]
 
 
+_PRESS_STYLE_RE = re.compile(r"(?:[가-힣]다|\d+\s*(?:건|곳|개|명|개소|개\s*마을)\s*(?:최종\s*)?선정)[\"'”’」』]?$")
+
+
 def is_mois_noise(agency, title):
     """사업·과제 공고가 아닌 글이면 True (이름은 예전 그대로 — 행안부 외 공지 게시판·비IT 입찰도 함께 판정)"""
     a, t = str(agency or ""), str(title or "")
     if any(w in t for w in NON_IT_WORDS):
         return True
     if any(b in a for b in NOTICE_BOARD_AGENCIES):
+        if _PRESS_STYLE_RE.search(t.strip()):
+            return True               # '…이어간다' · '…7건 선정' 처럼 기사체로 끝나는 보도자료
         keep = MOIS_KEEP_WORDS if "행정안전부" in a else NOTICE_KEEP_WORDS
         return not any(w in t for w in keep)
     return False
