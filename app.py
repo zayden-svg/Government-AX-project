@@ -392,7 +392,7 @@ st.markdown(
     .gt-mon-row {{ display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid {C['row_border']}; transition:background .15s; }}
     .gt-mon-row:last-child {{ border-bottom:none; }}
     .gt-mon-row:hover {{ background:{C['surface2']}; }}
-    .gt-mon-src-tag {{ font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:5px; color:#fff; white-space:nowrap; min-width:50px; text-align:center; flex-shrink:0; }}
+    .gt-mon-src-tag {{ font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:5px; color:#fff !important; white-space:nowrap; min-width:50px; text-align:center; flex-shrink:0; }}
     .gt-mon-title-link {{ flex:1; font-size:13px; font-weight:600; color:{C['text']}; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }}
     .gt-mon-title-link:hover {{ color:{C['accent']}; text-decoration:underline; }}
     .gt-mon-status {{ font-size:10px; font-weight:800; padding:2px 9px; border-radius:5px; white-space:nowrap; letter-spacing:.03em; flex-shrink:0; }}
@@ -1146,7 +1146,7 @@ else:
 # ------------------------------------------------------------
 # 뉴스 렌더링 공통 헬퍼
 # ------------------------------------------------------------
-SOURCE_COLOR = {"naver": "#03c75a", "google": "#4285f4", "boan": "#e53935", "etnews": "#8e24aa"}
+SOURCE_COLOR = {"naver": "#0A7D3B", "google": "#1A5FD0", "boan": "#C62828", "etnews": "#7B1FA2"}   # 흰 글씨 명암비 4.5:1 이상
 SOURCE_BADGE_TEXT = {"naver": "N", "google": "G", "boan": "보안", "etnews": "전자"}
 SOURCE_LABEL_KO = {"google": "구글", "naver": "네이버", "boan": "보안뉴스", "etnews": "전자신문"}
 
