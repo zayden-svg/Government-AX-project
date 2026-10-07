@@ -109,7 +109,7 @@ def _toggle_theme():
 
 # 오른쪽 위 버튼 3개 (메일 알림 · PDF · 다크모드) — 같은 크기·같은 모양 (.st-key-gt_topbar CSS)
 with st.container(key="gt_topbar"):
-    tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([7.4, 1.5, 1.5, 1.5])
+    tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([7.0, 1.6, 1.6, 1.6])
 with tcol_pdf:
     pdf_top_slot = st.empty()
     pdf_top_slot.button("📄 PDF 준비 중", key="pdf_wait_btn", disabled=True, use_container_width=True)
@@ -426,13 +426,14 @@ st.markdown(
         background: {_SEC_BTN_BG} !important; border: 1px solid {_SEC_BTN_BORDER} !important; border-radius: 8px !important;
         color: {_SEC_BTN_TXT} !important; font-size: 13.5px !important; font-weight: 700 !important; line-height: 1 !important;
         text-align: center !important; text-decoration: none !important; white-space: nowrap !important;
-        box-shadow: none !important; opacity: 1 !important; transition: border-color .15s ease, color .15s ease;
+        box-shadow: none !important; opacity: 1 !important; transition: none !important;
     }}
     .st-key-gt_topbar div[data-testid="stPopover"] button[data-testid] *,
     .st-key-gt_topbar .stDownloadButton button[data-testid] *,
     .st-key-gt_topbar .stButton button[data-testid] * {{
         color: inherit !important; font-size: 13.5px !important; font-weight: 700 !important; margin: 0 !important;
         white-space: nowrap !important; text-decoration: none !important;
+        overflow: visible !important; text-overflow: clip !important; max-width: none !important; flex: 0 0 auto !important;
     }}
     .st-key-gt_topbar div[data-testid="stPopover"] button[data-testid]:hover,
     .st-key-gt_topbar .stDownloadButton button[data-testid]:hover,
