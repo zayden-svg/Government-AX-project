@@ -926,9 +926,11 @@ def render_toggle_card(label, count, key, active, colors, on_click=None, args=No
                 color: {colors['active_text']} !important;
                 border-left: 5px solid {colors['active_bg']} !important;
             }}
-            .st-key-{key} button[kind="primary"] *, .st-key-{key} button[kind="primary"]::first-line {{
+            .st-key-{key} .stButton > button[kind="primary"] p, .st-key-{key} .stButton > button[kind="primary"] span,
+            .st-key-{key} .stButton > button[kind="primary"] div, .st-key-{key} .stButton > button[kind="primary"]::first-line {{
                 color: {colors['active_text']} !important; }}
-            .st-key-{key} button[kind="secondary"] * {{ color: {inactive_text} !important; }}
+            .st-key-{key} .stButton > button[kind="secondary"] p, .st-key-{key} .stButton > button[kind="secondary"] span,
+            .st-key-{key} .stButton > button[kind="secondary"] div {{ color: {inactive_text} !important; }}
             </style>
             """,
             unsafe_allow_html=True,
