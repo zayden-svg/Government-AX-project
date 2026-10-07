@@ -107,6 +107,8 @@ def run(dry_run=False):
     today = datetime.now().date()
     new_df = df[df["_created"].dt.date == today] if not df.empty else df
     reorder = load_reorder_candidates(horizon_days=90, include_solution=False)
+    if not reorder.empty:
+        reorder = reorder[reorder["d_day"] >= 0]          # 메일에는 앞으로 다가올 건만
     reorder_rows = reorder.head(10).to_dict("records") if not reorder.empty else []
     dashboard_url = read_secret("DASHBOARD_URL") or DASHBOARD_URL_DEFAULT
 

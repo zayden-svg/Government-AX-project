@@ -2178,7 +2178,7 @@ with main_tab_trend:
         st.info("아직 재발주 예상 건이 없습니다. 낙찰·계약 결과가 쌓이면 자동으로 표시됩니다. "
                 "(첫 자동수집 때 최근 1년치 자사 관련 사업을 한 번 조회합니다)")
     else:
-        soon_n = int((reorder_df["d_day"] <= 30).sum())
+        soon_n = int(((reorder_df["d_day"] >= 0) & (reorder_df["d_day"] <= 30)).sum())
         with ro_c1:
             st.caption(f"총 {len(reorder_df)}건 · 30일 이내 발주 예상 {soon_n}건 — 발주 1~2개월 전 기관 담당자 접촉을 권장합니다.")
         _rv = reorder_df.assign(

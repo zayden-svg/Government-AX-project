@@ -134,4 +134,6 @@ def load_reorder_candidates(competitors=None, horizon_days=180, include_solution
     df = df[(df["d_day"] >= -30) & (df["d_day"] <= horizon_days)].copy()
     df["expected"] = df["_expected"].dt.strftime("%Y-%m")
     df["표시"] = ["🔴 경쟁사" if c else "🟢 자사관련" for c in df["_comp"]]
-    return df.sort_values("d_day")[cols].reset_index(drop=True)
+    # 앞으로 다가올 건(D-0 이상)을 가까운 순으로 먼저, 이미 지난 건은 맨 뒤
+    df["_passed"] = df["d_day"] < 0
+    return df.sort_values(["_passed", "d_day"])[cols].reset_index(drop=True)
