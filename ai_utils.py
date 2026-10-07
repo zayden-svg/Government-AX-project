@@ -1,474 +1,431 @@
-# ai_utils.py
 import os
 import re
 import json
-import time
-import asyncio
-from collections import deque
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    load_dotenv("gemini_api.env")  # 별도 파일로 키를 관리 중인 경우도 함께 로드
-except ImportError:
-    pass
+from dotenv import load_dotenv
+load_dotenv()
 
 try:
     import google.generativeai as genai
-    _genai_available = True
 except ImportError:
-    _genai_available = False
+    genai = None
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-# 분류/점수 판단처럼 가벼운 작업은 Flash-Lite가 더 빠르고, 무료 티어 분당 요청 한도(RPM)도 더 넉넉함
-GEMINI_MODEL_NAME = "gemini-2.5-flash-lite"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
-# AI 호출 1건당 최대 이만큼(초)까지만 기다리고, 넘으면 실패로 처리하고 다음으로 넘어감
-AI_TIMEOUT_SECONDS = 25
-
-# 동시에 몇 건까지 병렬로 Gemini에 요청할지 (너무 크게 잡으면 429 에러 위험)
-AI_MAX_CONCURRENCY = 8
-
-# 분당 몇 건까지 허용할지 (Flash-Lite 무료 한도 15RPM보다 낮게 여유를 둠)
-AI_RPM_LIMIT = 14
-
-_gemini_ready = False
-if _genai_available and GEMINI_API_KEY:
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        _gemini_ready = True
-    except Exception:
-        _gemini_ready = False
+_model = None
 
 
 def is_gemini_ready():
-    return _gemini_ready
+    return bool(GEMINI_API_KEY) and genai is not None
 
 
-PRODUCT_PROFILE = """
-- 회사 핵심 사업: 웹/앱 대기열·트래픽 관리 솔루션(NetFUNNEL, 온프렘/SaaS 모두 지원),
-  온라인 신원확인/부정접속 방어 솔루션(봇매니저 SaaS), AI 기반 이상 트래픽 탐지
-- 관심 기술 분야: AI/빅데이터, 클라우드 인프라, 사이버보안, 공공/금융 시스템 고도화,
-  재해복구(DR), 통합관제, 대량접속 제어
-- 관심 고객: 공공기관, 금융기관, 대형 포털/커머스사
-- 관심 사업 형태: SI/SM 용역, 시스템 구축·고도화, R&D 공동연구, AI 솔루션 실증사업
-"""
-
-
-def _extract_json(text: str):
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
+def _get_model():
+    global _model
+    if not is_gemini_ready():
         return None
-    try:
-        return json.loads(match.group(0))
-    except Exception:
-        return None
+    if _model is None:
+        genai.configure(api_key=GEMINI_API_KEY)
+        _model = genai.GenerativeModel(MODEL_NAME)
+    return _model
 
 
-def _extract_json_array(text: str):
-    match = re.search(r"\[.*\]", text, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except Exception:
-        return None
-
-
-def build_analysis_prompt(info_block: str) -> str:
-    return f"""당신은 IT 솔루션 기업의 사업개발 담당자를 돕는 어시스턴트입니다.
-아래 [자사 프로필]을 참고하여 [공고 정보]에 대해 두 가지를 판단하세요.
-
-[자사 프로필]
-{PRODUCT_PROFILE}
-
-[공고 정보]
-{info_block}
-
-판단할 내용:
-1. track: 이 공고가 "연구개발·기술개발·실증 성격의 R&D 과제"에 가까운지,
-   "입찰·용역·제품구매처럼 매출과 직결되는 사업부 과제"에 가까운지
-   단순 키워드가 아니라 공고의 실제 성격(연구비 지원 방식인지, 조달/구매 계약 방식인지)을
-   근거로 판단하세요. 반드시 "RND" 또는 "BIZ" 중 하나만 답하세요.
-2. track_reason: 왜 그렇게 판단했는지 1문장 이유.
-3. score: 자사 프로필을 기준으로 영업 또는 연구협력 관점의 연관도를 0~100 사이 정수로 평가.
-4. score_reason: 왜 그 점수를 주었는지 1문장 이유.
-
-정보가 부족해서 확신하기 어려우면, score는 낮게 주고 score_reason에 "정보 부족으로 판단 어려움"
-이라고 명시하세요. 절대 근거 없이 추측해서 확정적으로 답하지 마세요.
-
-반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트를 절대 추가하지 마세요.
-{{"track": "RND 또는 BIZ", "track_reason": "...", "score": 0~100 사이 정수, "score_reason": "..."}}
-"""
-
-
-def _parse_analysis_response(text_resp: str):
-    data = _extract_json(text_resp)
-    if not data:
-        return None
-    track = str(data.get("track", "")).strip().upper()
-    if track not in ("RND", "BIZ"):
-        track = "BIZ"
-    try:
-        score = max(0, min(100, int(data.get("score", 0))))
-    except Exception:
-        score = None
-    return {
-        "track": track,
-        "track_reason": str(data.get("track_reason", "")).strip(),
-        "score": score,
-        "score_reason": str(data.get("score_reason", "")).strip(),
-    }
-
-
-# ------------------------------------------------------------
-# 동기(순차) 버전 - 단건 분석이 필요할 때(예: app.py에서 특정 공고 재분석) 사용
-# ------------------------------------------------------------
-def analyze_posting(info_block: str, max_retries: int = 1):
-    if not _gemini_ready:
-        return {"error": "Gemini API 키가 설정되지 않았습니다."}
-
-    last_error = ""
-    for attempt in range(max_retries + 1):
-        try:
-            model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-            resp = model.generate_content(
-                build_analysis_prompt(info_block),
-                request_options={"timeout": AI_TIMEOUT_SECONDS},
-            )
-            parsed = _parse_analysis_response((resp.text or "").strip())
-            if not parsed:
-                last_error = "AI 응답 파싱 실패"
-                continue
-            return parsed
-        except Exception as e:
-            last_error = str(e)
-            continue
-
-    return {"error": f"{max_retries + 1}회 시도 후 실패: {last_error}"}
-
-
-# ------------------------------------------------------------
-# 분당 요청 수 제한기 (leaky bucket) - 여러 코루틴이 동시에 써도 안전하게 카운트
-# ------------------------------------------------------------
-class _RateLimiter:
-    def __init__(self, max_calls_per_minute: int):
-        self.max_calls = max_calls_per_minute
-        self._timestamps = deque()
-        self._lock = asyncio.Lock()
-
-    async def acquire(self):
-        async with self._lock:
-            while True:
-                now = time.monotonic()
-                while self._timestamps and now - self._timestamps[0] > 60:
-                    self._timestamps.popleft()
-                if len(self._timestamps) < self.max_calls:
-                    self._timestamps.append(now)
-                    return
-                wait_time = 60 - (now - self._timestamps[0]) + 0.05
-                await asyncio.sleep(wait_time)
-
-
-_rate_limiter = _RateLimiter(AI_RPM_LIMIT)
-
-
-async def _analyze_posting_async(info_block: str, max_retries: int = 1):
-    if not _gemini_ready:
-        return {"error": "Gemini API 키가 설정되지 않았습니다."}
-
-    last_error = ""
-    for attempt in range(max_retries + 1):
-        try:
-            await _rate_limiter.acquire()
-            model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-            resp = await model.generate_content_async(
-                build_analysis_prompt(info_block),
-                request_options={"timeout": AI_TIMEOUT_SECONDS},
-            )
-            parsed = _parse_analysis_response((resp.text or "").strip())
-            if not parsed:
-                last_error = "AI 응답 파싱 실패"
-                continue
-            return parsed
-        except Exception as e:
-            last_error = str(e)
-            await asyncio.sleep(2)
-            continue
-
-    return {"error": f"{max_retries + 1}회 시도 후 실패: {last_error}"}
-
-
-async def analyze_postings_batch(items, progress_cb=None, max_retries: int = 1):
-    """
-    items: [(key, info_block), ...] 형태의 리스트
-    progress_cb: 건 하나 끝날 때마다 (key, result) 로 호출되는 콜백 (선택)
-    반환값: {key: result_dict, ...}
-    """
-    semaphore = asyncio.Semaphore(AI_MAX_CONCURRENCY)
-    results = {}
-
-    async def worker(key, info_block):
-        async with semaphore:
-            result = await _analyze_posting_async(info_block, max_retries=max_retries)
-        results[key] = result
-        if progress_cb:
-            progress_cb(key, result)
-
-    tasks = [asyncio.create_task(worker(k, ib)) for k, ib in items]
-    if tasks:
-        await asyncio.gather(*tasks)
-    return results
-
-
-def build_summary_prompt(info_block: str) -> str:
-    return f"""당신은 정부 R&D/IT 사업 공고를 분석하는 어시스턴트입니다.
-아래 공고 정보를 참고하여 실무자가 5초 안에 핵심만 파악할 수 있도록
-아주 간결하게 2~3문장으로 요약해 주세요.
-
-작성 규칙:
-1) 공고의 핵심 내용, 우리 조직에 왜 중요한지, 마감일/예산/자격 조건처럼
-   놓치면 안 되는 정보만 압축해서 담을 것.
-2) 마감일, 예산, 자격조건, 사업명 등 핵심 키워드에는 반드시
-   마크다운 굵게(**단어**) 표시를 할 것.
-3) 목록(bullet)이나 번호 매기기는 쓰지 말고 줄글로 쓸 것.
-4) 주어진 정보에 없는 내용은 추측하지 말 것.
-
-[공고 정보]
-{info_block}
-"""
-
-
-def generate_summary(info_block: str):
-    """반환: (summary_text:str|None, error:str|None)"""
-    if not _gemini_ready:
+def _call(prompt, json_mode=True):
+    model = _get_model()
+    if model is None:
         return None, "Gemini API 키가 설정되지 않았습니다."
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        resp = model.generate_content(
-            build_summary_prompt(info_block),
-            request_options={"timeout": AI_TIMEOUT_SECONDS},
-        )
+        cfg = {"response_mime_type": "application/json"} if json_mode else {}
+        resp = model.generate_content(prompt, generation_config=cfg)
         return (resp.text or "").strip(), None
     except Exception as e:
         return None, str(e)
 
 
-# ------------------------------------------------------------
-# [신규] 추천 키워드 생성 - 자사 프로필 + 최근 공고 제목을 근거로 뉴스 검색용 키워드 추천
-# ------------------------------------------------------------
-def build_keyword_recommendation_prompt(sample_titles) -> str:
-    joined = "\n".join(f"- {t}" for t in sample_titles[:60])
-    return f"""당신은 IT 솔루션 기업의 사업개발 담당자를 돕는 어시스턴트입니다.
-아래 [자사 프로필]과 [최근 수집된 공고 제목 목록]을 참고하여,
-IT 뉴스 검색에 사용하면 좋을 대표 키워드를 5~8개 추천하세요.
-
-각 키워드는 반드시 아래 둘 중 하나 이상을 근거로 선정하세요:
-1) 최근 공고 제목에서 실제로 자주 등장하는 주제/기술 트렌드
-2) 자사 프로필(솔루션/기술분야/고객군)과 직접적인 연관성
-
-[자사 프로필]
-{PRODUCT_PROFILE}
-
-[최근 수집된 공고 제목 목록]
-{joined}
-
-반드시 아래 JSON 배열 형식으로만 답변하세요. 다른 텍스트를 절대 추가하지 마세요.
-[{{"keyword": "짧은 키워드", "reason": "왜 이 키워드를 추천했는지 1문장"}}, ...]
-"""
-
-
-def recommend_keywords(sample_titles, max_keywords: int = 8):
-    """반환: (추천리스트, error). 추천리스트는 [{"keyword":..., "reason":...}, ...]"""
-    if not _gemini_ready:
-        return [], "Gemini API 키가 설정되지 않았습니다."
-    if not sample_titles:
-        return [], "분석할 공고 데이터가 없습니다."
+def _parse_json(text, fallback):
+    if not text:
+        return fallback
+    cleaned = re.sub(r"^```(json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        resp = model.generate_content(
-            build_keyword_recommendation_prompt(sample_titles),
-            request_options={"timeout": AI_TIMEOUT_SECONDS},
-        )
-        data = _extract_json_array((resp.text or "").strip())
-        if not data:
-            return [], "AI 응답 파싱 실패"
-        results = []
-        for d in data[:max_keywords]:
-            kw = str(d.get("keyword", "")).strip()
-            reason = str(d.get("reason", "")).strip()
-            if kw:
-                results.append({"keyword": kw, "reason": reason})
-        return results, None
+        return json.loads(cleaned)
+    except Exception:
+        m = re.search(r"(\[.*\]|\{.*\})", cleaned, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(1))
+            except Exception:
+                pass
+    return fallback
+
+
+def _dedupe_similar_keywords(items, key_field="keyword"):
+    """유사/중복 키워드 1차 필터링 — 완전 동일하거나 한쪽이 다른쪽을 포함하는 짧은 변형을 제거.
+    예: 'AI'와 '인공지능'처럼 의미는 겹치지만 문자열이 다른 경우는 AI 판단을 신뢰하고 그대로 두되,
+    공백/대소문자만 다른 중복이나 완전 부분 포함 관계만 제거한다."""
+    seen_norm = []
+    result = []
+    for item in items:
+        kw = str(item.get(key_field, "")).strip()
+        if not kw:
+            continue
+        norm = kw.lower().replace(" ", "")
+        is_dup = False
+        for prev_norm in seen_norm:
+            if norm == prev_norm or norm in prev_norm or prev_norm in norm:
+                is_dup = True
+                break
+        if is_dup:
+            continue
+        seen_norm.append(norm)
+        result.append(item)
+    return result
+
+
+# ------------------------------------------------------------
+# 1. 공고 상세 요약 — 근거 기반, 1~2문장
+# ------------------------------------------------------------
+def generate_summary(info_block):
+    prompt = f"""너는 공공 IT 영업 담당자를 돕는 분석가다.
+아래 공고 정보를 근거로, 담당자가 10초 안에 읽을 수 있도록 핵심을 1~2문장으로 한국어 요약해라.
+규칙:
+- 공고 정보에 없는 내용은 절대 만들어내지 말 것(추측 금지).
+- 숫자·마감일·기관명이 있으면 반드시 포함할 것.
+- 출력은 요약 문장만, 다른 설명이나 머리말 없이.
+
+[공고 정보]
+{info_block}
+"""
+    text, err = _call(prompt, json_mode=False)
+    return text, err
+
+
+# ------------------------------------------------------------
+# 2. 공고 1줄 핵심 요약 배치 생성 (목록용, 비용 절감을 위해 묶어서 호출)
+# ------------------------------------------------------------
+def summarize_titles_oneline(batch):
+    """batch: [{"key":..., "title":..., "agency":...}, ...]
+    반환: [{"key":..., "summary":...}, ...]
+    """
+    if not batch:
+        return [], None
+    items_text = "\n".join(f'- key:{b["key"]} | 제목:{b["title"]} | 기관:{b.get("agency","")}' for b in batch)
+    prompt = f"""아래 공고 목록 각각을 한국어로 15~25자 내외의 핵심 한줄 요약으로 바꿔라.
+무엇을 하는 사업/과제인지 핵심만 압축하고, 제목에 없는 내용은 추측해서 넣지 마라.
+입력에 있는 key 값을 그대로 포함해서 JSON 배열로만 출력해라.
+형식: [{{"key": "...", "summary": "..."}}]
+
+[공고 목록]
+{items_text}
+"""
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    result = _parse_json(text, [])
+    return result, None
+
+
+# ------------------------------------------------------------
+# 3. 객관적 IT 트렌드 키워드 추천 — 자사 제품명 배제 + 유사 키워드 중복 제거
+# ------------------------------------------------------------
+def recommend_keywords(titles, exclude_terms=None, n=8):
+    exclude_terms = exclude_terms or ["넷퍼넬", "NetFUNNEL", "넷퍼넬API", "봇매니저", "BotManager", "로드테스터", "LoadTester", "에스티씨랩"]
+    titles_text = "\n".join(f"- {t}" for t in titles[:80])
+    prompt = f"""너는 공공 IT 시장을 객관적으로 분석하는 애널리스트다.
+아래는 최근 수집된 공고·뉴스 제목 목록이다. 이 제목들만 근거로, 지금 공공 IT 업계에서
+떠오르고 있는 '객관적인 트렌드 키워드' {n}개 내외를 뽑아라.
+
+반드시 지킬 규칙:
+1) 다음 단어들은 특정 회사의 자사 제품명이므로 절대 키워드로 추천하지 마라: {", ".join(exclude_terms)}
+2) '정부', '사업', '공고'처럼 너무 포괄적인 단어 대신 구체적인 트렌드 단어를 뽑아라.
+3) 실제 제목에 등장했거나 그로부터 합리적으로 도출되는 단어만 사용해라(없는 트렌드 지어내지 말 것).
+4) 서로 거의 같은 의미의 키워드를 중복으로 뽑지 말고, 각 키워드는 서로 명확히 구분되는 주제여야 한다.
+5) 각 키워드마다 왜 선택했는지 1줄 이유를 붙여라.
+
+[제목 목록]
+{titles_text}
+
+출력은 JSON 배열로만: [{{"keyword": "...", "reason": "..."}}]
+"""
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    result = _parse_json(text, [])
+    # 1차: 자사 제품명 2차 필터링 (모델이 규칙을 어겼을 경우 대비)
+    filtered = [r for r in result if not any(ex.lower() in str(r.get("keyword", "")).lower() for ex in exclude_terms)]
+    # 2차: 문자열 수준의 중복/포함 관계 키워드 제거 (예: "AI" vs "AI 기술"처럼 한쪽이 다른쪽을 포함하는 경우)
+    deduped = _dedupe_similar_keywords(filtered)
+    return deduped, None
+
+
+# ------------------------------------------------------------
+# 4. 트렌드 키워드 추출 — 카테고리를 AI가 자유롭게 명명 (3개 고정값 제거)
+# ------------------------------------------------------------
+def extract_trend_keywords(titles):
+    titles_text = "\n".join(f"- {t}" for t in titles[:150])
+    prompt = f"""아래 뉴스·공고 제목들을 분석해서 핵심 키워드를 15~30개 추출해라.
+
+각 키워드마다 다음 항목을 포함해라:
+- keyword: 키워드 자체
+- importance: 0~100 중요도 점수 (언급 빈도 + 업계 영향력을 종합 고려)
+- count: 해당 키워드가 포함된 제목 수
+- category: 이 키워드가 속하는 주제 분류명을 네가 직접 정해라.
+  (예시일 뿐 그대로 쓰지 말고 실제 내용에 맞게 자유롭게 명명: 'AI', '사이버보안', '클라우드', '정책/제도', '산업동향' 등)
+  특정 회사의 제품 카테고리로 분류하지 말고, 업계 전반의 주제로 분류해라.
+- reason: 1줄 판단 근거
+- sample_titles: 근거가 된 실제 제목 2~3개 (목록에 있는 제목 그대로)
+
+[제목 목록]
+{titles_text}
+
+출력은 JSON 배열로만.
+"""
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    result = _parse_json(text, [])
+    # 거의 동일한 키워드가 중복 추출되는 경우 1차 정리 (importance 높은 쪽을 우선 유지)
+    result = sorted(result, key=lambda x: -(x.get("importance") or 0))
+    result = _dedupe_similar_keywords(result)
+    return result, None
+
+
+# ------------------------------------------------------------
+# 5. 오늘의 헤드라인 — govit-briefing 스타일 한 줄 헤드라인 + 부연 2문장
+# ------------------------------------------------------------
+def generate_headline(titles):
+    titles_text = "\n".join(f"- {t}" for t in titles[:40])
+    prompt = f"""너는 공공 IT 시장 리서치 애널리스트다.
+아래 공고/뉴스 제목들만 근거로, 오늘자 브리핑의 헤드라인을 작성해라.
+- headline: 임팩트 있는 한 줄 (예: "AI 예산은 늘고 클라우드는 줄었다 — 10월은 마감 몰빵의 달" 같은 톤), 데이터에 없는 수치는 넣지 마라.
+- subtext: 2문장 이내 부연 설명.
+
+[제목 목록]
+{titles_text}
+
+JSON으로만 출력: {{"headline": "...", "subtext": "..."}}
+"""
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return None, err
+    return _parse_json(text, None), None
+
+
+# ------------------------------------------------------------
+# 6. 오늘의 핵심 이슈 카드 — AI가 직접 클러스터링해서 테마 3~4개 생성
+# ------------------------------------------------------------
+def generate_key_issues(items_text, n=4):
+    prompt = f"""아래는 오늘 기준 연관도가 높은 공공 IT 공고/뉴스 목록이다.
+이 목록을 분석해서 핵심 이슈 테마 {n}개로 묶어라. 각 테마마다:
+- theme: 테마명 (10자 내외)
+- impact: "매우높음" | "높음" | "보통" | "낮음" 중 하나 (이 테마가 사업 기회에 미치는 영향도)
+- confidence: "High" | "Medium" | "Low" (근거 자료의 신뢰도)
+- summary: 1문장 핵심 요약
+- count: 이 테마에 해당하는 항목 수(목록 기준으로 추정)
+
+[목록]
+{items_text}
+
+JSON 배열로만 출력.
+"""
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    return _parse_json(text, []), None
+
+
+# ------------------------------------------------------------
+# 7. 역할별 대응 전략 — 한 줄 액션 아이템
+# ------------------------------------------------------------
+def generate_action_strategies(role, items_txt):
+    prompt = f"""너는 공공 IT 영업/R&D 조직의 전략 어드바이저다.
+보는 사람 역할: {role}
+아래 공고 목록을 근거로, 이 역할이 지금 당장 해야 할 액션을 한 줄씩 제시해라.
+각 항목은 다음 필드를 가진다:
+- 대상: 어떤 공고/과제에 대한 것인지
+- 액션: 구체적으로 무엇을 해야 하는지 (한 줄)
+- 마감: 마감일 또는 '상시'
+- 담당: 제안하는 담당 역할(예: 영업팀, R&D팀, 컨소시엄 담당 등)
+
+공고 정보에 없는 내용은 추측해서 만들지 마라.
+
+[공고 목록]
+{items_txt}
+
+JSON 배열로만 출력.
+"""
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    return _parse_json(text, []), None
+
+
+# ------------------------------------------------------------
+# 8. 기회영역 비교 — 사업부 vs R&D 한줄 bullet 3개씩
+# ------------------------------------------------------------
+def match_titles_to_product(product_name, product_desc, titles, _err_default=None):
+    """1차 키워드 매칭이 0건일 때 호출하는 AI 폴백.
+    실질적으로 연관 있는 제목만 추려서 반환, 없으면 빈 배열."""
+    if not titles:
+        return [], None
+    model = _get_model()
+    if model is None:
+        return [], "Gemini API가 설정되지 않았습니다."
+    prompt = (
+        f"다음은 공공 IT 공고/과제 제목 목록입니다.\n"
+        f"'{product_name}' ({product_desc})과 실질적으로 연관된 공고 제목만 "
+        f"아래 목록에 있는 문자열 그대로 골라 JSON 배열로 반환하세요.\n"
+        f"억지로 끼워맞추지 말고, 연관 있는 게 전혀 없으면 빈 배열 []을 반환하세요.\n"
+        f"반드시 JSON 배열만 출력하고 다른 설명은 넣지 마세요.\n\n"
+        + "\n".join(f"- {t}" for t in titles[:150])
+    )
+    try:
+        resp = model.generate_content(prompt)
+        text = resp.text.strip()
+        text = re.sub(r"^```json\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
+        result = json.loads(text)
+        if isinstance(result, list):
+            return [str(x) for x in result], None
+        return [], None
     except Exception as e:
         return [], str(e)
 
+def generate_opportunity_bullets(biz_titles, rnd_titles):
+    biz_text = "\n".join(f"- {t}" for t in biz_titles[:30])
+    rnd_text = "\n".join(f"- {t}" for t in rnd_titles[:30])
+    prompt = f"""아래는 사업부(수주·용역) 공고 목록과 R&D(개발과제) 공고 목록이다.
+각각에 대해 지금 가장 주목해야 할 기회를 3개씩 뽑아라. 목록에 없는 내용은 만들지 마라.
 
-# ------------------------------------------------------------
-# [신규] 뉴스 다이제스트 - 여러 뉴스 제목을 모아서 오늘의 트렌드를 한번에 요약
-# ------------------------------------------------------------
-def build_news_digest_prompt(titles) -> str:
-    joined = "\n".join(f"- {t}" for t in titles[:40])
-    return f"""당신은 IT 사업개발 담당자를 돕는 어시스턴트입니다.
-아래는 오늘 수집된 IT 뉴스 제목 목록입니다. 이 제목들만 근거로 삼아 오늘의 핵심 트렌드를
-3~4문장으로 요약해 주세요.
+각 항목은 다음 두 필드를 가진 객체로 작성해라:
+- text: 왜 주목해야 하는지 한 줄 설명(기회 포인트)
+- related_title: 이 기회의 근거가 된 공고 제목을 [사업부 공고]/[R&D 공고] 목록에 있는 제목 중 하나와
+  '정확히 동일한 문자열'로 적어라. 절대 요약하거나 줄이지 말고 원문 그대로 복사해라.
 
-작성 규칙:
-1) 여러 기사에서 반복적으로 등장하는 주제나 키워드가 있다면 언급할 것.
-2) 가능하다면 자사(대기열/트래픽 관리, 신원확인/부정접속 방어, AI 이상탐지 솔루션 기업) 관점에서
-   왜 주목할 만한지도 함께 짚을 것.
-3) 목록(bullet)이나 번호 매기기 없이 줄글로 작성할 것.
-4) 핵심 키워드에는 마크다운 굵게(**단어**) 표시를 할 것.
-5) 주어진 제목 목록에 없는 내용은 절대 추측하지 말 것.
+[사업부 공고]
+{biz_text}
 
-[오늘의 뉴스 제목 목록]
-{joined}
+[R&D 공고]
+{rnd_text}
+
+JSON으로 출력: {{"biz": [{{"text": "...", "related_title": "..."}}, ...], "rnd": [{{"text": "...", "related_title": "..."}}, ...]}}
 """
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return {"biz": [], "rnd": []}, err
+    result = _parse_json(text, {"biz": [], "rnd": []})
+
+    def _normalize(items):
+        normed = []
+        for it in (items or []):
+            if isinstance(it, dict):
+                normed.append({
+                    "text": str(it.get("text", "")).strip(),
+                    "related_title": str(it.get("related_title", "")).strip(),
+                })
+            else:
+                # 혹시 모델이 과거처럼 문자열만 줘도 안 깨지게 방어
+                normed.append({"text": str(it).strip(), "related_title": ""})
+        return normed
+
+    result["biz"] = _normalize(result.get("biz"))
+    result["rnd"] = _normalize(result.get("rnd"))
+    return result, None
 
 
+# ------------------------------------------------------------
+# 9. 오늘의 IT 뉴스 종합 요약 (기존 유지)
+# ------------------------------------------------------------
 def generate_news_digest(titles):
-    """반환: (요약텍스트:str|None, error:str|None)"""
-    if not _gemini_ready:
-        return None, "Gemini API 키가 설정되지 않았습니다."
-    if not titles:
-        return None, "요약할 뉴스 제목이 없습니다."
-    try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        resp = model.generate_content(
-            build_news_digest_prompt(titles),
-            request_options={"timeout": AI_TIMEOUT_SECONDS},
-        )
-        return (resp.text or "").strip(), None
-    except Exception as e:
-        return None, str(e)
+    titles_text = "\n".join(f"- {t}" for t in titles[:60])
+    prompt = f"""아래 오늘의 IT 뉴스 제목들을 분석해서 3~4문장으로 종합 요약해라.
+제목에 없는 내용은 추측하지 말고, 공공 IT 영업/R&D 관점에서 어떤 의미가 있는지 짚어줘라.
+
+[제목 목록]
+{titles_text}
+"""
+    text, err = _call(prompt, json_mode=False)
+    return text, err
 
 
-def build_relevance_batch_prompt(items):
-    lines = [f"{i}. [{it.get('source', '')}] {it['title']}" for i, it in enumerate(items)]
-    joined = "\n".join(lines)
-    return f"""당신은 IT 기업의 사업 전략 분석가입니다. 아래 [회사 프로필]을 참고하여,
-[뉴스 목록]에 있는 각 뉴스 제목이 이 회사의 솔루션과 얼마나 연관이 있는지 0~100점으로 평가하세요.
-점수가 높을수록 자사 영업/사업 기회와 직접적으로 연관됨을 의미합니다.
-
-[회사 프로필]
-{PRODUCT_PROFILE}
+# ------------------------------------------------------------
+# 10. 뉴스-솔루션 연관도 스코어링 (당사 솔루션 기준, 의도적으로 솔루션 중심 유지)
+# ------------------------------------------------------------
+def score_news_relevance(items):
+    titles_text = "\n".join(f"{i}. {it['title']}" for i, it in enumerate(items))
+    prompt = f"""너는 에스티씨랩(대기열/트래픽 제어, 봇 차단, 부하테스트 솔루션 기업)의 영업 분석가다.
+아래 뉴스 제목들이 이 솔루션들과 얼마나 연관 있는지 0~100점으로 평가해라.
+인덱스 번호를 key로, 점수를 value로 하는 JSON 객체로만 출력해라.
 
 [뉴스 목록]
-{joined}
+{titles_text}
 
-아래 JSON 배열 형식으로만 답하세요. 다른 설명이나 코드블록 표시(```) 없이 순수 JSON만 출력하세요.
-[{{"index": 0, "score": 87}}, {{"index": 1, "score": 12}}]
+형식: {{"0": 85, "1": 40, ...}}
 """
-
-
-def score_news_relevance(items):
-    """items: [{"title": str, "source": str}, ...] -> ({index: score}, error)"""
-    if not items:
-        return {}, None
-    if not is_gemini_ready():
-        return {}, "Gemini API 키가 설정되지 않았습니다."
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return {}, err
+    raw = _parse_json(text, {})
     try:
-        prompt = build_relevance_batch_prompt(items)
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(
-            prompt,
-            request_options={"timeout": AI_TIMEOUT_SECONDS},
-        )
-        data = _extract_json_array(response.text)
-        if not isinstance(data, list):
-            return {}, "AI 응답 형식이 올바르지 않습니다."
-        score_map = {}
-        for d in data:
-            try:
-                score_map[int(d["index"])] = int(d["score"])
-            except (KeyError, ValueError, TypeError):
-                continue
-        return score_map, None
-    except Exception as e:
-        return {}, str(e)
+        return {int(k): int(v) for k, v in raw.items()}, None
+    except Exception:
+        return {}, "점수 파싱 실패"
 
-
-# ------------------------------------------------------------
-# 트렌드 키워드 추출 + 3분류 (넷퍼넬 / 엠버스터 / 일반동향)
-# ------------------------------------------------------------
-def build_trend_keyword_prompt(titles: list) -> str:
-    joined = "\n".join(f"- {t}" for t in titles[:150])
-    return f"""
-당신은 트래픽 제어 솔루션(넷퍼넬)과 매크로 탐지/차단 솔루션(엠버스터)을 판매하는 회사의 시장 분석가입니다.
-
-아래는 오늘 수집된 IT 뉴스 제목 목록입니다:
-{joined}
-
-이 뉴스들에서 최대 12개의 핵심 트렌드 키워드를 추출하고, 각 키워드를 아래 기준에 따라
-반드시 하나의 카테고리로 분류하세요. 카테고리 판단은 키워드 자체의 의미뿐 아니라,
-그 키워드가 등장한 뉴스 제목의 맥락까지 함께 고려해서 판단하세요.
-
-- "넷퍼넬": 동시접속 폭주, 서버 다운/먹통, 트래픽 급증, 대기열/가상 대기실,
-  예약 시스템 오픈(수강신청, 청약, 티켓팅, 선착순 등), 접속량 제어와 관련된 키워드.
-  예: 트래픽, 동시접속, 서버다운, 대기열, 예약시스템, 오픈런, 청약
-- "엠버스터": 매크로, 봇, 자동화 프로그램을 이용한 부정 예약/구매/응모, 어뷰징,
-  선점, 리셀/되팔이와 관련된 키워드.
-  예: 매크로, 봇탐지, 어뷰징, 선점구매, 리셀
-- "일반동향": 위 두 카테고리에 명확히 해당하지 않는 나머지 일반적인 IT/AI/보안 업계 키워드
-
-주의: 뉴스 제목 목록에 넷퍼넬/엠버스터 관련 내용이 실제로 없다면 모든 키워드를
-"일반동향"으로 분류하는 것이 맞습니다. 억지로 끼워맞추지 마세요. 반대로 관련 키워드가
-있는데도 "일반동향"으로 뭉뚱그리지 말고, 조금이라도 트래픽 제어/매크로 차단과 관련이
-있으면 반드시 해당 카테고리로 분류하세요.
-
-각 키워드는 다음 필드를 가진 JSON 객체로 응답하세요: keyword(키워드명),
-category("넷퍼넬"/"엠버스터"/"일반동향" 중 하나), count(언급 건수 추정),
-importance(1~100 중요도), reason(분류 판단 근거 1~2문장),
-sample_titles(관련 뉴스 제목 최대 3개 배열).
-
-JSON 배열 형식으로만 응답하고 다른 설명은 붙이지 마세요.
-""".strip()
-
-
-# AI가 "일반동향"으로 뭉뚱그려도, 명백한 단서 단어가 있으면 규칙 기반으로 재분류하는 안전장치
-NETFUNNEL_HINTS = [
-    "트래픽", "접속", "동시접속", "서버다운", "서버 다운", "먹통", "폭주",
-    "대기열", "대기시간", "예약", "오픈런", "수강신청", "청약", "티켓팅",
-    "선착순", "접속량", "부하",
-]
-MBUSTER_HINTS = [
-    "매크로", "봇탐지", "봇 탐지", "어뷰징", "부정예약", "부정 구매",
-    "자동화 프로그램", "선점", "되팔이", "리셀", "핫딜봇",
-]
-
-
-def _rule_based_category(keyword: str, reason: str):
-    haystack = f"{keyword} {reason}"
-    if any(h in haystack for h in MBUSTER_HINTS):
-        return "엠버스터"
-    if any(h in haystack for h in NETFUNNEL_HINTS):
-        return "넷퍼넬"
-    return None
-
-
-def extract_trend_keywords(titles: list):
+def match_titles_to_group(group_name: str, group_desc: str, titles: list):
+    """
+    키워드 사전 매칭이 0건일 때 AI가 실질 연관성을 판단해 보강하는 폴백 함수.
+    연관된 게 전혀 없으면 빈 리스트를 반환한다(억지로 끼워맞추지 않음).
+    반환: (titles_list, error_str_or_None)
+    """
     if not titles:
-        return [], "분석할 뉴스 제목이 없습니다."
+        return [], None
     if not is_gemini_ready():
-        return [], "Gemini API가 설정되지 않았습니다."
+        return [], "Gemini API 키가 설정되지 않았습니다."
+
+    prompt = f"""다음은 공공 IT 공고/과제 제목 목록입니다.
+'{group_name}' ({group_desc})와(과) 실질적으로 연관된 항목만 골라,
+목록에 있는 제목을 "정확히 그대로" JSON 배열로 반환하세요.
+연관된 항목이 전혀 없으면 빈 배열 []을 반환하세요. 억지로 끼워맞추지 마세요.
+
+[제목 목록]
+{chr(10).join(f"- {t}" for t in titles[:150])}
+
+출력 형식: ["제목1", "제목2", ...] 형태의 JSON 배열만 출력하세요."""
+
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-        response = model.generate_content(
-            build_trend_keyword_prompt(titles),
-            request_options={"timeout": AI_TIMEOUT_SECONDS},
-        )
-        parsed = _extract_json_array((response.text or "").strip())
-        if not isinstance(parsed, list):
-            return [], "AI 응답 파싱 실패"
-        for item in parsed:
-            ai_category = str(item.get("category", "")).strip()
-            if ai_category not in ("넷퍼넬", "엠버스터", "일반동향"):
-                ai_category = "일반동향"
-            rule_category = _rule_based_category(
-                str(item.get("keyword", "")), str(item.get("reason", ""))
-            )
-            item["category"] = rule_category or ai_category
-        parsed.sort(key=lambda x: -x.get("importance", 0))
-        return parsed, None
+        # ↓↓↓ 아래 3줄을 기존 generate_opportunity_bullets 함수에서 쓰는
+        #     모델 호출 방식(예: model.generate_content(prompt) 등)으로 그대로 교체해줘
+        model = _get_model()
+        resp = model.generate_content(prompt)
+        raw = resp.text.strip()
+
+        raw = re.sub(r"^```(json)?|```$", "", raw, flags=re.MULTILINE).strip()
+        result = json.loads(raw)
+        if isinstance(result, list):
+            return [str(t) for t in result], None
+        return [], "AI 응답 형식 오류"
     except Exception as e:
         return [], str(e)
+
+# ------------------------------------------------------------
+# 11. 뉴스 제목 쉬운말 변환 — 초등학생도 이해 가능한 수준으로 압축
+# ------------------------------------------------------------
+def simplify_news_titles(items):
+    """items: [{"title": ...}, ...]
+    반환: ([{"title": 원문제목, "simple": "쉬운 한 문장"}, ...], error)"""
+    if not items:
+        return [], None
+    lines = "\n".join(f"- {it.get('title','')}" for it in items)
+    prompt = f"""아래 뉴스 제목들을 초등학교 5~6학년도 바로 이해할 수 있는
+아주 쉬운 한국어 한 문장으로 바꿔라. 전문 용어는 쉬운 말로 풀고,
+원래 의미는 바꾸지 말고 20~35자 내외로 압축해라.
+입력 제목을 "title" 필드에 원문 그대로 포함하고, 쉬운 문장은 "simple" 필드에 적어라.
+
+[뉴스 목록]
+{lines}
+
+JSON 배열로만 출력: [{{"title": "...", "simple": "..."}}]
+"""
+    text, err = _call(prompt, json_mode=True)
+    if err:
+        return [], err
+    return _parse_json(text, []), None
+    

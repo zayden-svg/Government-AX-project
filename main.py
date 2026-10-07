@@ -93,7 +93,7 @@ def build_dedup_hash(title: str, agency: str, reg_date: str, due_date: str) -> s
 
 
 def make_uniq_key(rec: dict) -> str:
-    base = rec.get("url") or f"{rec.get('agency')}|{rec.get('title')}|{rec.get('reg_date')}"
+    base = f"{rec.get('agency','')}|{rec.get('title','')}|{rec.get('reg_date','')}|{rec.get('url','')}"
     return hashlib.md5(base.encode("utf-8")).hexdigest()
 
 

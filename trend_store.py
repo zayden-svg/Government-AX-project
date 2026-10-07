@@ -15,6 +15,7 @@ def _create_sql():
             id SERIAL PRIMARY KEY,
             snapshot_date DATE NOT NULL,
             keyword VARCHAR(100) NOT NULL,
+            category VARCHAR(20),
             count INT,
             importance INT,
             reason TEXT,
@@ -27,6 +28,7 @@ def _create_sql():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         snapshot_date DATE NOT NULL,
         keyword VARCHAR(100) NOT NULL,
+        category VARCHAR(20),
         count INT,
         importance INT,
         reason TEXT,
@@ -36,10 +38,27 @@ def _create_sql():
     """
 
 
+def _migrate_add_category(engine):
+    """예전 버전 테이블에 category 컬럼이 없으면 추가 (기존 데이터는 '일반동향'으로 채움)"""
+    with engine.begin() as conn:
+        if is_postgres():
+            existing = {row[0] for row in conn.execute(text(
+                f"SELECT column_name FROM information_schema.columns WHERE table_name='{TREND_TABLE}'"
+            ))}
+        else:
+            existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({TREND_TABLE})"))}
+        if "category" not in existing:
+            conn.execute(text(f"ALTER TABLE {TREND_TABLE} ADD COLUMN category VARCHAR(20)"))
+            conn.execute(text(
+                f"UPDATE {TREND_TABLE} SET category='일반동향' WHERE category IS NULL"
+            ))
+
+
 def ensure_table():
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text(_create_sql()))
+    _migrate_add_category(engine)
 
 
 def save_trend_snapshot(keywords, snapshot_date=None):
@@ -51,6 +70,7 @@ def save_trend_snapshot(keywords, snapshot_date=None):
     rows = [{
         "snapshot_date": snapshot_date,
         "keyword": kw["keyword"],
+        "category": kw.get("category", "일반동향"),
         "count": kw.get("count", 0),
         "importance": kw.get("importance", 0),
         "reason": kw.get("reason", ""),
@@ -68,6 +88,8 @@ def load_latest_trend():
     )
     if not df.empty and "sample_titles" in df.columns:
         df["sample_titles"] = df["sample_titles"].apply(lambda x: json.loads(x) if x else [])
+    if not df.empty and "category" in df.columns:
+        df["category"] = df["category"].fillna("일반동향")
     return df
 
 
@@ -76,12 +98,15 @@ def load_trend_history(days=14):
     engine = get_engine()
     if is_postgres():
         query = (
-            f"SELECT snapshot_date, keyword, importance, count FROM {TREND_TABLE} "
+            f"SELECT snapshot_date, keyword, category, importance, count FROM {TREND_TABLE} "
             f"WHERE snapshot_date >= CURRENT_DATE - INTERVAL '{days} days'"
         )
     else:
         query = (
-            f"SELECT snapshot_date, keyword, importance, count FROM {TREND_TABLE} "
+            f"SELECT snapshot_date, keyword, category, importance, count FROM {TREND_TABLE} "
             f"WHERE snapshot_date >= date('now', '-{days} days')"
         )
-    return pd.read_sql_query(query, engine)
+    df = pd.read_sql_query(query, engine)
+    if not df.empty and "category" in df.columns:
+        df["category"] = df["category"].fillna("일반동향")
+    return df

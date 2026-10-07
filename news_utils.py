@@ -13,7 +13,6 @@ except ImportError:
     pass
 
 import html
-import re
 
 
 def _clean_naver_text(raw: str) -> str:
@@ -146,6 +145,7 @@ def fetch_boannews(keywords=None, max_items: int = 15):
 
 # ------------------------------------------------------------
 # 4) 전자신문 RSS ("오늘의뉴스" 카테고리, 키 불필요) - 로컬에서 주제 키워드로 필터링
+#    (중복 정의되어 있던 두 번째 버전은 필드명이 달라 삭제, 이 버전만 유지)
 # ------------------------------------------------------------
 _ETNEWS_RSS_URL = "https://rss.etnews.com/Section901.xml"
 
@@ -261,53 +261,3 @@ def collect_news(topics, use_naver=True, use_google=True, use_boannews=True, use
         deduped.append(item)
 
     return deduped, errors
-
-import xml.etree.ElementTree as ET
-
-
-def fetch_etnews_rss(keywords=None, max_items=10):
-    """전자신문 RSS 피드에서 뉴스 수집. keywords가 있으면 제목에 포함된 것만 필터링"""
-    url = "https://rss.etnews.com/Section901.xml"
-    results = []
-    err = None
-
-    try:
-        resp = requests.get(url, timeout=10)
-        resp.encoding = "utf-8"
-        root = ET.fromstring(resp.text)
-
-        for item in root.findall(".//item"):
-            title_el = item.find("title")
-            link_el = item.find("link")
-            pubdate_el = item.find("pubDate")
-            desc_el = item.find("description")
-
-            title = title_el.text.strip() if title_el is not None and title_el.text else ""
-            link = link_el.text.strip() if link_el is not None and link_el.text else ""
-            pub_date = pubdate_el.text.strip() if pubdate_el is not None and pubdate_el.text else ""
-            desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ""
-
-            if not title or not link:
-                continue
-
-            # keywords가 지정된 경우, 제목에 해당 키워드가 없으면 건너뜀
-            if keywords:
-                if not any(kw.lower() in title.lower() for kw in keywords):
-                    continue
-
-            results.append({
-                "title": title,
-                "link": link,
-                "source": "전자신문",
-                "pub_date": pub_date,
-                "description": _clean_naver_text(desc) if desc else "",
-            })
-
-            if len(results) >= max_items:
-                break
-
-    except Exception as e:
-        err = f"ETNews RSS 수집 실패: {e}"
-        return [], err
-
-    return results, err

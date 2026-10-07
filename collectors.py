@@ -1,9 +1,11 @@
-# collectors.py
+# collectors.py (전체 교체)
 import os
 import re
 import time
 import traceback
+import concurrent.futures
 from datetime import datetime
+from urllib.parse import urljoin
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -51,7 +53,6 @@ def base_record(**kwargs):
     return rec
 
 
-
 def normalize_date(raw):
     """다양한 형식의 날짜 문자열을 YYYY-MM-DD 형태로 통일"""
     if not raw:
@@ -69,12 +70,13 @@ def normalize_date(raw):
     return raw
 
 
-def safe_get(url, params=None, headers=None, timeout=8, verify=True, retries=2):
+def safe_get(url, params=None, headers=None, timeout=8, verify=True, retries=2, session=None):
     last_err = None
     h = headers or {"User-Agent": "Mozilla/5.0"}
+    requester = session if session is not None else requests
     for _ in range(retries):
         try:
-            resp = requests.get(url, params=params, headers=h, timeout=timeout, verify=verify)
+            resp = requester.get(url, params=params, headers=h, timeout=timeout, verify=verify)
             resp.raise_for_status()
             return resp
         except Exception as e:
@@ -93,7 +95,69 @@ def _strip_html(raw_html):
 
 
 # ------------------------------------------------------------------
+# === 신규: 사업금액 추출 공통 헬퍼 ===
+# 사이트마다 "사업금액/예산규모/배정예산/추정금액/사업비/총사업비/지원금액" 등
+# 표현이 제각각이라 하나의 정규식 세트로 통일해서 처리한다.
+# ------------------------------------------------------------------
+BUDGET_LABEL_PATTERNS = [
+    r"사업\s*금액", r"예산\s*규모", r"배정\s*예산", r"추정\s*가격", r"추정\s*금액",
+    r"계약\s*금액", r"총\s*사업\s*비", r"사업\s*비", r"지원\s*금액", r"정부\s*지원\s*연구개발비",
+]
+_BUDGET_LABEL_RE = re.compile(
+    r"(?:" + "|".join(BUDGET_LABEL_PATTERNS) + r")\s*[:：]?\s*"
+    r"([\d,]+(?:\.\d+)?)\s*(백만원|천만원|만원|원)?"
+)
+
+
+def extract_budget_from_text(text_val):
+    """본문 텍스트에서 사업금액/예산 관련 문구를 찾아 '원' 단위 숫자 문자열로 변환"""
+    if not text_val:
+        return ""
+    m = _BUDGET_LABEL_RE.search(str(text_val))
+    if not m:
+        return ""
+    num_str, unit = m.groups()
+    try:
+        num = float(num_str.replace(",", ""))
+    except ValueError:
+        return ""
+    if unit == "백만원":
+        num *= 1_000_000
+    elif unit == "천만원":
+        num *= 10_000_000
+    elif unit == "만원":
+        num *= 10_000
+    return str(int(num))
+
+
+def _fetch_budgets_parallel(urls, max_workers=5):
+    """=== 신규: requests 기반 수집기 전용 — 상세페이지 N건을 동시에 열어 예산을 뽑음 ===
+    ↓ 더 빠르게 하려면 max_workers 숫자를 늘리면 되지만, 상대 서버 과부하/차단 위험이 커지니
+    5~8 사이를 권장함."""
+    results = [""] * len(urls)
+
+    def _one(i, u):
+        if not u:
+            return i, ""
+        try:
+            r = safe_get(u)
+            text_val = BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
+            return i, extract_budget_from_text(text_val)
+        except Exception as e:
+            print(f"[WARN] 상세페이지 예산 추출 실패({u}): {e}")
+            return i, ""
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = [ex.submit(_one, i, u) for i, u in enumerate(urls)]
+        for f in concurrent.futures.as_completed(futures):
+            i, val = f.result()
+            results[i] = val
+    return results
+
+
+# ------------------------------------------------------------------
 # 1. 조달청 (나라장터 OpenAPI) - BidPublicInfoService
+#    예산(presmptPrce/asignBdgtAmt)이 API 필드로 이미 제공되므로 수정 불필요
 # ------------------------------------------------------------------
 def fetch_g2b(limit=10):
     service_key = os.getenv("G2B_SERVICE_KEY")
@@ -109,13 +173,8 @@ def fetch_g2b(limit=10):
     end = today.strftime("%Y%m%d") + "2359"
 
     params = {
-        "serviceKey": service_key,
-        "pageNo": "1",
-        "numOfRows": str(limit),
-        "inqryDiv": "1",
-        "inqryBgnDt": begin,
-        "inqryEndDt": end,
-        "type": "xml",
+        "serviceKey": service_key, "pageNo": "1", "numOfRows": str(limit),
+        "inqryDiv": "1", "inqryBgnDt": begin, "inqryEndDt": end, "type": "xml",
     }
 
     resp = safe_get(url, params=params)
@@ -141,17 +200,12 @@ def fetch_g2b(limit=10):
             continue
 
         rec = base_record(
-            source="API",
-            agency="조달청",
-            gubun="입찰공고",
-            title=title,
-            dept=g("ntceInsttNm", "dminsttNm"),
-            manager=g("ntceInsttOfclNm"),
+            source="API", agency="조달청", gubun="입찰공고", title=title,
+            dept=g("ntceInsttNm", "dminsttNm"), manager=g("ntceInsttOfclNm"),
             reg_date=normalize_date(g("bidNtceDt", "bidNtceDate")),
             due_date=normalize_date(g("bidClseDt", "bidClseDate")),
             budget=g("presmptPrce", "asignBdgtAmt"),
-            attach="",
-            views="",
+            attach="", views="",
             url=g("bidNtceDtlUrl", "bidNtceUrl") or "https://www.g2b.go.kr",
             content=title,
         )
@@ -162,6 +216,7 @@ def fetch_g2b(limit=10):
 
 # ------------------------------------------------------------------
 # 2. 행정안전부 (MOIS) - requests + BeautifulSoup
+#    === 공지사항 게시판 특성상 예산 정보가 존재하지 않아 budget 추출 생략 ===
 # ------------------------------------------------------------------
 def fetch_mois(limit=10):
     url = "https://www.mois.go.kr/frt/bbs/type010/commonSelectBoardList.do"
@@ -210,34 +265,38 @@ def fetch_mois(limit=10):
 
 # ------------------------------------------------------------------
 # 3. NIPA - requests + BeautifulSoup
+#    === 수정: 상세페이지 병렬 방문으로 사업금액 추출 ===
 # ------------------------------------------------------------------
 def fetch_nipa(limit=10):
     url = "https://www.nipa.kr/home/2-3"
     resp = safe_get(url)
     soup = BeautifulSoup(resp.text, "html.parser")
-    rows = soup.select("table tbody tr")
+    rows = soup.select("table tbody tr")[:limit]
 
-    results = []
-    for row in rows[:limit]:
+    prelim = []
+    for row in rows:
         a_tag = row.find("a")
         if not a_tag:
             continue
         title = a_tag.get_text(strip=True)
         if not title:
             continue
-
         href = a_tag.get("href", "")
-        detail_url = href if href.startswith("http") else "https://www.nipa.kr" + href
-
+        detail_url = href if href.startswith("http") else urljoin("https://www.nipa.kr", href)
         cells = row.find_all("td")
         manager = cells[-2].get_text(strip=True) if len(cells) >= 2 else ""
         reg_date = cells[-1].get_text(strip=True) if cells else ""
+        prelim.append({"title": title, "detail_url": detail_url, "manager": manager, "reg_date": reg_date})
 
+    budgets = _fetch_budgets_parallel([p["detail_url"] for p in prelim])
+
+    results = []
+    for p, budget_val in zip(prelim, budgets):
         rec = base_record(
             source="SCRAPE", agency="NIPA", gubun="입찰공고",
-            title=title, dept="", manager=manager,
-            reg_date=normalize_date(reg_date), due_date="", budget="",
-            attach="", views="", url=detail_url, content=title,
+            title=p["title"], dept="", manager=p["manager"],
+            reg_date=normalize_date(p["reg_date"]), due_date="", budget=budget_val,
+            attach="", views="", url=p["detail_url"], content=p["title"],
         )
         results.append(rec)
 
@@ -246,6 +305,7 @@ def fetch_nipa(limit=10):
 
 # ------------------------------------------------------------------
 # 4. KERIS - Playwright
+#    === 수정: 상세페이지 방문(같은 브라우저 내 new_page 재사용)으로 예산 추출 ===
 # ------------------------------------------------------------------
 def fetch_keris(limit=10):
     try:
@@ -286,11 +346,22 @@ def fetch_keris(limit=10):
                     reg_date = cells[3].inner_text().strip() if len(cells) > 3 else ""
                     due_date = cells[4].inner_text().strip() if len(cells) > 4 else ""
 
+                    budget_val = ""
+                    if tender_seq:
+                        try:
+                            detail_page = browser.new_page()
+                            detail_page.goto(detail_url, timeout=15000)
+                            detail_page.wait_for_timeout(500)
+                            budget_val = extract_budget_from_text(detail_page.inner_text("body"))
+                            detail_page.close()
+                        except Exception as e:
+                            print(f"[WARN] KERIS 상세 예산 추출 실패({detail_url}): {e}")
+
                     rec = base_record(
                         source="SCRAPE", agency="KERIS", gubun="입찰공고",
                         title=title, dept="재무회계부", manager="",
                         reg_date=normalize_date(reg_date), due_date=normalize_date(due_date),
-                        budget="", attach="", views="", url=detail_url, content=title,
+                        budget=budget_val, attach="", views="", url=detail_url, content=title,
                     )
                     results.append(rec)
                 except Exception as e:
@@ -309,6 +380,7 @@ def fetch_keris(limit=10):
 
 # ------------------------------------------------------------------
 # 5. AIHub - Playwright
+#    === 수정: 상세페이지 방문으로 예산 추출 ===
 # ------------------------------------------------------------------
 def fetch_aihub(limit=10):
     try:
@@ -348,10 +420,21 @@ def fetch_aihub(limit=10):
 
                     reg_date = cells[-1].inner_text().strip() if cells else ""
 
+                    budget_val = ""
+                    if nttsn:
+                        try:
+                            detail_page = browser.new_page()
+                            detail_page.goto(detail_url, timeout=15000)
+                            detail_page.wait_for_timeout(500)
+                            budget_val = extract_budget_from_text(detail_page.inner_text("body"))
+                            detail_page.close()
+                        except Exception as e:
+                            print(f"[WARN] AIHub 상세 예산 추출 실패({detail_url}): {e}")
+
                     rec = base_record(
                         source="SCRAPE", agency="AIHub", gubun="사업공고",
                         title=title, dept="", manager="",
-                        reg_date=normalize_date(reg_date), due_date="", budget="",
+                        reg_date=normalize_date(reg_date), due_date="", budget=budget_val,
                         attach="", views="", url=detail_url, content=title,
                     )
                     results.append(rec)
@@ -371,28 +454,21 @@ def fetch_aihub(limit=10):
 
 # ------------------------------------------------------------------
 # 6. 국가AI전략위원회 - requests.Session + AJAX(JSON)
-#    (공지사항 menu_cd=000010, 보도자료 menu_cd=000012 통합 수집)
+#    === 공지/보도자료 특성상 예산 정보 없음 - budget 추출 생략 ===
 # ------------------------------------------------------------------
 def _fetch_ai_strategy_menu(session, menu_cd, gubun_nm, limit):
     list_url = f"https://www.aikorea.go.kr/web/board/brdList.do?menu_cd={menu_cd}"
     ajax_url = "https://www.aikorea.go.kr/web/board/ajax/list.do"
 
-    # 1) 목록 페이지 방문 -> JSESSIONID 쿠키 확보
     safe_get(list_url, session=session)
 
-    # 2) AJAX 목록 호출 (Referer, X-Requested-With 필수)
     headers = dict(HEADERS)
     headers.update({
         "Referer": list_url,
         "X-Requested-With": "XMLHttpRequest",
         "Accept": "application/json, text/javascript, */*; q=0.01",
     })
-    params = {
-        "menu_cd": menu_cd,
-        "currentPage": "1",
-        "searchData": "contdata",
-        "searchText": "",
-    }
+    params = {"menu_cd": menu_cd, "currentPage": "1", "searchData": "contdata", "searchText": ""}
 
     resp = safe_get(ajax_url, params=params, headers=headers, session=session)
     data = resp.json()
@@ -437,8 +513,11 @@ def fetch_ai_strategy(limit=10):
     all_results.sort(key=lambda r: r.get("reg_date", ""), reverse=True)
     return all_results[:limit]
 
-import re
 
+# ------------------------------------------------------------------
+# 7. IRIS (범부처통합연구지원시스템) - Playwright
+#    === 수정: 상세페이지 방문으로 예산규모 추출 ===
+# ------------------------------------------------------------------
 IRIS_LIST_URL = "https://www.iris.go.kr/contents/retrieveBsnsAncmListView.do"
 IRIS_VIEW_URL = "https://www.iris.go.kr/contents/retrieveBsnsAncmView.do"
 
@@ -457,12 +536,23 @@ def fetch_iris(limit=20, max_pages=3):
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(IRIS_LIST_URL, timeout=30000)
+        try:
+            page.wait_for_selector("li:has(a[onclick*='f_bsnsAncmListForm_view'])", timeout=15000)
+        except Exception:
+            print("[WARN] IRIS 목록이 15초 내에 로드되지 않았습니다. 0건으로 처리합니다.")
+            browser.close()
+            return results
         page.wait_for_timeout(3000)
 
         for page_no in range(1, max_pages + 1):
             if page_no > 1:
-                page.evaluate(f"f_bsnsAncmListForm_search({page_no})")
-                page.wait_for_timeout(2000)
+                try:
+                    page.evaluate("window.bsnsAncmTap = window.bsnsAncmTap || 'rcve_prg';")
+                    page.evaluate(f"f_bsnsAncmListForm_search({page_no})")
+                    page.wait_for_timeout(2000)
+                except Exception as e:
+                    print(f"[WARN] IRIS {page_no}페이지 이동 실패: {e}")
+                    break
 
             items = page.locator("li:has(a[onclick*='f_bsnsAncmListForm_view'])")
             count = items.count()
@@ -502,21 +592,29 @@ def fetch_iris(limit=20, max_pages=3):
 
                 final_title = etc_info.get("사업공고명") or title_text
                 content_parts = [
-                    etc_info.get("세부사업명", ""),
-                    etc_info.get("통합공고명", ""),
-                    etc_info.get("내역사업명", ""),
-                    final_title,
+                    etc_info.get("세부사업명", ""), etc_info.get("통합공고명", ""),
+                    etc_info.get("내역사업명", ""), final_title,
                 ]
                 content = " / ".join([c for c in content_parts if c])
 
-                # ancmId + sorgnBsnsCd 조합으로 유일키를 만들어 지역별 세부공고가 서로 덮어쓰지 않도록 함
                 detail_url = f"{IRIS_VIEW_URL}?ancmId={ancm_id}&sorgnBsnsCd={sorgn_bsns_cd}"
+
+                # === 신규: 상세페이지 방문해서 예산규모 텍스트 추출 ===
+                budget_val = ""
+                try:
+                    detail_page = browser.new_page()
+                    detail_page.goto(detail_url, timeout=15000)
+                    detail_page.wait_for_timeout(600)
+                    budget_val = extract_budget_from_text(detail_page.inner_text("body"))
+                    detail_page.close()
+                except Exception as e:
+                    print(f"[WARN] IRIS 상세 예산 추출 실패({detail_url}): {e}")
 
                 rec = base_record(
                     source="SCRAPE", agency="IRIS", gubun="사업공고",
                     title=final_title, dept=dept, manager=org,
                     reg_date=normalize_date(rcve_from), due_date=normalize_date(rcve_to),
-                    budget="", attach="", views="", url=detail_url, content=content,
+                    budget=budget_val, attach="", views="", url=detail_url, content=content,
                 )
                 results.append(rec)
 
@@ -528,6 +626,7 @@ def fetch_iris(limit=20, max_pages=3):
 
     return results
 
+
 import hashlib
 
 
@@ -536,19 +635,15 @@ _ORG_HINT_CHARS = ["부", "청", "원", "실", "센터", "팀", "과", "국", "�
 
 
 def clean_manager_name(raw):
-    """담당자 칸에 기관명/숫자가 들어간 오류를 걸러내고, 사람 이름처럼 보일 때만 통과시킴."""
     if not raw:
         return ""
     text = str(raw).strip()
     if not text:
         return ""
-    # 숫자(전화번호, 내선번호 등)가 포함되면 담당자명이 아닌 것으로 판단
     if any(ch.isdigit() for ch in text):
         return ""
-    # 기관/부서를 뜻하는 글자가 포함되면 걸러냄
     if any(hint in text for hint in _ORG_HINT_CHARS):
         return ""
-    # 한글 이름(2~4자) 또는 영문 이름 패턴만 허용
     if re.fullmatch(r"[가-힣]{2,4}", text):
         return text
     if re.fullmatch(r"[A-Za-z][A-Za-z .'-]{1,30}", text):
@@ -561,9 +656,9 @@ def _normalize_for_dedup(text):
     if not text:
         return ""
     t = str(text)
-    t = re.sub(r"\(.*?\)", "", t)          # 괄호 안 내용 제거 (예: 수정, 재공고 표기 등)
-    t = re.sub(r"20\d{2}년?도?", "", t)     # 연도 표기 제거 (사업연도 차이는 같은 과제로 봄)
-    t = re.sub(r"[^가-힣A-Za-z0-9]", "", t)  # 공백/특수문자 제거
+    t = re.sub(r"\(.*?\)", "", t)
+    t = re.sub(r"20\d{2}년?도?", "", t)
+    t = re.sub(r"[^가-힣A-Za-z0-9]", "", t)
     return t.strip().lower()
 
 
@@ -575,48 +670,79 @@ def build_dedup_hash(title, reg_date="", due_date=""):
 
 
 # ------------------ NTIS 국가R&D통합공고 ------------------
+# === 수정: (1) 행마다 실제 상세 URL(view.do) 추출 — 기존엔 전부 같은 목록 URL이 박혀있던 버그 수정
+#           (2) 상세페이지 방문으로 사업비 추출 ===
 def fetch_ntis(limit=20):
+    from playwright.sync_api import sync_playwright
+
     url = "https://www.ntis.go.kr/rndgate/eg/un/ra/mng.do"
-    resp = safe_get(url)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    rows = soup.select("table tbody tr")
-
     results = []
-    for row in rows[:limit]:
-        a_tag = row.find("a")
-        if not a_tag:
-            continue
-        title = a_tag.get_text(strip=True)
-        if not title:
-            continue
 
-        cells = row.find_all("td")
-        dept = cells[1].get_text(strip=True) if len(cells) > 1 else ""
-        reg_date = cells[2].get_text(strip=True) if len(cells) > 2 else ""
-        due_date = cells[3].get_text(strip=True) if len(cells) > 3 else ""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.goto(url, timeout=30000)
+            page.wait_for_selector("a[href*='view.do']", timeout=15000)
+            rows = page.query_selector_all("table tbody tr")
 
-        rec = base_record(
-            source="SCRAPE", agency="NTIS", gubun="국가R&D통합공고",
-            title=title, dept=dept, manager=clean_manager_name(""),
-            reg_date=normalize_date(reg_date), due_date=normalize_date(due_date),
-            budget="", attach="", views="",
-            url="https://www.ntis.go.kr/rndgate/eg/un/ra/mng.do", content=title,
-        )
-        rec["dedup_hash"] = build_dedup_hash(title, reg_date, due_date)
-        results.append(rec)
+            for row in rows:
+                if len(results) >= limit:
+                    break
+                try:
+                    a_tag = row.query_selector("a[href*='view.do']")
+                    if not a_tag:
+                        continue
+                    title = a_tag.inner_text().strip()
+                    if not title:
+                        continue
+
+                    href = a_tag.get_attribute("href") or ""
+                    detail_url = href if href.startswith("http") else urljoin(url, href)
+
+                    cells = row.query_selector_all("td")
+                    dept = cells[4].inner_text().strip() if len(cells) > 4 else ""
+                    reg_date = cells[5].inner_text().strip() if len(cells) > 5 else ""
+                    due_date = cells[6].inner_text().strip() if len(cells) > 6 else ""
+
+                    budget_val = ""
+                    try:
+                        detail_page = browser.new_page()
+                        detail_page.goto(detail_url, timeout=15000)
+                        detail_page.wait_for_timeout(500)
+                        budget_val = extract_budget_from_text(detail_page.inner_text("body"))
+                        detail_page.close()
+                    except Exception as e:
+                        print(f"[WARN] NTIS 상세 예산 추출 실패({detail_url}): {e}")
+
+                    rec = base_record(
+                        source="SCRAPE", agency="NTIS", gubun="국가R&D통합공고",
+                        title=title, dept=dept, manager=clean_manager_name(""),
+                        reg_date=normalize_date(reg_date), due_date=normalize_date(due_date),
+                        budget=budget_val, attach="", views="",
+                        url=detail_url, content=title,
+                    )
+                    rec["dedup_hash"] = build_dedup_hash(title, reg_date, due_date)
+                    results.append(rec)
+                except Exception as e:
+                    print(f"[WARN] NTIS 행 처리 중 오류: {e}")
+                    continue
+        finally:
+            browser.close()
 
     return results
 
 
 # ------------------ TIPA (중소기업기술정보진흥원) ------------------
+# === 수정: 상세페이지 병렬 방문으로 사업비 추출 ===
 def fetch_tipa(limit=20):
     url = "https://www.tipa.or.kr/s040101"
     resp = safe_get(url)
     soup = BeautifulSoup(resp.text, "html.parser")
-    rows = soup.select("table tbody tr")
+    rows = soup.select("table tbody tr")[:limit]
 
-    results = []
-    for row in rows[:limit]:
+    prelim = []
+    for row in rows:
         a_tag = row.find("a")
         if not a_tag:
             continue
@@ -624,33 +750,39 @@ def fetch_tipa(limit=20):
         if not title:
             continue
         href = a_tag.get("href", "")
-        detail_url = href if href.startswith("http") else "https://www.tipa.or.kr" + href
-
+        detail_url = href if href.startswith("http") else urljoin("https://www.tipa.or.kr", href)
         cells = row.find_all("td")
         reg_date = cells[-1].get_text(strip=True) if cells else ""
+        prelim.append({"title": title, "detail_url": detail_url, "reg_date": reg_date})
 
+    budgets = _fetch_budgets_parallel([p["detail_url"] for p in prelim])
+
+    results = []
+    for p, budget_val in zip(prelim, budgets):
         rec = base_record(
             source="SCRAPE", agency="TIPA", gubun="지원사업공고",
-            title=title, dept="중소벤처기업부", manager="",
-            reg_date=normalize_date(reg_date), due_date="",
-            budget="", attach="", views="",
-            url=detail_url, content=title,
+            title=p["title"], dept="중소벤처기업부", manager="",
+            reg_date=normalize_date(p["reg_date"]), due_date="",
+            budget=budget_val, attach="", views="",
+            url=p["detail_url"], content=p["title"],
         )
-        rec["dedup_hash"] = build_dedup_hash(title, reg_date)
+        rec["dedup_hash"] = build_dedup_hash(p["title"], p["reg_date"])
         results.append(rec)
 
     return results
 
 
 # ------------------ KIAT (한국산업기술진흥원, k-pass) ------------------
+# === 수정: (1) 행마다 실제 상세 URL(ancView.do) 추출 — 기존엔 전부 같은 목록 URL이 박혀있던 버그 수정
+#           (2) 상세페이지 병렬 방문으로 사업비 추출 ===
 def fetch_kiat(limit=20):
     url = "https://k-pass.kr/notice/ancList.do"
     resp = safe_get(url)
     soup = BeautifulSoup(resp.text, "html.parser")
-    rows = soup.select("table tbody tr")
+    rows = soup.select("table tbody tr")[:limit]
 
-    results = []
-    for row in rows[:limit]:
+    prelim = []
+    for row in rows:
         cells = row.find_all("td")
         if len(cells) < 4:
             continue
@@ -659,33 +791,48 @@ def fetch_kiat(limit=20):
         title = a_tag.get_text(strip=True) if a_tag else cells[2].get_text(strip=True)
         if not title:
             continue
+
+        href = a_tag.get("href", "") if a_tag else ""
+        detail_url = href if href.startswith("http") else (urljoin("https://k-pass.kr/notice/", href) if href else url)
+
         period_text = cells[3].get_text(strip=True)
         reg_date, due_date = "", ""
         if "~" in period_text:
             parts = period_text.split("~")
             reg_date, due_date = parts[0].strip(), parts[1].split("[")[0].strip()
 
+        prelim.append({"gubun": gubun, "title": title, "detail_url": detail_url, "reg_date": reg_date, "due_date": due_date})
+
+    budgets = _fetch_budgets_parallel([p["detail_url"] for p in prelim])
+
+    results = []
+    for p, budget_val in zip(prelim, budgets):
         rec = base_record(
-            source="SCRAPE", agency="KIAT", gubun=gubun or "사업공고",
-            title=title, dept="산업통상부", manager="",
-            reg_date=normalize_date(reg_date), due_date=normalize_date(due_date),
-            budget="", attach="", views="",
-            url="https://k-pass.kr/notice/ancList.do", content=title,
+            source="SCRAPE", agency="KIAT", gubun=p["gubun"] or "사업공고",
+            title=p["title"], dept="산업통상부", manager="",
+            reg_date=normalize_date(p["reg_date"]), due_date=normalize_date(p["due_date"]),
+            budget=budget_val, attach="", views="",
+            url=p["detail_url"], content=p["title"],
         )
-        rec["dedup_hash"] = build_dedup_hash(title, reg_date, due_date)
+        rec["dedup_hash"] = build_dedup_hash(p["title"], p["reg_date"], p["due_date"])
         results.append(rec)
 
     return results
 
 
 # ------------------ 연구개발특구진흥재단 (INNOPOLIS) ------------------
+# === 수정: 상세페이지 병렬 방문으로 사업비 추출 ===
 def fetch_innopolis(limit=20):
     url = "https://www.innopolis.or.kr/board/list?menuId=MENU00404&pageNum=1&rowCnt=" + str(limit)
     resp = safe_get(url)
     soup = BeautifulSoup(resp.text, "html.parser")
     rows = soup.select("table tbody tr")
 
-    results = []
+    if not rows and "이용에 불편을 드려서 죄송합니다" in resp.text:
+        print("[WARN] INNOPOLIS 사이트 자체 오류 페이지 응답 - 사이트 장애로 추정, 0건 처리")
+        return []
+
+    prelim = []
     for row in rows[:limit]:
         a_tag = row.find("a")
         if not a_tag:
@@ -694,38 +841,43 @@ def fetch_innopolis(limit=20):
         if not title:
             continue
         href = a_tag.get("href", "")
-        detail_url = href if href.startswith("http") else "https://www.innopolis.or.kr" + href
-
+        detail_url = href if href.startswith("http") else urljoin("https://www.innopolis.or.kr", href)
         cells = row.find_all("td")
         reg_date = cells[-2].get_text(strip=True) if len(cells) >= 2 else ""
         views = cells[-1].get_text(strip=True) if cells else ""
+        prelim.append({"title": title, "detail_url": detail_url, "reg_date": reg_date, "views": views})
 
+    budgets = _fetch_budgets_parallel([p["detail_url"] for p in prelim])
+
+    results = []
+    for p, budget_val in zip(prelim, budgets):
         rec = base_record(
             source="SCRAPE", agency="INNOPOLIS", gubun="사업공고",
-            title=title, dept="과학기술정보통신부", manager="",
-            reg_date=normalize_date(reg_date), due_date="",
-            budget="", attach="", views=views,
-            url=detail_url, content=title,
+            title=p["title"], dept="과학기술정보통신부", manager="",
+            reg_date=normalize_date(p["reg_date"]), due_date="",
+            budget=budget_val, attach="", views=p["views"],
+            url=p["detail_url"], content=p["title"],
         )
-        rec["dedup_hash"] = build_dedup_hash(title, reg_date)
+        rec["dedup_hash"] = build_dedup_hash(p["title"], p["reg_date"])
         results.append(rec)
 
     return results
 
+
 # ------------------ KISA (한국인터넷진흥원) 자체 입찰공고 게시판 ------------------
+# === 수정: 상세페이지 병렬 방문으로 사업비 추출 ===
 def fetch_kisa_bid(limit=20):
     url = "https://www.kisa.or.kr/403"
-    resp = safe_get(url, verify=False)  # KISA 서버 인증서 체인 문제 → 검증 비활성화
+    resp = safe_get(url, verify=False)
     soup = BeautifulSoup(resp.text, "html.parser")
     rows = soup.select("table tbody tr")
 
-    results = []
+    prelim = []
     for row in rows[:limit]:
         cells = row.find_all("td")
         if len(cells) < 3:
             continue
 
-        # 제목 셀에서 postSeq 링크 찾기
         a_tag = row.find("a", href=re.compile(r"postSeq="))
         if not a_tag:
             continue
@@ -734,25 +886,75 @@ def fetch_kisa_bid(limit=20):
             continue
 
         href = a_tag.get("href", "")
-        detail_url = href if href.startswith("http") else "https://www.kisa.or.kr" + href
-        m = re.search(r"postSeq=(\d+)", href)
-        post_seq = m.group(1) if m else ""
+        detail_url = href if href.startswith("http") else urljoin("https://www.kisa.or.kr", href)
 
-        # 열 순서: 번호 / 제목 / 등록일 / 조회수 / (첨부파일)
         reg_date = cells[2].get_text(strip=True) if len(cells) > 2 else ""
         views = cells[3].get_text(strip=True) if len(cells) > 3 else ""
+        prelim.append({"title": title, "detail_url": detail_url, "reg_date": reg_date, "views": views})
 
+    # KISA는 인증서 체인 문제로 verify=False 필요 → safe_get 기본 verify=True라 별도 처리
+    def _kisa_budgets(urls, max_workers=5):
+        results = [""] * len(urls)
+
+        def _one(i, u):
+            try:
+                r = safe_get(u, verify=False)
+                text_val = BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
+                return i, extract_budget_from_text(text_val)
+            except Exception as e:
+                print(f"[WARN] KISA 상세 예산 추출 실패({u}): {e}")
+                return i, ""
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = [ex.submit(_one, i, u) for i, u in enumerate(urls)]
+            for f in concurrent.futures.as_completed(futures):
+                i, val = f.result()
+                results[i] = val
+        return results
+
+    budgets = _kisa_budgets([p["detail_url"] for p in prelim])
+
+    results = []
+    for p, budget_val in zip(prelim, budgets):
         rec = base_record(
             source="SCRAPE", agency="KISA", gubun="입찰공고",
-            title=title, dept="", manager="",
-            reg_date=normalize_date(reg_date), due_date="",
-            budget="", attach="", views=views,
-            url=detail_url, content=title,
+            title=p["title"], dept="", manager="",
+            reg_date=normalize_date(p["reg_date"]), due_date="",
+            budget=budget_val, attach="", views=p["views"],
+            url=p["detail_url"], content=p["title"],
         )
-        rec["dedup_hash"] = build_dedup_hash(title, reg_date)
+        rec["dedup_hash"] = build_dedup_hash(p["title"], p["reg_date"])
         results.append(rec)
 
     return results
+
+
+# ------------------------------------------------------------------
+# IITP (정보통신기획평가원) 필터 — IRIS 재수집 없이, 이미 받아온 넓은 IRIS 풀에서 골라냄
+# === 수정: fetch_iris()를 내부에서 재호출하던 구조 제거 (중복 스크래핑 방지) ===
+# ------------------------------------------------------------------
+_IITP_HINTS = ["정보통신기획평가원", "IITP", "iitp"]
+
+
+def filter_iitp_from_iris(iris_records, limit=20):
+    results = []
+    for rec in iris_records:
+        haystack = f"{rec.get('dept','')} {rec.get('manager','')} {rec.get('content','')}"
+        if any(h in haystack for h in _IITP_HINTS):
+            rec = dict(rec)
+            rec["source"] = "SCRAPE"
+            rec["agency"] = "정보통신기획평가원(IITP)"
+            results.append(rec)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def fetch_iitp(limit=20, max_pages=3):
+    """단독 실행(테스트용)일 때만 자체적으로 IRIS를 수집함. run_all_collectors()에서는
+    아래 run_all_collectors 함수가 IRIS 풀을 재사용하므로 이 함수가 호출되지 않음."""
+    all_iris = fetch_iris(limit=max(limit * 4, 40), max_pages=max_pages)
+    return filter_iitp_from_iris(all_iris, limit=limit)
 
 
 # ------------------------------------------------------------------
@@ -766,25 +968,48 @@ COLLECTORS = {
     "국가AI전략위원회": fetch_ai_strategy,
     "조달청": fetch_g2b,
     "IRIS": fetch_iris,
-    "NTIS": fetch_ntis,          # 신규
-    "TIPA": fetch_tipa,          # 신규
-    "KIAT": fetch_kiat,          # 신규
-    "INNOPOLIS": fetch_innopolis,  # 신규
+    "NTIS": fetch_ntis,
+    "TIPA": fetch_tipa,
+    "KIAT": fetch_kiat,
+    "INNOPOLIS": fetch_innopolis,
     "KISA": fetch_kisa_bid,
+    "IITP": fetch_iitp,
 }
 
 
-
 def run_all_collectors(limit=10):
+    """=== 수정: 13개 수집처를 ThreadPoolExecutor로 동시 실행.
+    IITP는 IRIS를 한 번만(넓게) 긁어서 재사용 — 중복 스크래핑 제거.
+    ↓ max_workers 숫자를 늘리면 더 빨라지지만, 사이트별 차단 위험과 PC 리소스를 고려해 8 권장. """
     all_results = {}
-    for name, fn in COLLECTORS.items():
-        try:
-            records = fn(limit=limit)
-            print(f"[OK] {name}: {len(records)}건 수집")
-            all_results[name] = records
-        except Exception as e:
-            print(f"[FAIL] {name} 수집 실패: {e}")
-            traceback.print_exc()
-            all_results[name] = []
-    return all_results
+    collectors_to_run = {k: v for k, v in COLLECTORS.items() if k not in ("IRIS", "IITP")}
 
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_map = {executor.submit(fn, limit=limit): name for name, fn in collectors_to_run.items()}
+
+        iris_pool_future = executor.submit(fetch_iris, limit=max(limit * 4, 40))
+        future_map[iris_pool_future] = "__IRIS_POOL__"
+
+        for future in concurrent.futures.as_completed(future_map):
+            name = future_map[future]
+            try:
+                records = future.result()
+                if name == "__IRIS_POOL__":
+                    all_results["IRIS"] = records[:limit]
+                    all_results["IITP"] = filter_iitp_from_iris(records, limit=limit)
+                    print(f"[OK] IRIS: {len(all_results['IRIS'])}건 수집")
+                    print(f"[OK] IITP: {len(all_results['IITP'])}건 수집 (IRIS 결과 재사용, 재수집 없음)")
+                else:
+                    print(f"[OK] {name}: {len(records)}건 수집")
+                    all_results[name] = records
+            except Exception as e:
+                label = "IRIS/IITP" if name == "__IRIS_POOL__" else name
+                print(f"[FAIL] {label} 수집 실패: {e}")
+                traceback.print_exc()
+                if name == "__IRIS_POOL__":
+                    all_results["IRIS"] = []
+                    all_results["IITP"] = []
+                else:
+                    all_results[name] = []
+
+    return all_results
