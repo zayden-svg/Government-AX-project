@@ -14,7 +14,7 @@ from common import (
     COMPETITOR_DEFAULT, is_competitor_match, procurement_boost_score, is_mois_noise,
     detect_regions, region_label, ALL_REGIONS, NATIONAL_LABEL,
     DEFAULT_NEWS_KEYWORDS, SOLUTION_NEWS_KEYWORDS, ALERT_MIN_SCORE_DEFAULT, validate_email,
-    is_closed, family_key, owner_org, competitor_variants,
+    is_closed, family_key, owner_org, competitor_variants, source_rank,
 )
 from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product
 from ai_utils import (
@@ -98,7 +98,7 @@ def _tc(light_hex, dark_hex):
     return dark_hex if THEME == "dark" else light_hex
 
 
-tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([6.6, 1.5, 1.3, 1.4])
+tcol1, tcol_mail, tcol_pdf, tcol_dark = st.columns([6.2, 1.5, 1.3, 1.7])
 with tcol_pdf:
     pdf_top_slot = st.empty()
     pdf_top_slot.markdown(
@@ -110,57 +110,51 @@ with tcol_mail:
     # 📧 메일 알림 등록 — 매일 아침 연관도 높은 신규 공고를 메일로 받기 (사내 메일만)
     # ------------------------------------------------------------
     with st.popover("📧 메일 알림", use_container_width=True):
-        st.markdown("**매일 아침 영업 기회 메일 받기**")
-        st.caption("오늘 새로 올라온 공고 중 AI 연관도가 기준 이상인 것 + 경쟁사 수주 사업 재발주 예상을 보내드립니다.")
-        mail_input = st.text_input("이메일", key="alert_email", placeholder="name@stclab.com")
-        mail_email, mail_err = validate_email(mail_input) if mail_input else (None, None)
-        if mail_err:
-            st.error(mail_err)
-        current_sub = None
-        if mail_email:
-            try:
-                current_sub = get_subscriber(mail_email)
-            except Exception as e:
-                st.error(f"구독 정보를 불러오지 못했습니다: {e}")
-            st.caption("✅ 이미 등록된 주소입니다. 아래에서 조건을 바꾸거나 해제할 수 있습니다." if current_sub
-                       else "ℹ️ 아직 등록되지 않은 주소입니다.")
-        mail_regions = st.multiselect(
-            "받을 지역 (비우면 전체)", ALL_REGIONS,
-            default=(current_sub["regions"] if current_sub else []),
-            key=f"alert_regions_{mail_email or 'new'}",
-        )
-        mail_national = st.checkbox(
-            f"지역이 안 적힌 공고({NATIONAL_LABEL})도 받기",
-            value=(current_sub["include_national"] if current_sub else True),
-            key=f"alert_national_{mail_email or 'new'}",
-        )
-        mail_score = st.slider(
-            "AI 연관도 기준(점 이상)", 40, 95,
-            value=(current_sub["min_score"] if current_sub else ALERT_MIN_SCORE_DEFAULT), step=5,
-            key=f"alert_score_{mail_email or 'new'}",
-        )
-        mb1, mb2 = st.columns(2)
-        with mb1:
-            if st.button("등록·저장", key="alert_save", type="primary", use_container_width=True, disabled=not mail_email):
+        st.markdown("**매일 아침 새 공고 메일 받기**")
+        st.caption("메일 주소만 넣고 Enter 또는 '등록'을 누르면 끝입니다. "
+                   "매일 아침 8시 수집이 끝나면 AI 연관도 기준 이상인 신규 공고와 재발주 예상을 보내드립니다.")
+        with st.form("alert_form", clear_on_submit=False, border=False):
+            mail_input = st.text_input("이메일", key="alert_email", placeholder="name@stclab.com")
+            with st.expander("세부 조건 (선택 — 그대로 두면 전체 지역 · 50점 이상)"):
+                mail_regions = st.multiselect("받을 지역 (비우면 전체)", ALL_REGIONS, key="alert_regions",
+                                              placeholder="전체 지역")
+                mail_national = st.checkbox(f"지역이 안 적힌 공고({NATIONAL_LABEL})도 받기", value=True,
+                                            key="alert_national")
+                mail_score = st.slider("AI 연관도 기준(점 이상)", 40, 95, value=ALERT_MIN_SCORE_DEFAULT, step=5,
+                                       key="alert_score")
+            mb1, mb2 = st.columns(2)
+            with mb1:
+                mail_save = st.form_submit_button("등록", type="primary", use_container_width=True)
+            with mb2:
+                mail_remove = st.form_submit_button("알림 해제", use_container_width=True)
+        if mail_save or mail_remove:
+            mail_email, mail_err = validate_email(mail_input)
+            if mail_err:
+                st.error(mail_err)
+            elif mail_save:
                 try:
                     res = upsert_subscriber(mail_email, mail_regions, mail_national, mail_score)
-                    st.success("등록했습니다." if res == "created" else "조건을 저장했습니다.")
+                    st.success(f"{mail_email} 등록 완료 — 내일 아침부터 메일이 갑니다." if res == "created"
+                               else f"{mail_email} 은(는) 이미 등록돼 있어 조건만 새로 저장했습니다.")
                 except Exception as e:
                     st.error(f"저장 실패: {e}")
-        with mb2:
-            if st.button("알림 해제", key="alert_delete", use_container_width=True,
-                         disabled=not (mail_email and current_sub)):
+            else:
                 try:
-                    delete_subscriber(mail_email)
-                    st.success("해제했습니다. 더 이상 메일이 가지 않습니다.")
+                    if get_subscriber(mail_email):
+                        delete_subscriber(mail_email)
+                        st.success("해제했습니다. 더 이상 메일이 가지 않습니다.")
+                    else:
+                        st.info("등록되지 않은 주소입니다.")
                 except Exception as e:
                     st.error(f"해제 실패: {e}")
-        st.caption(f"현재 등록 {count_subscribers()}명 · 매일 아침 8시 자동수집 후 발송")
+        try:
+            st.caption(f"현재 등록 {count_subscribers()}명 · 매일 아침 8시 자동수집 후 발송")
+        except Exception:
+            pass
 
 
 with tcol_dark:
-    st.toggle("🌙 다크모드", key="dark_mode", on_change=_on_theme_change,
-              help="화면을 어둡게 바꿉니다. 선택은 주소(URL)에 저장되어 새로고침해도 유지됩니다.")
+    st.toggle("🌙 다크모드", key="dark_mode", on_change=_on_theme_change)
 
 # ------------------------------------------------------------
 # 화면 CSS — 라이트·다크 모두 같은 규칙에 색 토큰(C)만 바꿔 적용 (위젯까지 전부 덮어 칠함)
@@ -272,6 +266,43 @@ st.markdown(
         border-color: {C['accent']} !important; box-shadow: 0 0 0 2px {C['accent_soft']} !important; }}
     input, textarea {{ background: transparent !important; color: {C['text']} !important; caret-color: {C['text']}; }}
     input::placeholder, textarea::placeholder {{ color: {C['text_muted']} !important; opacity: 1 !important; }}
+    /* 새 Streamlit(react-aria) 구조의 입력칸·선택상자 — 위 baseweb 규칙이 안 먹는 버전 대응 */
+    div[data-testid="stTextInputRootElement"], div[data-testid="stTextAreaRootElement"],
+    div[data-testid="stNumberInputContainer"], div[data-testid="stMultiSelect"] [role="group"],
+    div[data-testid="stSelectbox"] [role="group"], div[data-testid="stSelectbox"] button[aria-haspopup] {{
+        background: {C['input_bg']} !important; border: 1.5px solid {_tc('#D7DBE3', C['border_strong'])} !important;
+        border-radius: 8px !important; box-shadow: none !important; color: {C['text']} !important;
+    }}
+    div[data-testid="stTextInputRootElement"]:focus-within, div[data-testid="stTextAreaRootElement"]:focus-within,
+    div[data-testid="stMultiSelect"] [role="group"]:focus-within {{
+        border-color: {C['accent']} !important; box-shadow: 0 0 0 2px {C['accent_soft']} !important; }}
+    div[data-testid="stMultiSelect"] [role="group"] svg, div[data-testid="stSelectbox"] svg {{ fill: {C['text_muted']} !important; color: {C['text_muted']} !important; }}
+    div[data-testid="stMultiSelect"] [data-testid*="Tag"]:not([data-testid="stMultiSelectTagsContainer"]) {{
+        background: {C['accent_soft']} !important; border: 1px solid {C['accent']} !important; color: {C['text']} !important; }}
+    div[data-testid="stMultiSelect"] [data-testid*="Tag"] span, div[data-testid="stMultiSelect"] [data-testid*="Tag"] p {{ color: {C['text']} !important; }}
+    [role="listbox"] {{ background: {C['surface2']} !important; border: 1px solid {C['border']} !important; color: {C['text_body']} !important; }}
+    [role="listbox"] [role="option"] {{ background: transparent !important; color: {C['text_body']} !important; }}
+    [role="listbox"] [role="option"]:hover, [role="listbox"] [role="option"][data-focused],
+    [role="listbox"] [role="option"][aria-selected="true"] {{ background: {C['surface3']} !important; color: {C['text']} !important; }}
+    /* 토글 스위치 — 꺼진 상태 바탕이 다크모드에서 안 보이던 문제 */
+    label:has(input[role="switch"]:not(:checked)) > span + div {{ background: {_tc('#C3CAD3', '#5A6372')} !important; }}
+    label:has(input[role="switch"]:checked) > span + div {{ background: {C['accent']} !important; }}
+    label:has(input[role="switch"]:not(:checked)) > span + div > div {{ background: {_tc('#FFFFFF', '#F5F7FA')} !important; }}
+    label:has(input[role="switch"]:checked) > span + div > div {{ background: {_tc('#FFFFFF', '#0B1620')} !important; }}
+    /* 체크박스 — 다크모드 윤곽선 */
+    label:has(input[type="checkbox"]:not([role="switch"]):not(:checked)) > span + div {{
+        background: {C['input_bg']} !important; border-color: {C['border_strong']} !important; }}
+    /* 추천 키워드 칩 — 글자 길이만큼 넓이, 넘치면 다음 줄로 (글자 잘림 '…' 방지) */
+    .st-key-search_chip_row [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; gap: 6px 8px !important; }}
+    .st-key-search_chip_row [data-testid="stColumn"], .st-key-search_chip_row [data-testid="column"] {{
+        flex: 0 0 auto !important; width: auto !important; min-width: 0 !important; }}
+    .st-key-search_chip_row button {{ padding: 0.3rem 0.9rem !important; }}
+    .st-key-search_chip_row button p {{ white-space: nowrap !important; overflow: visible !important; }}
+    /* 새 Streamlit 탭(react-aria) */
+    div[data-testid="stTabs"] [role="tab"] {{ opacity: {_tc('0.6', '0.78')}; font-weight: 700; }}
+    div[data-testid="stTabs"] [role="tab"] p, div[data-testid="stTabs"] [role="tab"] div {{ color: {C['text']} !important; }}
+    div[data-testid="stTabs"] [role="tab"][aria-selected="true"] {{ opacity: 1 !important; }}
+    div[data-testid="stTabs"] [role="tab"][aria-selected="true"] p {{ font-weight: 800 !important; }}
 
     /* 선택상자·여러개 선택 + 펼쳐지는 목록 */
     div[data-baseweb="select"] > div {{ background: {C['input_bg']} !important; border-color: {_tc('#D7DBE3', C['border_strong'])} !important; }}
@@ -289,6 +320,7 @@ st.markdown(
     div[data-testid="stSlider"] [data-testid="stTickBarMin"], div[data-testid="stSlider"] [data-testid="stTickBarMax"],
     div[data-testid="stSlider"] div[data-testid="stSliderThumbValue"] {{ color: {C['text_muted']} !important; }}
     div[data-testid="stCheckbox"] label p, div[data-testid="stToggle"] label p {{ color: {C['text_body']} !important; }}
+    label:has(input[role="switch"]) p {{ white-space: nowrap !important; overflow: visible !important; text-overflow: clip !important; }}
 
     /* 팝오버(작은 창)·대화상자 */
     div[data-testid="stPopoverBody"], div[data-baseweb="popover"] > div {{
@@ -665,7 +697,8 @@ df = df[[not is_closed(d, r, p, _today_d) for d, r, p in zip(df[COL_DUE_DATE], d
 # [정리] 같은 사업의 연장·재공고·정정, 기관 게시판과 조달청에 함께 올라온 공고는 최근 1건만
 _fams = [family_key(a, d, t) for a, d, t in zip(df[COL_AGENCY], df[COL_DEPT], df[COL_TITLE])]
 df["_fam"] = [f if len(f.split("|", 1)[-1]) >= 6 else f"{f}#{i}" for i, f in enumerate(_fams)]
-df = df.sort_values(COL_REG_DATE, ascending=False).drop_duplicates("_fam", keep="first")
+df["_src_rank"] = [source_rank(a) for a in df[COL_AGENCY]]      # IRIS↔NTIS 같은 과제는 IRIS(접수처) 쪽을 남김
+df = df.sort_values(["_src_rank", COL_REG_DATE], ascending=[False, False]).drop_duplicates("_fam", keep="first")
 df["_org"] = [owner_org(a, d) for a, d in zip(df[COL_AGENCY], df[COL_DEPT])]   # 표시용 기관 (조달청 건은 실제 발주기관)
 
 # [정리] 행안부 게시판의 일반 보도자료 제외 — 사업·공모 성격 단어가 있는 글만 남김
@@ -1435,7 +1468,7 @@ with main_tab_dash:
         for raw in kw_series:
             for piece in re.split(r"[,/;·]", raw):
                 p = piece.strip()
-                if p and p not in ("nan", "None"):
+                if p and p not in ("nan", "None", "-", "없음", "해당없음", "미분류"):   # '-'(매칭 없음)는 막대에서 제외
                     kw_counter[p] = kw_counter.get(p, 0) + 1
         if kw_counter:
             kw_df = pd.DataFrame(sorted(kw_counter.items(), key=lambda x: -x[1])[:15], columns=["keyword", "count"])
@@ -1536,7 +1569,7 @@ with main_tab_dash:
                 f'border-bottom:1px solid {C["row_border"]};background:{C["surface"]};">'
                 f'<div style="padding:9px 12px;"><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" '
                 f'style="color:{C["text"]};font-weight:600;font-size:12px;text-decoration:none;">{escape(str(r[COL_TITLE]))}</a></div>'
-                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get(COL_DEPT,"-") or "-"))}</div>'
+                f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get("_org") or r.get(COL_AGENCY) or "-"))}</div>'
                 f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get(COL_AGENCY,"-") or "-"))}</div>'
                 f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r.get("_region_label") or "-"))}</div>'
                 f'<div style="padding:9px 12px;font-size:11.5px;color:{C["text_body"]};">{escape(str(r[COL_DUE_DATE] or "미정"))}</div>'
@@ -1552,13 +1585,12 @@ with main_tab_dash:
     with tab_summary:
         st.subheader("⭐ AI핵심요약")
 
+        # 연관도 높은 순 상위 10건 (60점 이상이 10건을 넘으면 그 전부) — 1~2건만 보이던 문제 보완
         PRIORITY_THRESHOLD = 60
-        priority_df = display_df[display_df[COL_AI_SCORE] >= PRIORITY_THRESHOLD].copy()
-
-        if priority_df.empty:
-            priority_df = display_df[display_df[COL_GRADE] == "상"].copy()
-
-        priority_df = priority_df.sort_values(COL_AI_SCORE, ascending=False)
+        _ranked = display_df[display_df[COL_AI_SCORE] > 0].sort_values(COL_AI_SCORE, ascending=False)
+        _high_n = int((_ranked[COL_AI_SCORE] >= PRIORITY_THRESHOLD).sum())
+        priority_df = _ranked.head(max(10, _high_n)).copy()
+        st.caption(f"AI 연관도 높은 순 {len(priority_df)}건 · 요약은 매일 아침 수집 때 미리 만들어 둡니다.")
 
         # 요약은 아침 자동수집 때 미리 만들어 DB에 저장됨 → 화면을 열 때 AI를 다시 부르지 않음
         for _, _r in priority_df.iterrows():
@@ -1983,7 +2015,7 @@ with main_tab_trend:
                 <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
                             border-bottom:1px solid {C['row_border']};">
                     <span style="color:{C['text_muted']};font-weight:700;width:20px;flex-shrink:0;">{i}</span>
-                    <span style="background:{type_color};color:#fff;font-size:10px;font-weight:700;
+                    <span style="background:{type_color};color:{_ACT_TXT};font-size:10px;font-weight:700;
                                 padding:2px 7px;border-radius:5px;flex-shrink:0;">{cand['type']}</span>
                     <span style="background:{C['surface3']};color:{C['text']};font-size:10px;font-weight:700;
                                 padding:2px 7px;border-radius:5px;flex-shrink:0;">{escape(cand['solution'])}</span>
@@ -2306,7 +2338,7 @@ with main_tab_integrated:
                     f'<div class="gt-issue-desc">{_est(issue.get("summary"))}</div>{impact_html}<div>{prods}</div></div>'
                 )
             st.markdown(
-                f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;">{cards}</div>',
+                f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;">{cards}</div>',
                 unsafe_allow_html=True,
             )
         else:
@@ -2467,7 +2499,7 @@ with main_tab_integrated:
                     f"""
                     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
                                 border-bottom:1px solid {C['row_border']};">
-                        <span style="background:{C['accent']};color:#fff;font-size:10.5px;font-weight:700;
+                        <span style="background:{C['accent']};color:{_ACT_TXT};font-size:10.5px;font-weight:700;
                                     padding:1px 7px;border-radius:6px;">{r['snapshot_date']}</span>
                         <span style="flex:1;font-weight:600;font-size:13px;color:{C['text']};">{escape(str(r['keyword']))}</span>
                         <span style="font-size:11px;color:{C['text_muted']};">{escape(str(cat))} · 중요도 {r['importance']}점</span>

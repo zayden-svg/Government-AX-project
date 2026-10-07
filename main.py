@@ -15,11 +15,11 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 from collectors import run_all_collectors, fetch_g2b_results, refresh_records, refreshable_url
-from common import is_mois_noise, posting_key, family_key, full_agency, is_closed, series_title, is_list_url
+from common import is_mois_noise, posting_key, family_key, full_agency, is_closed, series_title, is_list_url, source_rank
 from store import load_cache, save_cache
 from procurement_store import save_results, count_results
 from biz_classifier import classify_and_score as biz_classify_and_score
-from ai_utils import is_ai_ready, analyze_postings_batch, AI_MAX_CONCURRENCY, AI_RPM_LIMIT, MODEL_NAME
+from ai_utils import is_ai_ready, analyze_postings_batch, AI_MAX_CONCURRENCY, AI_RPM_LIMIT, MODEL_NAME, ANALYSIS_VERSION
 from db2 import get_engine, is_postgres
 
 EXCEL_OUTPUT = "Gov-Tracker_결과.xlsx"
@@ -155,8 +155,8 @@ def _d(v):
 def _quality(r):
     """같은 공고 여러 행 중 남길 행: ① 공고 1건 원문 주소 ② 최근 등록(연장·재공고) ③ 최근 갱신(오늘 수집)
     ④ IRIS 대신 실제 주관기관 표기 ⑤ 마감·예산·AI분석·본문이 있는 행"""
-    return (not is_list_url(r.get("url")), _d(r.get("reg_date")) or date.min, str(r.get("updated_at") or ""),
-            "IRIS" not in str(r.get("agency") or ""), bool(r.get("due_date")), bool(r.get("budget")),
+    return (not is_list_url(r.get("url")), source_rank(r.get("agency")), _d(r.get("reg_date")) or date.min,
+            str(r.get("updated_at") or ""), bool(r.get("due_date")), bool(r.get("budget")),
             r.get("ai_priority_score") is not None, len(r.get("content") or ""))
 
 
@@ -307,13 +307,26 @@ def export_to_excel(engine):
     print(f"[완료] 결과 파일 저장: {EXCEL_OUTPUT} ({len(df)}건)")
 
 
+def _budget_text(v):
+    """AI에게 넘길 예산 글자 — 화면 표기와 같은 '5.1억원' 형식 (AI가 단위를 잘못 계산하지 않도록)"""
+    try:
+        n = float(str(v).replace(",", ""))
+    except (TypeError, ValueError):
+        return "미표기"
+    if n <= 0:
+        return "미표기"
+    if n >= 1e8:
+        return f"{n / 1e8:,.1f}".rstrip("0").rstrip(".") + "억원"
+    return f"{n / 1e4:,.0f}만원"
+
+
 def _build_ai_info_block(rec):
     return (
         f"제목: {rec.get('title', '')}\n"
         f"기관: {rec.get('agency', '')} / 수요·주관기관: {rec.get('dept', '')}\n"
         f"공고유형(원본 구분값): {rec.get('gubun', '')}\n"
         f"접수 마감일: {rec.get('due_date', '') or '미표기'}\n"
-        f"예산(원): {rec.get('budget', '') or '미표기'} ({rec.get('budget_label', '')})\n"
+        f"예산: {_budget_text(rec.get('budget'))} ({rec.get('budget_label', '') or '금액 구분 없음'})\n"
         f"사업 종료일: {rec.get('period_end', '') or '미표기'}\n"
         f"본문 일부: {str(rec.get('content', ''))[:2500]}"
     )
@@ -419,6 +432,11 @@ def collect_and_process():
 
     # [3단계] AI 분석 — 신규 + 본문이 새로 확보된 공고 (마감된 공고는 제외)
     row_by_key = {r["uniq_key"]: r for r in rows}
+    ver_flag, _ = load_cache("analysis_version")
+    reanalyze_all = (ver_flag or {}).get("version") != ANALYSIS_VERSION
+    if reanalyze_all:                           # 분석 지시문이 바뀐 뒤 첫 실행 — 진행 중 공고 전체를 1회 다시 분석
+        needs_ai.update(row_by_key)
+        print(f"[3단계] 분석 지시문 변경({ANALYSIS_VERSION}) → 진행 중 공고 전체 1회 재분석")
     pending = [(k, _build_ai_info_block(row_by_key[k])) for k in needs_ai
                if k in row_by_key and not is_closed(row_by_key[k].get("due_date"), row_by_key[k].get("reg_date"),
                                                     row_by_key[k].get("period_end"), today)]
@@ -436,6 +454,9 @@ def collect_and_process():
                 print(f"  [{done['n']}/{len(pending)}] 실패: {(result or {}).get('error', '알수없음')} - {title}")
 
         ai_results = asyncio.run(analyze_postings_batch(pending, progress_cb=_progress))
+        ok_n = sum(1 for v in ai_results.values() if v and not v.get("error"))
+        if reanalyze_all and ok_n >= max(1, len(pending) * 0.8):     # 대부분 성공했을 때만 '재분석 완료'로 기록
+            save_cache("analysis_version", {"version": ANALYSIS_VERSION, "date": today.isoformat(), "n": ok_n})
     elif pending:
         print("  [경고] ANTHROPIC_API_KEY 미설정 → AI 분석 생략, 기관 기본값으로 임시 분류")
     for k, _ in pending:

@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 
 import common  # noqa: F401  (한국시간 고정)
-from common import is_mois_noise, detect_regions, is_closed, family_key
+from common import is_mois_noise, detect_regions, is_closed, family_key, source_rank
 from db2 import get_engine
 
 
@@ -35,7 +35,8 @@ def load_active_postings():
     # 같은 사업의 연장·재공고가 남아 있으면 최근 것만
     fams = [family_key(a, d, t) for a, d, t in zip(df["agency"], df["dept"], df["title"])]
     df = df.assign(_fam=[f if len(f.split("|", 1)[-1]) >= 6 else f"{f}#{i}" for i, f in enumerate(fams)])
-    df = df.sort_values("reg_date", ascending=False).drop_duplicates("_fam", keep="first")
+    df = df.assign(_src_rank=[source_rank(a) for a in df["agency"]])
+    df = df.sort_values(["_src_rank", "reg_date"], ascending=[False, False]).drop_duplicates("_fam", keep="first")
     noise = [is_mois_noise(a, t) for a, t in zip(df["agency"], df["title"])]
     df = df[[not n for n in noise]].copy()
     df["_regions"] = [detect_regions(a, d, t, c[:300]) for a, d, t, c in

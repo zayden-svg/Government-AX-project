@@ -124,11 +124,24 @@ def procurement_boost_score(title):
 # ------------------------------------------------------------
 # 행안부 게시판 — 사업·공모 성격이 아닌 일반 보도자료 제외용
 # ------------------------------------------------------------
-MOIS_KEEP_WORDS = ["공고", "입찰", "모집", "공모", "용역", "사업 안내", "선정", "지원사업", "수요조사"]
+MOIS_KEEP_WORDS = ["공고", "입찰", "모집", "공모", "용역", "사업 안내", "선정 공고", "지원사업", "수요조사"]
+# 공지·보도자료가 섞여 올라오는 게시판 — 아래 단어가 하나도 없으면 사업·과제 공고가 아닌 글로 보고 제외
+NOTICE_BOARD_AGENCIES = ["행정안전부", "국가AI전략위원회", "중소기업기술정보진흥원"]
+NOTICE_KEEP_WORDS = MOIS_KEEP_WORDS + ["접수", "신청", "제안", "과제", "참여기업", "수요기업", "지원 대상"]
+# IT와 무관한 기관 살림 입찰 (정수기·차입·청소 등) — 정보 수집 목적에 맞지 않아 제외
+NON_IT_WORDS = ["정수기", "차입", "청소용역", "미화용역", "경비용역", "시설경비", "급식", "구내식당", "식자재",
+                "피복", "조경", "방역소독", "승강기", "복사용지"]
 
 
 def is_mois_noise(agency, title):
-    return "행정안전부" in str(agency or "") and not any(w in str(title or "") for w in MOIS_KEEP_WORDS)
+    """사업·과제 공고가 아닌 글이면 True (이름은 예전 그대로 — 행안부 외 공지 게시판·비IT 입찰도 함께 판정)"""
+    a, t = str(agency or ""), str(title or "")
+    if any(w in t for w in NON_IT_WORDS):
+        return True
+    if any(b in a for b in NOTICE_BOARD_AGENCIES):
+        keep = MOIS_KEEP_WORDS if "행정안전부" in a else NOTICE_KEEP_WORDS
+        return not any(w in t for w in keep)
+    return False
 
 
 # ------------------------------------------------------------
@@ -153,9 +166,37 @@ def full_agency(name):
     return AGENCY_ALIASES.get(n, n)
 
 
+_BRACKET_HEAD_RE = re.compile(r"^\s*[\[\(【<〈［]([^\]\)】>〉］]{0,30})[\]\)】>〉］]\s*")
+_STATUS_IN_BRACKET_RE = re.compile(r"공고|입찰|공모|모집|재|긴급|연장|정정|변경|사전|규격|공개|조달|용역|\d")
+
+
+def _strip_status_prefix(t):
+    """앞쪽 [긴급입찰공고]·(재공고)·[2026-047]·('26.10.1.) 같은 꼬리표만 떼고, (대경권)·(호남권) 같은 지역 구분은 남김"""
+    t = str(t or "")
+    for _ in range(5):
+        m = _BRACKET_HEAD_RE.match(t)
+        if not m or not _STATUS_IN_BRACKET_RE.search(m.group(1)):
+            break
+        t = t[m.end():]
+    return t
+
+
+RND_PORTALS = ("범부처통합연구지원시스템", "국가과학기술지식정보서비스")
+
+
+def rnd_core_title(agency, title):
+    """NTIS 제목은 '{통합 공고명}_{세부 과제명}' 형식 → 세부 과제명으로 비교해야 IRIS의 같은 과제와 맞춰짐"""
+    t = str(title or "")
+    if "국가과학기술지식정보서비스" in full_agency(agency) and "_" in t:
+        tail = t.split("_", 1)[1]
+        if len(re.sub(r"[^0-9A-Za-z가-힣]", "", tail)) >= 8:
+            t = tail
+    return t
+
+
 def series_title(title):
     """'[조달청 긴급입찰 재공고] OO 용역' · 'OO 모집 연장 공고' → 같은 사업이면 같은 글자열"""
-    t = _SERIES_PREFIX_RE.sub("", str(title or ""))
+    t = _strip_status_prefix(title)
     for rx in _SERIES_MARKER_RES:
         t = rx.sub("", t)
     return re.sub(r"[^0-9A-Za-z가-힣]", "", t).lower()
@@ -164,14 +205,24 @@ def series_title(title):
 def owner_org(agency, dept=""):
     """조달청 공고는 실제 발주(수요)기관 기준, 나머지는 게시 기관 기준"""
     a = full_agency(agency)
-    if a.startswith("조달청") and str(dept or "").strip():
-        return str(dept).strip()
+    if (a.startswith("조달청") or any(p in a for p in RND_PORTALS)) and str(dept or "").strip():
+        return str(dept).strip()       # 조달청=수요기관, IRIS·NTIS=소관 부처 (IRIS↔NTIS 같은 과제를 하나로)
     return a
+
+
+def source_rank(agency):
+    """같은 과제가 여러 곳에 올라온 경우 남길 출처: 주관기관 게시판(IITP 등) > IRIS(접수처) > NTIS(모음 사이트)"""
+    a = full_agency(agency)
+    if "국가과학기술지식정보서비스" in a:
+        return 0
+    if "범부처통합연구지원시스템" in a:
+        return 1
+    return 2
 
 
 def family_key(agency, dept, title):
     org = re.sub(r"[^0-9A-Za-z가-힣]", "", owner_org(agency, dept)).lower()
-    return f"{org}|{series_title(title)}"
+    return f"{org}|{series_title(rnd_core_title(agency, title))}"
 
 
 _LIST_URL_RE = re.compile(r"(mng\.do|list\.do|List\.do|ancList\.do|selectTenderList\.do|ListView\.do)(?:[?#]|$)")
@@ -228,14 +279,14 @@ REGION_PATTERNS = {
            r"영등포구", r"동작구", r"관악구", r"종로구"],
     "인천": [r"인천", r"송도", r"강화군", r"옹진군", r"인하대"],
     "경기": [r"경기도", r"경기권", r"수원", r"성남", r"용인", r"고양시", r"화성시", r"부천", r"안산", r"안양", r"남양주",
-           r"평택", r"의정부", r"시흥", r"파주", r"김포", r"광명시", r"하남시", r"오산시", r"이천시", r"판교"],
+           r"평택", r"오산대", r"의정부", r"시흥", r"파주", r"김포", r"광명시", r"하남시", r"오산시", r"이천시", r"판교"],
     "강원": [r"강원", r"춘천", r"원주", r"강릉", r"동해시", r"태백", r"속초", r"삼척", r"홍천", r"횡성", r"영월", r"평창",
            r"정선", r"철원", r"화천", r"양구", r"양양"],
     "충북": [r"충북", r"충청북도", r"청주", r"충주", r"제천"],
     "충남": [r"충남", r"충청남도", r"천안", r"아산", r"보령", r"서산", r"논산", r"당진", r"홍성"],
     "대전": [r"대전(?!환)", r"한밭"],
-    "세종": [r"세종시", r"세종특별자치시"],
-    "전북": [r"전북", r"전라북도", r"전주", r"군산", r"익산", r"정읍", r"남원", r"김제", r"진안", r"무주", r"임실", r"순창",
+    "세종": [r"세종시", r"세종특별자치시", r"세종캠퍼스"],
+    "전북": [r"전북", r"전라북도", r"전주(?!기)", r"군산", r"익산", r"정읍", r"남원", r"김제", r"진안", r"무주", r"임실", r"순창",
            r"고창", r"부안"],
     "전남": [r"전남(?!편)", r"전라남도", r"목포", r"여수", r"순천", r"나주", r"광양", r"담양", r"곡성", r"구례", r"고흥",
            r"화순", r"장흥", r"해남", r"영암", r"무안", r"함평", r"완도", r"신안"],
