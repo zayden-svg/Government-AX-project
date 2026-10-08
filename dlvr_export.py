@@ -4,7 +4,7 @@
 #   · API: 조달청_나라장터쇼핑몰 품목정보 서비스 / getDlvrReqDtlInfoList (납품요구 상세)
 #   · 공공데이터포털 활용신청 필요(자동승인). 하루 1,000회 한도 — 이 수집은 수십~수백 회면 끝남
 #
-# 실행: python dlvr_export.py --out dlvr.xlsx [--years 12]
+# 실행: python dlvr_export.py --out dlvr.xlsx
 import argparse
 import io
 import json
@@ -40,11 +40,12 @@ TARGET_CONTRACTS = [
     ("002261452", "비교군", "API 게이트웨이", "이데아텍", "i-ONE API Gateway v1.2"),
     ("R25TA01041570", "비교군", "API 게이트웨이", "메가투스", "Megaapim V1.0"),
 ]
-# 계약번호로 못 잡는 예전·다른 계약을 보완: 물품규격명(제품명) 검색
-TARGET_NAMES = [
-    ("NetFUNNEL", "자사", "NF"), ("넷퍼넬", "자사", "NF"), ("MBUSTER", "자사", "BM/MB"), ("엠버스터", "자사", "BM/MB"),
-    ("xQueue", "경쟁사", "대기열·유량제어"), ("DynaPath", "경쟁사", "봇·매크로 차단"), ("에버세이프", "경쟁사", "봇·앱 보안"),
-    ("BotfenderAI", "비교군", "봇·매크로 차단"),
+# 계약번호로 못 잡는 예전·다른 계약 보완: 물품규격명(제품명) 월별 검색 — (검색어, 구분, 제품군, 시작연도)
+#   조달청 API는 날짜 조회를 한 달 단위로만 허용 → 한 달씩 훑음
+SCAN_NAMES = [
+    ("에스티씨랩", "자사", "자사 제품", 2012), ("NetFUNNEL", "자사", "NF", 2012),
+    ("xQueue", "경쟁사", "대기열·유량제어", 2020), ("DynaPath", "경쟁사", "봇·매크로 차단", 2020),
+    ("에버세이프", "경쟁사", "봇·앱 보안", 2020),
 ]
 RENEWAL_BEFORE = "2020-01-01"   # 자사 고객 중 마지막 구매가 이 날짜 이전이고 그 뒤 구매가 없는 기관 = 리뉴얼 타겟
 MY_REGIONS = ["서울", "인천", "강원", "전북", "전남", "광주", "제주"]   # 담당 지역 표시용
@@ -89,6 +90,10 @@ def call(params):
             data = r.json()
         except ValueError:
             raise ApiError(mask(txt[:200]))
+        err = data.get("nkoneps.com.response.ResponseError")
+        if err:
+            h = err.get("header") or {}
+            raise ApiError(f"요청값 오류 {h.get('resultCode')} {h.get('resultMsg')}")
         root = data.get("response") or {}
         head = root.get("header") or {}
         if str(head.get("resultCode", "00")) not in ("00", "0"):
@@ -113,32 +118,68 @@ def fetch_all(params):
         page += 1
 
 
-def year_chunks(years):
+def month_chunks(start_year):
+    cur = datetime(start_year, 1, 1)
     end = datetime.now()
-    cur = end - timedelta(days=365 * years)
-    while cur < end:
-        nxt = min(cur + timedelta(days=364), end)
-        yield cur.strftime("%Y%m%d"), nxt.strftime("%Y%m%d")
-        cur = nxt + timedelta(days=1)
+    while cur <= end:
+        nxt = (cur.replace(day=28) + timedelta(days=4)).replace(day=1)
+        yield cur.strftime("%Y%m%d"), min(nxt - timedelta(days=1), end).strftime("%Y%m%d")
+        cur = nxt
 
 
-def collect(years=4):
-    rows = []
-    log = []
-    for no, kind, fam, maker, prod in TARGET_CONTRACTS:
-        n0 = len(rows)
-        for b, e in year_chunks(years):
-            for it in fetch_all({"inqryDiv": "1", "inqryBgnDate": b, "inqryEndDate": e, "cntrctNo": no}):
-                rows.append({**it, "_구분": kind, "_제품군": fam, "_제조사": maker, "_대상제품": prod, "_찾은방법": f"계약번호 {no}"})
-        log.append(f"계약 {no} {prod}: {len(rows) - n0}건")
-    for nm, kind, fam in TARGET_NAMES:
-        n0 = len(rows)
-        for b, e in year_chunks(years):
-            for it in fetch_all({"inqryDiv": "1", "inqryBgnDate": b, "inqryEndDate": e, "prdctIdntNoNm": nm}):
-                rows.append({**it, "_구분": kind, "_제품군": fam, "_제조사": "", "_대상제품": nm, "_찾은방법": f"제품명 '{nm}'"})
-        log.append(f"제품명 {nm}: {len(rows) - n0}건")
+def _fam(spec):
+    t = str(spec)
+    if "API NetFUNNEL" in t:
+        return "NFA"
+    if "NetFUNNEL" in t or "넷퍼넬" in t:
+        return "NF"
+    if "MBUSTER" in t or "엠버스터" in t or "봇매니저" in t:
+        return "BM/MB"
+    return ""
+
+
+PARTIAL = {"stopped": ""}
+
+
+def collect(years=None):
+    rows, log = [], []
+    try:
+        _collect(rows, log)
+    except ApiError as e:            # 한도 초과 등 → 모은 데까지 엑셀로 만들고, 다음 실행 때 다시 전부 조회
+        PARTIAL["stopped"] = str(e)
+        log.append(f"[중단] {e} — 여기까지 모은 결과로 엑셀 생성")
     print("\n".join(log))
     return rows
+
+
+def _collect(rows, log):
+    done_contracts = set()
+    # ① 알려진 계약번호 → 그 계약으로 들어온 납품요구 전부 (기간 제한 없음)
+    for no, kind, fam, maker, prod in TARGET_CONTRACTS:
+        got = fetch_all({"inqryDiv": "3", "cntrctNo": no})
+        rows += [{**it, "_구분": kind, "_제품군": fam, "_제조사": maker, "_대상제품": prod, "_찾은방법": f"계약번호 {no}"} for it in got]
+        done_contracts.add(no)
+        log.append(f"계약 {no} {prod}: {len(got)}건")
+    # ② 제품명으로 월별 검색 (예전 계약·목록에 없는 계약 찾기)
+    found_new = {}
+    for nm, kind, fam, y0 in SCAN_NAMES:
+        n = 0
+        for b, e in month_chunks(y0):
+            for it in fetch_all({"inqryDiv": "1", "inqryBgnDate": b, "inqryEndDate": e, "prdctIdntNoNm": nm}):
+                n += 1
+                rows.append({**it, "_구분": kind, "_제품군": _fam(it.get("prdctIdntNoNm")) or fam, "_제조사": "",
+                             "_대상제품": nm, "_찾은방법": f"제품명 '{nm}'"})
+                no = it.get("cntrctNo")
+                if no and no not in done_contracts:
+                    found_new[no] = (kind, fam)
+        log.append(f"제품명 {nm} ({y0}~): {n}건")
+    # ③ 새로 찾은 계약번호도 전부 조회
+    for no, (kind, fam) in found_new.items():
+        got = fetch_all({"inqryDiv": "3", "cntrctNo": no})
+        rows += [{**it, "_구분": kind, "_제품군": _fam(it.get("prdctIdntNoNm")) or fam, "_제조사": "",
+                  "_대상제품": str(it.get("prdctIdntNoNm", "")).split(",")[2].strip() if str(it.get("prdctIdntNoNm", "")).count(",") >= 2 else "",
+                  "_찾은방법": f"계약번호 {no}(검색으로 발견)"} for it in got]
+        log.append(f"추가 계약 {no}: {len(got)}건")
 
 
 def _num(v):
@@ -163,8 +204,11 @@ def build(rows):
         raise SystemExit("[SKIP] 납품요구 결과 0건")
     # 같은 납품요구·물품은 최신 변경차수만
     df["_chg"] = pd.to_numeric(df.get("dlvrReqChgOrd", 0), errors="coerce").fillna(0)
-    df = (df.sort_values("_chg", ascending=False)
+    df["_src"] = df["_찾은방법"].str.startswith("계약번호").map({True: 0, False: 1})
+    df = (df.sort_values(["_chg", "_src"], ascending=[False, True])
             .drop_duplicates(subset=["dlvrReqNo", "prdctSno", "prdctIdntNo"], keep="first"))
+    # 대상 제품 이름은 실제 규격명에서 (예: 'NetFUNNEL v3.0')
+    df["_대상제품"] = [(str(sp).split(",")[2].strip() if str(sp).count(",") >= 2 else t) for sp, t in zip(df["prdctIdntNoNm"], df["_대상제품"])]
     df["납품요구일"] = df["dlvrReqRcptDate"].map(_date)
     df["금액"] = df["prdctAmt"].map(_num)
     df["유지보수·재구매 예상"] = (pd.to_datetime(df["납품요구일"], errors="coerce") + pd.Timedelta(days=365)).dt.strftime("%Y-%m")
@@ -217,7 +261,7 @@ def build(rows):
     info = [
         ("쇼핑몰 납품요구 현황 (자사·경쟁사 제품)", ""),
         ("기준일", datetime.now().strftime("%Y-%m-%d")),
-        ("출처", "조달청_나라장터쇼핑몰 품목정보 서비스 · 납품요구 상세 (공공데이터포털 OpenAPI)"),
+        ("출처", "조달청_나라장터쇼핑몰 품목정보 서비스 · 납품요구 상세 (공공데이터포털 OpenAPI) — 자사 2012년~, 경쟁사 2020년~"),
         ("대상", "디지털서비스몰에 등록된 자사·경쟁사·비교군 제품의 계약번호 + 제품명 검색"),
         ("", ""),
         ("시트", "내용"),
@@ -257,14 +301,14 @@ def build(rows):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="dlvr.xlsx")
-    ap.add_argument("--years", type=int, default=12)
+    ap.add_argument("--years", type=int, default=0, help="(사용 안 함 — 제품별 시작연도는 SCAN_NAMES)")
     a = ap.parse_args()
-    try:
-        rows = collect(a.years)
-    except ApiError as e:
-        print(f"[FAIL] {e} · API {CALLS['n']}회")
+    rows = collect()
+    if not rows:
+        print(f"[FAIL] 결과 없음 {PARTIAL['stopped']} · API {CALLS['n']}회")
         return 1
     data, meta = build(rows)
+    meta["stopped"] = PARTIAL["stopped"]
     open(a.out, "wb").write(data)
     print(f"[OK] 납품요구 엑셀: API {CALLS['n']}회 · {json.dumps(meta, ensure_ascii=False)}")
     return 0
