@@ -278,6 +278,11 @@ def _g2b_key():
     return unquote(key) if "%" in key else key
 
 
+def mask_secret(msg):
+    """오류 문구에 인증키가 섞여 로그·DB에 남지 않도록 가림"""
+    return re.sub(r"(serviceKey|ServiceKey|apiKey|key)=[^&\s'\"]+", r"\1=***", str(msg))
+
+
 def _g2b_get(url, params):
     """https 우선, 접속 실패 시 http로 한 번 더. 연속 3회 접속 실패하면 이번 실행에서 조달청 호출 중단."""
     if _G2B_STATE["conn_fail"] >= 3:
@@ -382,7 +387,7 @@ def _g2b_items(url, params, label, max_pages=None):
             _G2B_DEAD.add(url)
             break
         except Exception as e:
-            print(f"[FAIL] {label}: {type(e).__name__}: {str(e)[:120]}")
+            print(f"[FAIL] {label}: {type(e).__name__}: {mask_secret(e)[:160]}")
             break
         root = data.get("response") or {}
         header = root.get("header") or {}

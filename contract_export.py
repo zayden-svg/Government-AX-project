@@ -35,9 +35,9 @@ K_PROGRESS = "contract_crawl_progress"
 K_EXCEL = "contract_excel"
 K_EXCEL_META = "contract_excel_meta"   # 대시보드는 이것만 먼저 읽고, 파일은 버튼 누를 때 읽음
 YEARS_BACK = 3                     # 과거 몇 년치 계약까지 훑을지 (진행 중인 계약은 대부분 3년 이내 체결)
-CALL_BUDGET = int(os.getenv("CONTRACT_CALL_BUDGET", "3000"))   # 한 번 실행에 쓸 최대 API 호출 수 (하루 한도 보호)
+CALL_BUDGET = int(os.getenv("CONTRACT_CALL_BUDGET", "850"))   # 한 번 실행에 쓸 최대 API 호출 수 (하루 한도 보호)
 TIME_BUDGET_SEC = int(os.getenv("CONTRACT_TIME_BUDGET", str(320 * 60)))
-PARALLEL_DAYS = 4                  # 하루치 조회를 동시에 몇 개 돌릴지 (조달청 서버 부담 고려)
+PARALLEL_DAYS = 2                  # 하루치 조회를 동시에 몇 개 돌릴지 (조달청 서버 부담 고려)
 ROWS_PER_PAGE = 999
 SOON_DAYS = 90                     # '곧 완료' = 오늘부터 90일 안에 끝나는 계약
 REORDER_LEAD_DAYS = 60
@@ -188,9 +188,21 @@ class Crawler:
         from collectors import _g2b_get
         q = {"serviceKey": self.key, "pageNo": str(page_no), "numOfRows": str(ROWS_PER_PAGE), "type": "json",
              "inqryDiv": "1", "inqryBgnDate": day, "inqryEndDate": day}
-        with self._lock:
-            self.calls += 1
-        resp = _g2b_get(url, q)
+        import requests
+        for attempt in range(4):
+            with self._lock:
+                self.calls += 1
+            try:
+                resp = _g2b_get(url, q)
+                break
+            except requests.exceptions.HTTPError as e:
+                code = getattr(e.response, "status_code", 0)
+                if code == 429 and attempt < 3:          # 너무 빨리 부름 → 잠깐 쉬었다 다시
+                    time.sleep(30 * (attempt + 1))
+                    continue
+                if code == 429:
+                    raise QuotaExceeded("조달청 서버가 호출을 제한함(429)")
+                raise
         try:
             data = resp.json()
         except ValueError:
@@ -287,7 +299,8 @@ def crawl():
     except QuotaExceeded as e:
         stats["stopped"] = f"조달청 하루 호출 한도 초과({e}) → 다음 실행에서 이어서"
     except Exception as e:
-        stats["stopped"] = f"오류로 중단: {type(e).__name__}: {str(e)[:150]}"
+        from collectors import mask_secret
+        stats["stopped"] = f"오류로 중단: {type(e).__name__}: {mask_secret(e)[:150]}"
     stats["calls"] = cr.calls
     prog["_last"] = {**stats, "at": datetime.now().strftime("%Y-%m-%d %H:%M")}
     store.save_cache(K_PROGRESS, prog)

@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       call_budget:
-        description: '이번 실행 최대 API 호출 수 (조달청 하루 한도 보호)'
+        description: '이번 실행 최대 API 호출 수 (조달청 하루 한도 약 1,000회 — 아침 8시 수집 몫 남김)'
         required: false
-        default: '3000'
+        default: '850'
 
 permissions:
   contents: write
@@ -21,7 +21,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
-      CONTRACT_CALL_BUDGET: ${{ github.event.inputs.call_budget || '3000' }}
+      CONTRACT_CALL_BUDGET: ${{ github.event.inputs.call_budget || '850' }}
       PYTHONIOENCODING: utf-8
       PYTHONUNBUFFERED: '1'
     steps:
