@@ -21,7 +21,9 @@ jobs:
           for id in $(echo "${{ github.event.inputs.ids }}" | tr ',' ' '); do
             curl -sL --max-time 60 -A "Mozilla/5.0" "https://www.data.go.kr/catalog/${id}/fileData.json" -o "meta_${id}.json" || true
             curl -sL --max-time 60 -A "Mozilla/5.0" "https://www.data.go.kr/biz/dcat/metadata/${id}.do" -o "dcat_${id}.xml" || true
-            urls=$( (grep -oE 'https?://[^"<> ]*(fileDownload|download)[^"<> ]*' "meta_${id}.json" "dcat_${id}.xml" 2>/dev/null || true) | sed 's/&amp;/\&/g' | sort -u | head -5)
+            curl -sL --max-time 60 -A "Mozilla/5.0" "https://www.data.go.kr/data/${id}/fileData.do" -o "page_${id}.html" || true
+            # 페이지 안의 첨부파일 번호(atchFileId·fileDetailSn)로 실제 다운로드 주소 구성
+            urls=$( (grep -oE "FILE_[0-9A-Za-z]+" "page_${id}.html" | sort -u | head -3 | while read f; do echo "https://www.data.go.kr/cmm/cmm/fileDownload.do?atchFileId=${f}&fileDetailSn=1"; done) || true)
             echo "[$id] download urls: $urls"
             n=0
             for u in $urls; do
