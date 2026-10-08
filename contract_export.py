@@ -340,6 +340,7 @@ def prepare(df, competitors=None, today=None):
     df["업체목록"] = df["corp_raw"].map(corp_names)
     df["업체명"] = df["업체목록"].map(lambda xs: " / ".join(xs))
     df["대표업체"] = df["업체목록"].map(lambda xs: xs[0] if xs else "")
+    df["검색용업체명"] = df["업체목록"].map(search_text)
     df["수요기관"] = [", ".join(dminstt_names(a, b)) for a, b in zip(df["dminstt_raw"], df["instt"])]
     end = pd.to_datetime(df["end_date"], errors="coerce")
     days = (end - today).dt.days
@@ -357,6 +358,71 @@ def prepare(df, competitors=None, today=None):
     df["계약금액"] = df["amount"].map(_won)
     df["금차금액"] = df["thtm_amount"].map(_won)
     return df
+
+
+# ------------------------------------------------------------
+# 업체명 정리: (주)·주식회사·띄어쓰기·영문 대소문자 차이를 없애 같은 회사로 인식
+#   엑셀 검색칸에도 같은 규칙(SUBSTITUTE 수식)을 적용하므로 두 곳이 반드시 같은 목록을 씀
+# ------------------------------------------------------------
+NAME_STRIP = ["주식회사", "(주)", "㈜", "( 주 )", "(주 )", "( 주)", "유한회사", "(유)", "사단법인", "(사)", "재단법인", "(재)",
+              "합자회사", "(합)", "co.,ltd.", "co.,ltd", "co., ltd.", "co., ltd", "corporation", "corp.", "inc.",
+              " ", ".", ",", "-", "·", "_", "(", ")", "&"]
+# 한글·영문 표기가 다른 같은 회사 (한 줄 = 한 회사). 필요하면 여기에 추가
+ALIAS_GROUPS = [
+    ["에스티씨랩", "stclab", "stc랩", "에스티씨lab"],
+    ["다이나패스", "다이내패스", "dynapath"],
+    ["에버세이프", "eversafe"],
+    ["에버스핀", "everspin"],
+    ["엑스큐", "xqueue"],
+    ["큐잇", "queueit", "queue-it"],
+    ["소프트베이스", "softbase"],
+    ["데브와이", "devy"],
+    ["메가펜스", "megafence"],
+]
+
+
+def norm_name(name):
+    t = str(name or "").lower().strip()
+    for w in NAME_STRIP:
+        t = t.replace(w, "")
+    return t
+
+
+_ALIAS_NORM = [[norm_name(a) for a in g] for g in ALIAS_GROUPS]
+
+
+def alias_group(nm):
+    """정리된 이름에 들어 있는 별칭 묶음 (없으면 None)"""
+    for g in _ALIAS_NORM:
+        if any(a and a in nm for a in g):
+            return g
+    return None
+
+
+def search_text(names):
+    """검색용 문자열: 정리된 이름들 + 별칭(한글↔영문) — 엑셀 '전체' 시트 숨은 칸"""
+    out = []
+    for n in names:
+        nm = norm_name(n)
+        out.append(nm)
+        g = alias_group(nm)
+        if g:
+            out.extend(g)
+    return "|".join(dict.fromkeys(x for x in out if x))
+
+
+def group_key(name):
+    nm = norm_name(name)
+    g = alias_group(nm)
+    return g[0] if g else nm
+
+
+def excel_norm_formula(cell_ref):
+    """엑셀에서 검색어를 같은 규칙으로 정리하는 수식"""
+    f = f"LOWER(TRIM({cell_ref}))"
+    for w in NAME_STRIP:
+        f = f'SUBSTITUTE({f},"{w}","")'
+    return f
 
 
 OUT_COLS = [  # (엑셀 제목, 칼럼, 너비)
@@ -414,9 +480,9 @@ def build_excel(df, today=None):
         for i, (_, _, w) in enumerate(OUT_COLS, start=1):
             ws.column_dimensions[get_column_letter(i)].width = w
         ws.freeze_panes = "E2"
-        titles = [t for t, _, _ in OUT_COLS] + (["검색키(수정 금지)"] if helper else [])
+        titles = [t for t, _, _ in OUT_COLS] + (["검색용 업체명(자동)", "검색키(수정 금지)"] if helper else [])
         header(ws, titles)
-        name_col = get_column_letter([c for _, c, _ in OUT_COLS].index("업체명") + 1)
+        srch_col = get_column_letter(len(OUT_COLS) + 1)
         for rn, r in enumerate(sub.to_dict("records"), start=2):
             row = []
             fill = soon_fill if r["상태"] == "곧 완료" else (mine_fill if r["자사관련"] == "Y" else None)
@@ -432,7 +498,8 @@ def build_excel(df, today=None):
                     v = f'=HYPERLINK("{v}","열기")' if str(v).startswith("http") else ""
                 row.append(cell(ws, v, fill=fill if c in ("상태", "title") else None))
             if helper:
-                row.append(f'=IF(AND(업체검색!$B$3<>"",ISNUMBER(SEARCH(업체검색!$B$3,{name_col}{rn}))),ROW(),"")')
+                row.append(r.get("검색용업체명", ""))
+                row.append(f'=IF(업체검색!$F$3="","",IF(ISNUMBER(SEARCH(업체검색!$F$3,{srch_col}{rn})),ROW(),""))')
             ws.append(row)
         ws.auto_filter.ref = f"A1:{get_column_letter(len(titles))}{max(len(sub) + 1, 2)}"
         return ws
@@ -462,8 +529,8 @@ def build_excel(df, today=None):
     ws.append([cell(ws, "시트 안내", hfont, navy), cell(ws, "", hfont, navy)])
     for k, v in [("곧 완료", "90일 안에 끝나는 계약 (종료 임박 순)"), ("진행중", "현재 수행 중인 계약"),
                  ("자사 관련", "자사 제품 관련 단어 또는 경쟁사 수주 계약"),
-                 ("업체별 요약", "업체마다 계약 수·진행중·곧 완료·금액 합계"),
-                 ("업체검색", "B3 칸에 업체명 일부를 입력하면 전체 계약에서 찾아 보여줌 (최대 500건)"),
+                 ("업체별 요약", "업체마다 계약 수·진행중·곧 완료·금액 합계 ((주)X와 주식회사 X 등은 한 회사로 합침)"),
+                 ("업체검색", "B3 칸에 업체명 일부 입력 → (주)·주식회사·띄어쓰기·대소문자·한글/영문 표기 차이 무시하고 찾아줌 (최대 500건)"),
                  ("전체", "모든 계약. 머리글 ▼ 필터로 업체·기관·상태별 검색 가능")]:
         ws.append([cell(ws, k, bold), v])
     ws.append([])
@@ -476,11 +543,13 @@ def build_excel(df, today=None):
             ("계약금액(원)", "G"), ("계약일", "H"), ("종료일", "J"), ("재발주 예상", "L"), ("자사관련", "M"), ("경쟁사", "O")]
     for i, w in enumerate([9, 8, 6, 46, 26, 24, 14, 11, 11, 11, 7, 7], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
-    helper_col = get_column_letter(len(OUT_COLS) + 1)
+    helper_col = get_column_letter(len(OUT_COLS) + 2)
     ws.append([cell(ws, "업체 검색", big)])
-    ws.append(["아래 노란 칸(B3)에 업체명 일부를 입력하세요 (예: 다이나패스). 전체 시트에서 찾아 최대 500건을 보여줍니다."])
+    ws.append(["노란 칸(B3)에 업체명 일부를 입력하세요. (주)·주식회사·띄어쓰기·대소문자는 무시하고, "
+               "한글·영문 표기(예: 에스티씨랩 = STCLab)도 같은 회사로 찾습니다. 최대 500건."])
     ws.append([cell(ws, "업체명 →", bold), cell(ws, "", fill=PatternFill("solid", fgColor="FFF59D")),
-               cell(ws, "결과 건수", bold), f'=IF(B3="","",COUNT(전체!{helper_col}:{helper_col}))'])
+               cell(ws, "결과 건수", bold), f'=IF(F3="","",COUNT(전체!{helper_col}:{helper_col}))',
+               cell(ws, "인식한 검색어", bold), f'={excel_norm_formula("B3")}'])
     header(ws, [t for t, _ in show])
     for k in range(1, 501):
         rowf = []
@@ -500,7 +569,9 @@ def build_excel(df, today=None):
     ex = d.explode("업체목록")
     ex = ex[ex["업체목록"].fillna("") != ""]
     if not ex.empty:
-        g = ex.groupby("업체목록")
+        ex = ex.assign(_gk=ex["업체목록"].map(group_key))
+        ex = ex[ex["_gk"] != ""]
+        g = ex.groupby("_gk")
         summ = pd.DataFrame({
             "계약 수": g.size(),
             "진행중": g["상태"].apply(lambda s: int((s == "진행중").sum())),
@@ -510,18 +581,21 @@ def build_excel(df, today=None):
             "최근 계약일": g["cntrct_date"].max(),
             "주요 기관": g["수요기관"].apply(lambda s: ", ".join(s.value_counts().index[:3])),
             "경쟁사": g["경쟁사"].apply(lambda s: "Y" if (s == "Y").any() else ""),
-        }).sort_values(["진행중", "계약 수"], ascending=False)
+            "_name": g["업체목록"].agg(lambda s: s.value_counts().index[0]),
+            "다른 표기": g["업체목록"].agg(lambda s: ", ".join(list(dict.fromkeys(s))[1:4])),
+        }).sort_values(["진행중", "계약 수"], ascending=False).set_index("_name")
     else:
-        summ = pd.DataFrame(columns=["계약 수", "진행중", "곧 완료", "자사 관련", "금액 합계(원)", "최근 계약일", "주요 기관", "경쟁사"])
-    for i, w in enumerate([30, 8, 8, 8, 8, 16, 11, 50, 7], start=1):
+        summ = pd.DataFrame(columns=["계약 수", "진행중", "곧 완료", "자사 관련", "금액 합계(원)", "최근 계약일", "주요 기관", "경쟁사", "다른 표기"])
+    for i, w in enumerate([30, 8, 8, 8, 8, 16, 11, 50, 7, 36], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "B2"
     header(ws, ["업체명"] + list(summ.columns))
     for name, r in summ.iterrows():
         amt = r["금액 합계(원)"]
         ws.append([name, int(r["계약 수"]), r["진행중"], r["곧 완료"], r["자사 관련"],
-                   cell(ws, None if pd.isna(amt) else int(amt), fmt="#,##0"), r["최근 계약일"], r["주요 기관"], r["경쟁사"]])
-    ws.auto_filter.ref = f"A1:I{max(len(summ) + 1, 2)}"
+                   cell(ws, None if pd.isna(amt) else int(amt), fmt="#,##0"), r["최근 계약일"], r["주요 기관"], r["경쟁사"],
+                   r["다른 표기"]])
+    ws.auto_filter.ref = f"A1:J{max(len(summ) + 1, 2)}"
 
     # 5) 전체 (검색키 포함)
     table_sheet("전체", d, helper=True)
