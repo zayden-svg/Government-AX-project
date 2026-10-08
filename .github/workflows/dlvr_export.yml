@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
       - run: pip install pandas openpyxl requests
       - name: 납품요구 수집 + 엑셀
-        run: python dlvr_export.py --out dlvr.xlsx --years 4
+        run: python dlvr_export.py --out dlvr.xlsx --years 12
       - name: 엑셀 사본을 exports-dlvr 브랜치에 보관
         if: always()
         run: |

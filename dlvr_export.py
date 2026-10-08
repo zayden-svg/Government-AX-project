@@ -4,7 +4,7 @@
 #   · API: 조달청_나라장터쇼핑몰 품목정보 서비스 / getDlvrReqDtlInfoList (납품요구 상세)
 #   · 공공데이터포털 활용신청 필요(자동승인). 하루 1,000회 한도 — 이 수집은 수십~수백 회면 끝남
 #
-# 실행: python dlvr_export.py --out dlvr.xlsx [--years 4]
+# 실행: python dlvr_export.py --out dlvr.xlsx [--years 12]
 import argparse
 import io
 import json
@@ -46,6 +46,7 @@ TARGET_NAMES = [
     ("xQueue", "경쟁사", "대기열·유량제어"), ("DynaPath", "경쟁사", "봇·매크로 차단"), ("에버세이프", "경쟁사", "봇·앱 보안"),
     ("BotfenderAI", "비교군", "봇·매크로 차단"),
 ]
+RENEWAL_BEFORE = "2020-01-01"   # 자사 고객 중 마지막 구매가 이 날짜 이전이고 그 뒤 구매가 없는 기관 = 리뉴얼 타겟
 MY_REGIONS = ["서울", "인천", "강원", "전북", "전남", "광주", "제주"]   # 담당 지역 표시용
 
 
@@ -220,6 +221,7 @@ def build(rows):
         ("대상", "디지털서비스몰에 등록된 자사·경쟁사·비교군 제품의 계약번호 + 제품명 검색"),
         ("", ""),
         ("시트", "내용"),
+        ("리뉴얼 타겟", "자사 제품을 2020년 이전에 산 뒤 그 이후 구매 이력이 없는 기관 (마지막 구매일 최신순)"),
         ("기관별 요약", "기관마다 산 제품·건수·금액·최근 구매일 → 다음 접촉 시점(최근 구매 + 10개월)"),
         ("경쟁사 고객", "경쟁사·비교군 제품을 산 기관 = 교체 영업 대상"),
         ("자사 고객", "자사 제품을 산 기관 = 유지보수·추가 구매 대상"),
@@ -236,13 +238,18 @@ def build(rows):
     scols = [("구분", "구분", 7), ("수요기관", "수요기관", 32), ("제품", "제품", 36), ("구매 건수", "구매 건수", 8),
              ("금액(원)", "금액 합계(원)", 14), ("최근 구매일", "최근 구매일", 11), ("다음 접촉 시점", "다음 접촉 시점", 12),
              ("지역", "지역", 14), ("담당지역", "담당지역", 7), ("판매업체", "판매업체", 30)]
+    own = summ[summ["구분"] == "자사"]
+    renew = own[(own["최근 구매일"] != "") & (own["최근 구매일"] < RENEWAL_BEFORE)].sort_values("최근 구매일", ascending=False)
+    rcols = [("수요기관", "수요기관", 32), ("마지막 구매일", "최근 구매일", 12), ("산 제품", "제품", 36), ("구매 건수", "구매 건수", 8),
+             ("금액(원)", "금액 합계(원)", 14), ("지역", "지역", 14), ("담당지역", "담당지역", 7), ("판매업체", "판매업체", 30)]
+    sheet(wb.create_sheet("리뉴얼 타겟", 1), renew, rcols)
     sheet(wb.create_sheet("기관별 요약"), summ, scols)
     sheet(wb.create_sheet("경쟁사 고객"), summ[summ["구분"] != "자사"], scols)
     sheet(wb.create_sheet("자사 고객"), summ[summ["구분"] == "자사"], scols)
     sheet(wb.create_sheet("전체 내역"), df, cols)
     buf = io.BytesIO()
     wb.save(buf)
-    meta = {"rows": len(df), "insttn": int(summ["수요기관"].nunique()),
+    meta = {"renewal": len(renew), "rows": len(df), "insttn": int(summ["수요기관"].nunique()),
             "own": int((summ["구분"] == "자사").sum()), "comp": int((summ["구분"] != "자사").sum())}
     return buf.getvalue(), meta
 
@@ -250,7 +257,7 @@ def build(rows):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="dlvr.xlsx")
-    ap.add_argument("--years", type=int, default=4)
+    ap.add_argument("--years", type=int, default=12)
     a = ap.parse_args()
     try:
         rows = collect(a.years)
