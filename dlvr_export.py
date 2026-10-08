@@ -139,47 +139,102 @@ def _fam(spec):
 
 
 PARTIAL = {"stopped": ""}
+CACHE_FILE = "raw_cache.json"     # 지난 실행에서 받아 둔 결과 (지난달 이전 자료는 바뀌지 않으므로 다시 안 부름)
+WORKERS = 6
+
+
+def _load_cache():
+    try:
+        return json.load(open(CACHE_FILE, encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _run_tasks(tasks, cache, log_label):
+    """tasks: [(cache_key, params)] → 캐시에 없는 것만 동시에 조회. 한도 초과 시 ApiError"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    todo = [(k, p) for k, p in tasks if k not in cache]
+    stop = {"err": None}
+
+    def one(k, p):
+        if stop["err"]:
+            return k, None
+        try:
+            return k, fetch_all(p)
+        except ApiError as e:
+            stop["err"] = e
+            return k, None
+    with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        for f in as_completed([ex.submit(one, k, p) for k, p in todo]):
+            k, items = f.result()
+            if items is not None:
+                cache[k] = items
+    print(f"[{log_label}] 새로 조회 {len(todo)}건 중 {sum(1 for k, _ in todo if k in cache)}건 완료 · 누적 API {CALLS['n']}회", flush=True)
+    if stop["err"]:
+        raise stop["err"]
 
 
 def collect(years=None):
     rows, log = [], []
+    cache = _load_cache()
+    this_month = datetime.now().strftime("%Y%m")
+    # 계약번호 조회와 이번 달 검색은 매번 새로 (새 구매 반영)
+    cache = {k: v for k, v in cache.items() if not (k.startswith("c|") or k.split("|")[-2][:6] == this_month)}
     try:
-        _collect(rows, log)
-    except ApiError as e:            # 한도 초과 등 → 모은 데까지 엑셀로 만들고, 다음 실행 때 다시 전부 조회
+        _collect(rows, log, cache)
+    except ApiError as e:            # 한도 초과 등 → 모은 데까지 엑셀로 만들고, 다음 실행 때 이어서
         PARTIAL["stopped"] = str(e)
-        log.append(f"[중단] {e} — 여기까지 모은 결과로 엑셀 생성")
+        log.append(f"[중단] {e} — 여기까지 모은 결과로 엑셀 생성 (다음 실행 때 이어서)")
+    json.dump(cache, open(CACHE_FILE, "w", encoding="utf-8"), ensure_ascii=False)
     print("\n".join(log))
     return rows
 
 
-def _collect(rows, log):
-    done_contracts = set()
+def _rows_from(cache, key, kind, fam, maker, prod, how):
+    return [{**it, "_구분": kind, "_제품군": _fam(it.get("prdctIdntNoNm")) or fam, "_제조사": maker,
+             "_대상제품": prod, "_찾은방법": how} for it in cache.get(key, [])]
+
+
+def _collect(rows, log, cache):
     # ① 알려진 계약번호 → 그 계약으로 들어온 납품요구 전부 (기간 제한 없음)
-    for no, kind, fam, maker, prod in TARGET_CONTRACTS:
-        got = fetch_all({"inqryDiv": "3", "cntrctNo": no})
-        rows += [{**it, "_구분": kind, "_제품군": fam, "_제조사": maker, "_대상제품": prod, "_찾은방법": f"계약번호 {no}"} for it in got]
-        done_contracts.add(no)
-        log.append(f"계약 {no} {prod}: {len(got)}건")
-    # ② 제품명으로 월별 검색 (예전 계약·목록에 없는 계약 찾기)
-    found_new = {}
+    tasks = [(f"c|{no}", {"inqryDiv": "3", "cntrctNo": no}) for no, *_ in TARGET_CONTRACTS]
+    try:
+        _run_tasks(tasks, cache, "계약번호")
+    finally:
+        for no, kind, fam, maker, prod in TARGET_CONTRACTS:
+            got = _rows_from(cache, f"c|{no}", kind, fam, maker, prod, f"계약번호 {no}")
+            rows += got
+            log.append(f"계약 {no} {prod}: {len(got)}건")
+    # ② 제품명으로 한 달씩 검색 (예전 계약·목록에 없는 계약 찾기)
+    tasks, meta = [], {}
     for nm, kind, fam, y0 in SCAN_NAMES:
-        n = 0
         for b, e in month_chunks(y0):
-            for it in fetch_all({"inqryDiv": "1", "inqryBgnDate": b, "inqryEndDate": e, "prdctIdntNoNm": nm}):
-                n += 1
-                rows.append({**it, "_구분": kind, "_제품군": _fam(it.get("prdctIdntNoNm")) or fam, "_제조사": "",
-                             "_대상제품": nm, "_찾은방법": f"제품명 '{nm}'"})
+            k = f"m|{nm}|{b}|{e}"
+            tasks.append((k, {"inqryDiv": "1", "inqryBgnDate": b, "inqryEndDate": e, "prdctIdntNoNm": nm}))
+            meta[k] = (nm, kind, fam)
+    try:
+        _run_tasks(tasks, cache, "제품명 월별 검색")
+    finally:
+        found_new, cnt = {}, {}
+        known = {no for no, *_ in TARGET_CONTRACTS}
+        for k, (nm, kind, fam) in meta.items():
+            got = _rows_from(cache, k, kind, fam, "", nm, f"제품명 '{nm}'")
+            rows += got
+            cnt[nm] = cnt.get(nm, 0) + len(got)
+            for it in got:
                 no = it.get("cntrctNo")
-                if no and no not in done_contracts:
+                if no and no not in known:
                     found_new[no] = (kind, fam)
-        log.append(f"제품명 {nm} ({y0}~): {n}건")
+        log += [f"제품명 {nm}: {n}건" for nm, n in cnt.items()]
     # ③ 새로 찾은 계약번호도 전부 조회
-    for no, (kind, fam) in found_new.items():
-        got = fetch_all({"inqryDiv": "3", "cntrctNo": no})
-        rows += [{**it, "_구분": kind, "_제품군": _fam(it.get("prdctIdntNoNm")) or fam, "_제조사": "",
-                  "_대상제품": str(it.get("prdctIdntNoNm", "")).split(",")[2].strip() if str(it.get("prdctIdntNoNm", "")).count(",") >= 2 else "",
-                  "_찾은방법": f"계약번호 {no}(검색으로 발견)"} for it in got]
-        log.append(f"추가 계약 {no}: {len(got)}건")
+    tasks = [(f"c|{no}", {"inqryDiv": "3", "cntrctNo": no}) for no in found_new]
+    try:
+        _run_tasks(tasks, cache, "추가 계약번호")
+    finally:
+        for no, (kind, fam) in found_new.items():
+            got = _rows_from(cache, f"c|{no}", kind, fam, "", "", f"계약번호 {no}(검색으로 발견)")
+            rows += got
+            log.append(f"추가 계약 {no}: {len(got)}건")
 
 
 def _num(v):

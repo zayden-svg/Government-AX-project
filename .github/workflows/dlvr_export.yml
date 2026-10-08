@@ -12,7 +12,7 @@ jobs:
   dlvr:
     runs-on: ubuntu-latest
     environment: gov-tracker
-    timeout-minutes: 60
+    timeout-minutes: 150
     env:
       G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
       PYTHONIOENCODING: utf-8
@@ -23,13 +23,16 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install pandas openpyxl requests
+      - name: 지난 실행 결과(캐시) 불러오기
+        run: git fetch -q origin exports-dlvr && git show FETCH_HEAD:raw_cache.json > raw_cache.json || echo "캐시 없음"
       - name: 납품요구 수집 + 엑셀
         run: set -o pipefail; python dlvr_export.py --out dlvr.xlsx 2>&1 | tee run_log.txt
       - name: 엑셀 사본을 exports-dlvr 브랜치에 보관
         if: always()
         run: |
           mkdir -p /tmp/exp && cp run_log.txt /tmp/exp/ 2>/dev/null || true
-          [ -f dlvr.xlsx ] && cp dlvr.xlsx /tmp/exp/
+          cp raw_cache.json /tmp/exp/ 2>/dev/null || true
+          if [ -f dlvr.xlsx ]; then cp dlvr.xlsx /tmp/exp/; fi
           cd /tmp/exp && git init -q -b exports-dlvr && git add -A
           git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "납품요구 엑셀 $(date +%F)"
           git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-dlvr
