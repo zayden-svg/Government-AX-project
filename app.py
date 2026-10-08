@@ -1,5 +1,27 @@
 import common  # noqa: F401  (한국시간 고정 — 다른 모듈보다 먼저)
 
+
+def _refresh_stale_modules():
+    """Streamlit Cloud는 코드가 바뀌어도 예전에 읽어 둔 보조 모듈(common.py 등)을 그대로 쓸 때가 있음.
+    새 이름을 못 찾으면(ImportError) 보조 모듈을 의존 순서대로 다시 읽어 들인다."""
+    import importlib
+    import sys as _sys
+    for _m in ("common", "store", "product_match", "procurement_store", "ai_utils", "news_utils",
+               "trend_store", "pdf_report", "briefing_pdf", "alert_mailer"):
+        if _m in _sys.modules:
+            try:
+                importlib.reload(_sys.modules[_m])
+            except Exception:
+                pass
+
+
+try:
+    from common import emphasize_html as _probe1, solution_hits as _probe2  # noqa: F401
+    from store import load_competitors as _probe3  # noqa: F401
+    from product_match import build_product_map as _probe4  # noqa: F401
+except ImportError:
+    _refresh_stale_modules()
+
 import base64
 import re
 import json
