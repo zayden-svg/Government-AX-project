@@ -1,0 +1,37 @@
+name: Fetch Public Data Files (공공데이터포털 파일 내려받기)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ids:
+        description: '공공데이터포털 파일데이터 번호 (쉼표 구분, 예: 15053481,15131726)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 메타데이터 확인 후 파일 내려받기
+        run: |
+          mkdir -p out && cd out
+          for id in $(echo "${{ github.event.inputs.ids }}" | tr ',' ' '); do
+            curl -sL --max-time 60 -A "Mozilla/5.0" "https://www.data.go.kr/catalog/${id}/fileData.json" -o "meta_${id}.json" || true
+            curl -sL --max-time 60 -A "Mozilla/5.0" "https://www.data.go.kr/biz/dcat/metadata/${id}.do" -o "dcat_${id}.xml" || true
+            urls=$( (grep -oE 'https?://[^"<> ]*(fileDownload|download)[^"<> ]*' "meta_${id}.json" "dcat_${id}.xml" 2>/dev/null || true) | sed 's/&amp;/\&/g' | sort -u | head -5)
+            echo "[$id] download urls: $urls"
+            n=0
+            for u in $urls; do
+              n=$((n+1)); curl -sL --max-time 300 -A "Mozilla/5.0" -D "hdr_${id}_${n}.txt" "$u" -o "file_${id}_${n}.bin" || true
+              ls -la "file_${id}_${n}.bin"; file "file_${id}_${n}.bin" || true
+            done
+          done
+          ls -la
+      - name: public-files 브랜치에 보관
+        run: |
+          cd out && git init -q -b public-files && git add -A
+          git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "public files $(date +%F)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" public-files
