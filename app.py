@@ -428,7 +428,7 @@ st.markdown(
     [class*="st-key-kc_"] .gt-kpi {{ margin-bottom: 8px; transition: border-color .15s, transform .15s, box-shadow .15s; }}
     [class*="st-key-kc_"]:hover .gt-kpi-click {{ border-color: {C['accent']}; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.10); }}
     .gt-kpi-more {{ font-size: 11px; color: {C['accent']}; margin-top: 5px; font-weight: 700; }}
-    [class*="st-key-kc_"] [data-testid="stElementContainer"]:has(.stButton) {{ position: absolute; inset: 0 0 8px 0; margin: 0; z-index: 2; }}
+    [class*="st-key-kc_"] [data-testid="stElementContainer"]:has(.stButton) {{ position: absolute !important; inset: 0 0 8px 0; margin: 0; z-index: 2; width: 100% !important; height: auto !important; }}
     [class*="st-key-kc_"] .stButton, [class*="st-key-kc_"] .stButton button {{ width: 100% !important; height: 100% !important; }}
     [class*="st-key-kc_"] .stButton button {{ opacity: 0 !important; cursor: pointer; }}
     /* 테마 전환용 숨은 스크립트 칸 */
