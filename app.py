@@ -412,13 +412,19 @@ st.markdown(
     /* 체크박스 — 다크모드 윤곽선 */
     label:has(input[type="checkbox"]:not([role="switch"]):not(:checked)) > span + div {{
         background: {C['input_bg']} !important; border-color: {C['border_strong']} !important; }}
+    /* 제목 오른쪽 링크(🔗) 아이콘 — 모든 페이지에서 숨김 */
+    [data-testid="stHeaderActionElements"] {{ display:none !important; }}
     /* 공통 머리 카드 · 숫자 카드 */
     .gt-page-head {{ background:{C['navy']}; border-radius:12px; padding:16px 20px; margin-bottom:10px; }}
     .gt-page-kicker {{ font-size:10.5px; font-weight:700; letter-spacing:.12em; color:{_tc('#9DB4FF', '#9DB4FF')}; }}
     .gt-page-title {{ font-size:19px; font-weight:800; color:{C['navy_text']}; margin-top:3px; line-height:1.35; }}
     .gt-page-desc {{ font-size:12.5px; color:#C9D4E2; margin-top:4px; line-height:1.5; }}
     .gt-kpi-row {{ display:grid; gap:10px; margin:6px 0 14px; }}
-    .gt-kpi {{ background:{C['surface2']}; border:1px solid {C['border']}; border-radius:10px; padding:12px 12px 10px; text-align:center; }}
+    .gt-kpi {{ background:{C['surface2']}; border:1px solid {C['border']}; border-radius:10px; padding:10px 12px; text-align:center;
+               height:124px; box-sizing:border-box; overflow:hidden; display:flex; flex-direction:column; justify-content:center; }}
+    /* 글자가 길어도 카드 높이는 같게: 라벨 1줄·보조설명 2줄까지만 (넘치면 … · 마우스 올리면 전체 표시) */
+    .gt-kpi-label, .gt-kpi-more {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+    .gt-kpi-sub {{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }}
     .gt-kpi-num {{ font-size:22px; font-weight:800; line-height:1.25; }}
     .gt-kpi-label {{ font-size:11.5px; color:{C['text_muted']}; margin-top:3px; font-weight:600; }}
     .gt-kpi-sub {{ font-size:11px; color:{C['text_muted']}; margin-top:4px; line-height:1.4; }}
@@ -1143,7 +1149,8 @@ def page_header(tab_name, title, desc):
 
 
 def _kpi_card_html(label, value, color, sub="", clickable=False):
-    return (f'<div class="gt-kpi{" gt-kpi-click" if clickable else ""}"><div class="gt-kpi-num" style="color:{color};">{escape(str(value))}</div>'
+    tip = escape(f"{label} {value}" + (f" · {sub}" if sub else ""))
+    return (f'<div class="gt-kpi{" gt-kpi-click" if clickable else ""}" title="{tip}"><div class="gt-kpi-num" style="color:{color};">{escape(str(value))}</div>'
             f'<div class="gt-kpi-label">{escape(str(label))}</div>'
             + (f'<div class="gt-kpi-sub">{escape(str(sub))}</div>' if sub else "")
             + ('<div class="gt-kpi-more">목록 보기 ›</div>' if clickable else "") + '</div>')
@@ -1737,10 +1744,11 @@ with main_tab_dash:
     # 카드를 누르면 해당 공고 목록이 팝업으로 뜸 (예전 '사업 구분 필터'·'빠른 필터' 카드를 대신함)
     kpi_row([("전체 공고·과제", f"{_total_cnt_all}건", C['accent'], f"평균 AI 연관도 {_avg_score_all}", ("postings", _fd)),
              ("R&D 과제", f"{_rnd_cnt_all}건", _tc("#0F9D58", DARK["success_text"]), "", ("postings", _fd[_fd["_track"] == TRACK_RND])),
-             ("사업부 과제", f"{_biz_cnt_all}건", _tc("#C2410C", DARK["warn_text"]), "", ("postings", _fd[_fd["_track"] == TRACK_BIZ])),
-             ("진행 중인 공고", f"{len(_prog)}건", C['accent'], "", ("postings", _prog)),
+             ("사업부 과제", f"{_biz_cnt_all}건", _tc("#C2410C", DARK["warn_text"]), "", ("postings", _fd[_fd["_track"] == TRACK_BIZ]))],
+            key="dash")
+    kpi_row([("진행 중인 공고", f"{len(_prog)}건", C['accent'], "", ("postings", _prog)),
              ("관련 높은 공고", f"{len(_high)}건", C['danger_text'], "AI 연관도 60점 이상", ("postings", _high)),
-             ("마감 3일 이내", f"{len(_soon3)}건", C['warn_text'], "", ("postings", _soon3))], key="dash")
+             ("마감 3일 이내", f"{len(_soon3)}건", C['warn_text'], "", ("postings", _soon3))], key="dash2")
 
     st.caption("💡 각 공고를 클릭하면 AI가 왜 R&D/사업부로 구분했는지 판단 근거를 함께 확인할 수 있습니다.")
 
@@ -2309,17 +2317,6 @@ def _stat_strip(items):
 
 with main_tab_proc:
     page_header("낙찰결과", "조달청 낙찰·계약 결과와 재발주 예상", "누가 어떤 사업을 얼마에 따냈는지, 그 사업이 언제 다시 나올지 보여줍니다.")
-    _cx_meta, _cx_at = _cached_contract_meta()
-    if _cx_meta:
-        _cx1, _cx2 = st.columns([3, 1])
-        with _cx1:
-            st.caption(f"📥 조달청 IT 계약 전체(최근 3년) 엑셀 · {_cx_meta.get('date', '')} 기준 · "
-                       f"전체 {_cx_meta.get('rows', 0):,}건 = 곧 완료 {_cx_meta.get('soon', 0):,} · 진행중 {_cx_meta.get('ongoing', 0):,} · "
-                       f"자사·경쟁사 관련 {_cx_meta.get('mine', 0):,} · 업체 검색 시트 포함")
-        with _cx2:
-            st.download_button("📥 계약 현황 엑셀", data=_contract_excel_bytes, file_name=_cx_meta.get("filename") or "contracts.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               key="dl_contract_excel", use_container_width=True)
     proc_mine = st.toggle("🎯 자사 관련 보기", value=False, key="proc_mine",
                           help="경쟁사 수주 건과 자사 제품(대기열·예약·매크로·부하테스트 등) 관련 사업만 남기고, 관련 단어를 강조합니다.")
     _comp_kws = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
@@ -2338,7 +2335,21 @@ with main_tab_proc:
                  ("경쟁사 수주", f"{len(_rk['comp'])}건", C['danger_text'], "", ("proc", _rk["comp"])),
                  ("자사 제품 관련", f"{len(_rk['sol'])}건", C['success_text'], "", ("proc", _rk["sol"]))], key="proc")
 
-        st.markdown("#### 🏆 낙찰·계약 결과 (최근 30일)")
+        _cx_meta, _cx_at = _cached_contract_meta()
+        _hd1, _hd2 = st.columns([3, 1], vertical_alignment="center")
+        with _hd1:
+            st.markdown("#### 🏆 낙찰·계약 결과 (최근 30일)")
+        with _hd2:
+            if _cx_meta:
+                st.download_button("📥 계약 현황 엑셀 (전체 3년)", data=_contract_excel_bytes,
+                                   file_name=_cx_meta.get("filename") or "contracts.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                   key="dl_contract_excel", type="primary", use_container_width=True,
+                                   help=(f"조달청 IT 계약 {_cx_meta.get('date', '')} 기준 · 전체 {_cx_meta.get('rows', 0):,}건 "
+                                         f"(곧 완료 {_cx_meta.get('soon', 0):,} · 진행중 {_cx_meta.get('ongoing', 0):,} · "
+                                         f"자사·경쟁사 관련 {_cx_meta.get('mine', 0):,}) · 업체 검색 시트 포함"))
+            else:
+                st.caption("📥 계약 현황 엑셀: 첫 수집 완료 후 표시")
         view = res_df[res_df["_comp"] | res_df["_sol"]] if proc_mine else res_df
         view = view.sort_values("event_date", ascending=False)
         if view.empty:
