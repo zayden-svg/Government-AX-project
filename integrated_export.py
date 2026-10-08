@@ -234,7 +234,7 @@ def build(all_df):
         return ILLEGAL_CHARACTERS_RE.sub("", v) if isinstance(v, str) else v
     all_df = all_df.copy()
     for col in all_df.columns:
-        if all_df[col].dtype == object:
+        if not pd.api.types.is_numeric_dtype(all_df[col]):
             all_df[col] = all_df[col].map(clean)
     order = {"곧 완료": 0, "진행중": 1, "종료일 미상": 2, "완료": 3}
     d = all_df.assign(_o=all_df["상태"].map(order), _dd=pd.to_datetime(all_df["일자"], errors="coerce"))
@@ -275,8 +275,10 @@ def build(all_df):
         return c(ws, round(v / 1e8, 2), fmt=EOK) if abs(v) >= 1e7 else c(ws, int(v), fmt=WON)
 
     def link(url, title):
-        t = str(title or "").replace('"', '""')[:250]
-        return f'=HYPERLINK("{url}","{t}")' if str(url).startswith("http") else str(title or "")
+        t = clean(str(title or "")).replace('"', '""')[:240]
+        u = clean(str(url or "")).replace('"', "%22")
+        # 엑셀 수식 한 칸은 255자 문자열 제한 → 주소가 너무 길면 링크 없이 제목만
+        return f'=HYPERLINK("{u}","{t}")' if u.startswith("http") and len(u) < 250 else t
 
     def table(name, sub, helper=False):
         ws = wb.create_sheet(name)
