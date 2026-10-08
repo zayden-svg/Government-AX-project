@@ -15,13 +15,19 @@ import json
 import re
 import sys
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 BOARD_WORDS = re.compile(r"(입찰\s*공고|입찰\s*정보|입찰|구매\s*입찰|구매|조달|계약\s*정보|계약\s*현황|낙찰|공개\s*입찰)")
 BOARD_BAD = re.compile(r"(채용|입학|모집|장학|수강|학사|논문|도서|기숙사|식단|강의)")
-MENU_WORDS = re.compile(r"(알림|공지|소식|대학\s*소개|학교\s*소개|정보\s*공개|행정|대학\s*생활|커뮤니티|열린|사이트\s*맵|sitemap)", re.I)
+MENU_WORDS = re.compile(r"(알림|공지|소식|뉴스|대학\s*소개|학교\s*소개|대학\s*안내|정보\s*공개|행정|총무|대학\s*생활|캠퍼스\s*생활|커뮤니티|소통|열린|홍보|사이트\s*맵|sitemap|site\s*map|전체\s*메뉴)", re.I)
+SITEMAP_PATHS = ["/sitemap.do", "/kor/sitemap.do", "/ko/sitemap.do", "/kr/sitemap.do", "/main/sitemap.do", "/sitemap/sitemap.do",
+                 "/sitemap.jsp", "/sitemap.html", "/sitemap.php", "/kor/etc/sitemap.do", "/user/sitemap.do", "/home/sitemap.do"]
+HTML_LINK_RE = re.compile(r"""href\s*=\s*["']([^"'#][^"']*)["'][^>]*>(?:\s*<[^>]+>)*\s*([^<]{0,40}?(?:입찰|구매\s*입찰|구매/입찰|구매·입찰)[^<]{0,20})""")
+JSON_LINK_RE = re.compile(r'"(?:url|link|href|menuUrl|linkUrl)"\s*:\s*"([^"]+)"[^{}]{0,300}?"(?:name|title|menuNm|menuName|text)"\s*:\s*"([^"]*입찰[^"]*)"'
+                          r'|"(?:name|title|menuNm|menuName|text)"\s*:\s*"([^"]*입찰[^"]*)"[^{}]{0,300}?"(?:url|link|href|menuUrl|linkUrl)"\s*:\s*"([^"]+)"')
 RESULT_WORDS = re.compile(r"(낙찰|개찰\s*결과|입찰\s*결과|선정\s*결과|계약\s*체결|우선\s*협상|결과\s*공고|업체\s*선정|최종\s*선정)")
 DATE_RE = re.compile(r"(20\d{2})[.\-/년]\s*(\d{1,2})[.\-/월]\s*(\d{1,2})")
+DATE_SHORT_RE = re.compile(r"(?<!\d)(2\d)[.\-/](\d{2})[.\-/](\d{2})(?!\d)")
 WINNER_RE = re.compile(r"(낙\s*찰\s*자|낙찰\s*업체|낙찰\s*예정자|계약\s*상대자|계약\s*업체|선정\s*업체|우선\s*협상\s*대상자|업\s*체\s*명|상\s*호)\s*[:：\-]?\s*"
                        r"([\(（]?[주유재사]?[\)）]?\s*[가-힣A-Za-z0-9&\.\(\)（）·\s]{2,40}?)(?=\s{2,}|\n|\s*\(|\s*대표|\s*사업자|\s*/|\s*,|$)")
 AMOUNT_RE = re.compile(r"(낙찰\s*금액|계약\s*금액|낙찰가|투찰\s*금액)[^\d]{0,20}([\d,]{6,})\s*원?")
@@ -53,7 +59,11 @@ def load_master(path="data/univ_master.csv"):
 def _date(txt):
     m = DATE_RE.search(txt or "")
     if not m:
-        return ""
+        m2 = DATE_SHORT_RE.search(txt or "")
+        if not m2:
+            return ""
+        y, mo, d = 2000 + int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
+        return f"{y:04d}-{mo:02d}-{d:02d}" if 1 <= mo <= 12 and 1 <= d <= 31 else ""
     y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
     if not (1 <= mo <= 12 and 1 <= d <= 31):
         return ""
@@ -107,32 +117,50 @@ async def find_board(page, home):
         return s
 
     async def collect(url):
+        """링크 목록 + 화면 HTML 속 숨은 메뉴(JSON·스크립트)에서 '입찰' 링크까지"""
         try:
-            await page.goto(url, timeout=25000, wait_until="domcontentloaded")
+            await page.goto(url, timeout=45000, wait_until="domcontentloaded")
             await page.wait_for_timeout(2500)
-            return await eval_all(page, JS_LINKS)
         except Exception:
             return []
+        links = await eval_all(page, JS_LINKS)
+        base = page.url
+        for fr in page.frames:
+            try:
+                html = await fr.content()
+            except Exception:
+                continue
+            for h, t in HTML_LINK_RE.findall(html):
+                links.append({"t": t.strip(), "h": urljoin(fr.url or base, h), "o": ""})
+            for m in JSON_LINK_RE.findall(html):
+                h, t = (m[0], m[1]) if m[0] else (m[3], m[2])
+                links.append({"t": t, "h": urljoin(fr.url or base, h.replace("\\/", "/")), "o": ""})
+        return links
 
-    links = await collect(home)
-    menus = []
-    for l in links:
-        t, h = l["t"], l["h"]
-        if not h.startswith("http"):
-            continue
-        sc = score(t, h)
-        if sc > 0 and BOARD_WORDS.search(t + " " + h):
-            cands[h] = max(cands.get(h, 0), sc)
-        elif MENU_WORDS.search(t) and urlparse(h).netloc == urlparse(page.url).netloc:
-            menus.append(h)
+    def take(links, bonus=0):
+        menus = []
+        for l in links:
+            t, h = l["t"], l["h"]
+            if not h.startswith("http"):
+                continue
+            sc = score(t, h)
+            if sc > 0 and BOARD_WORDS.search(t + " " + h):
+                cands[h] = max(cands.get(h, 0), sc + bonus)
+            elif MENU_WORDS.search(t) and urlparse(h).netloc.replace("www.", "") == urlparse(home).netloc.replace("www.", ""):
+                menus.append(h)
+        return menus
+
+    menus = take(await collect(home))
+    root = f"{urlparse(page.url or home).scheme}://{urlparse(page.url or home).netloc}"
+    if not cands:                              # 사이트맵 먼저 (메뉴 전체가 한 화면에 있음)
+        sm = [m for m in menus if re.search(r"sitemap|사이트", m, re.I)] + [root + p_ for p_ in SITEMAP_PATHS]
+        for m in sm[:8]:
+            take(await collect(m), -1)
+            if cands:
+                break
     if not cands:
-        for m in list(dict.fromkeys(menus))[:6]:
-            for l in await collect(m):
-                t, h = l["t"], l["h"]
-                if h.startswith("http"):
-                    sc = score(t, h)
-                    if sc > 0 and BOARD_WORDS.search(t + " " + h):
-                        cands[h] = max(cands.get(h, 0), sc - 1)
+        for m in list(dict.fromkeys(menus))[:12]:
+            take(await collect(m), -1)
             if cands:
                 break
     return [h for h, _ in sorted(cands.items(), key=lambda x: -x[1])][:3]
