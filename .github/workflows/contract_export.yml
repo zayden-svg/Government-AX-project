@@ -2,13 +2,13 @@ name: G2B Contract Excel (조달청 계약 전체 수집 + 엑셀)
 
 on:
   schedule:
-    - cron: '0 18 * * *'   # UTC 18:00 = 한국시간 03:00 (아침 8시 수집과 겹치지 않게)
+    - cron: '0 15 * * *'   # UTC 15:00 = 한국시간 자정(조달청 하루 호출 한도가 새로 시작될 때) — 최대 5시간 20분, 8시 수집 전 종료
   workflow_dispatch:
     inputs:
       call_budget:
         description: '이번 실행 최대 API 호출 수 (조달청 하루 한도 보호)'
         required: false
-        default: '900'
+        default: '3000'
 
 permissions:
   contents: write
@@ -17,11 +17,11 @@ jobs:
   contracts:
     runs-on: ubuntu-latest
     environment: gov-tracker
-    timeout-minutes: 100
+    timeout-minutes: 350
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
-      CONTRACT_CALL_BUDGET: ${{ github.event.inputs.call_budget || '900' }}
+      CONTRACT_CALL_BUDGET: ${{ github.event.inputs.call_budget || '3000' }}
       PYTHONIOENCODING: utf-8
       PYTHONUNBUFFERED: '1'
     steps:

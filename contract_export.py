@@ -18,6 +18,8 @@ import os
 import re
 import sys
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -33,8 +35,9 @@ K_PROGRESS = "contract_crawl_progress"
 K_EXCEL = "contract_excel"
 K_EXCEL_META = "contract_excel_meta"   # 대시보드는 이것만 먼저 읽고, 파일은 버튼 누를 때 읽음
 YEARS_BACK = 3                     # 과거 몇 년치 계약까지 훑을지 (진행 중인 계약은 대부분 3년 이내 체결)
-CALL_BUDGET = int(os.getenv("CONTRACT_CALL_BUDGET", "900"))   # 한 번 실행에 쓸 최대 API 호출 수 (하루 한도 보호)
-TIME_BUDGET_SEC = int(os.getenv("CONTRACT_TIME_BUDGET", str(80 * 60)))
+CALL_BUDGET = int(os.getenv("CONTRACT_CALL_BUDGET", "3000"))   # 한 번 실행에 쓸 최대 API 호출 수 (하루 한도 보호)
+TIME_BUDGET_SEC = int(os.getenv("CONTRACT_TIME_BUDGET", str(320 * 60)))
+PARALLEL_DAYS = 4                  # 하루치 조회를 동시에 몇 개 돌릴지 (조달청 서버 부담 고려)
 ROWS_PER_PAGE = 999
 SOON_DAYS = 90                     # '곧 완료' = 오늘부터 90일 안에 끝나는 계약
 REORDER_LEAD_DAYS = 60
@@ -174,6 +177,7 @@ class Crawler:
         from collectors import _g2b_key
         self.key = _g2b_key()
         self.calls = 0
+        self._lock = threading.Lock()
         self.call_budget = call_budget
         self.deadline = time.time() + time_budget
 
@@ -184,7 +188,8 @@ class Crawler:
         from collectors import _g2b_get
         q = {"serviceKey": self.key, "pageNo": str(page_no), "numOfRows": str(ROWS_PER_PAGE), "type": "json",
              "inqryDiv": "1", "inqryBgnDate": day, "inqryEndDate": day}
-        self.calls += 1
+        with self._lock:
+            self.calls += 1
         resp = _g2b_get(url, q)
         try:
             data = resp.json()
@@ -239,14 +244,17 @@ def crawl():
     today = datetime.now().date()
     floor = (today - timedelta(days=365 * YEARS_BACK)).strftime("%Y%m%d")
     stats = {"calls": 0, "saved": 0, "raw": 0, "stopped": ""}
+    lock = threading.Lock()
 
     def _run_day(bt, d):
         res = cr.day(bt, d)
         if res is None:
             return False
         rows, raw = res
-        stats["saved"] += save_rows(rows)
-        stats["raw"] += raw
+        n = save_rows(rows)
+        with lock:
+            stats["saved"] += n
+            stats["raw"] += raw
         return True
 
     try:
@@ -263,12 +271,16 @@ def crawl():
             while nxt >= floor:
                 if cr.out_of_budget():
                     raise StopIteration
-                if not _run_day(bt, nxt):
+                base = datetime.strptime(nxt, "%Y%m%d")
+                days = [(base - timedelta(days=i)).strftime("%Y%m%d") for i in range(PARALLEL_DAYS)]
+                days = [d for d in days if d >= floor]
+                with ThreadPoolExecutor(max_workers=len(days)) as ex:
+                    ok = list(ex.map(lambda d: _run_day(bt, d), days))
+                if not all(ok):
                     raise StopIteration
-                nxt = (datetime.strptime(nxt, "%Y%m%d") - timedelta(days=1)).strftime("%Y%m%d")
+                nxt = (base - timedelta(days=len(days))).strftime("%Y%m%d")
                 prog[bt] = {"next": nxt, "done": nxt < floor, "at": datetime.now().strftime("%Y-%m-%d %H:%M")}
-                if cr.calls % 50 == 0:
-                    store.save_cache(K_PROGRESS, prog)
+                store.save_cache(K_PROGRESS, prog)
             prog[bt] = {"next": nxt, "done": True, "at": datetime.now().strftime("%Y-%m-%d %H:%M")}
     except StopIteration:
         stats["stopped"] = "이번 실행 호출 한도·시간 도달 → 다음 실행에서 이어서"
