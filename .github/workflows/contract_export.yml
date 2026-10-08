@@ -1,0 +1,43 @@
+name: G2B Contract Excel (조달청 계약 전체 수집 + 엑셀)
+
+on:
+  schedule:
+    - cron: '0 18 * * *'   # UTC 18:00 = 한국시간 03:00 (아침 8시 수집과 겹치지 않게)
+  workflow_dispatch:
+    inputs:
+      call_budget:
+        description: '이번 실행 최대 API 호출 수 (조달청 하루 한도 보호)'
+        required: false
+        default: '900'
+
+permissions:
+  contents: write
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 100
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
+      CONTRACT_CALL_BUDGET: ${{ github.event.inputs.call_budget || '900' }}
+      PYTHONIOENCODING: utf-8
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: 계약 수집(이어하기) + 엑셀 생성
+        run: python contract_export.py --out contracts.xlsx
+      - name: 엑셀 사본을 exports 브랜치에 보관 (최신 1개만)
+        if: always()
+        run: |
+          [ -f contracts.xlsx ] || exit 0
+          mkdir -p /tmp/exp && cp contracts.xlsx /tmp/exp/
+          cd /tmp/exp && git init -q -b exports && git add contracts.xlsx
+          git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "계약 엑셀 $(date +%F)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports

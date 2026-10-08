@@ -36,7 +36,7 @@ from pdf_report import build_daily_report_pdf
 from procurement_store import load_results, load_reorder_candidates
 from store import (
     load_cache_many, upsert_subscriber, delete_subscriber, get_subscriber, count_subscribers,
-    load_competitors, save_competitors, reset_competitors,
+    load_competitors, save_competitors, reset_competitors, load_cache,
 )
 try:
     from alert_mailer import smtp_ready, send_welcome     # 메일 알림 등록 직후 확인 메일
@@ -1092,6 +1092,17 @@ def render_toggle_card(label, count, key, active, colors, on_click=None, args=No
 # ------------------------------------------------------------
 # 페이지 공통 부품 — 5개 탭 모두 같은 머리 카드 · 같은 숫자 카드 (글자 크기 3단계: 제목 19 · 본문 13 · 보조 11.5)
 # ------------------------------------------------------------
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_contract_meta():
+    return load_cache("contract_excel_meta")
+
+
+def _contract_excel_bytes():
+    """버튼을 누를 때만 큰 엑셀 파일을 읽음 (화면 로딩 속도 보호)"""
+    v, _ = load_cache("contract_excel")
+    return base64.b64decode(v["b64"]) if v and v.get("b64") else b""
+
+
 def page_header(tab_name, title, desc):
     """머리 카드: 윗줄 'GOV-TRACKER · 탭이름'(브랜드만 영문) · 제목 · 한 줄 설명"""
     st.markdown(
@@ -2266,6 +2277,17 @@ def _stat_strip(items):
 
 with main_tab_proc:
     page_header("낙찰결과", "조달청 낙찰·계약 결과와 재발주 예상", "누가 어떤 사업을 얼마에 따냈는지, 그 사업이 언제 다시 나올지 보여줍니다.")
+    _cx_meta, _cx_at = _cached_contract_meta()
+    if _cx_meta:
+        _cx1, _cx2 = st.columns([3, 1])
+        with _cx1:
+            st.caption(f"📥 조달청 IT 계약 전체(최근 3년) 엑셀 · {_cx_meta.get('date', '')} 기준 · "
+                       f"전체 {_cx_meta.get('rows', 0):,}건 = 곧 완료 {_cx_meta.get('soon', 0):,} · 진행중 {_cx_meta.get('ongoing', 0):,} · "
+                       f"자사·경쟁사 관련 {_cx_meta.get('mine', 0):,} · 업체 검색 시트 포함")
+        with _cx2:
+            st.download_button("📥 계약 현황 엑셀", data=_contract_excel_bytes, file_name=_cx_meta.get("filename") or "contracts.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               key="dl_contract_excel", use_container_width=True)
     proc_mine = st.toggle("🎯 자사 관련 보기", value=False, key="proc_mine",
                           help="경쟁사 수주 건과 자사 제품(대기열·예약·매크로·부하테스트 등) 관련 사업만 남기고, 관련 단어를 강조합니다.")
     _comp_kws = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
