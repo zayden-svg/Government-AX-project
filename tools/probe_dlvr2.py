@@ -14,15 +14,11 @@ def go(op, **p):
         print(op, p, "→ total", b.get("totalCount"), "| sample:", json.dumps(it[:1], ensure_ascii=False)[:900])
     except Exception:
         print(op, p, "→", r.status_code, t[:300])
-for div in ("1", "2", "3"):
-    go("getDlvrReqDtlInfoList", inqryDiv=div, inqryBgnDate="20260901", inqryEndDate="20260901")
-go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate="202609010000", inqryEndDate="202609012359")
-go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate="20260101", inqryEndDate="20261007")
-go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate="20260101", inqryEndDate="20261007", prdctIdntNoNm="NetFUNNEL")
-go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate="20260101", inqryEndDate="20261007", dtilPrdctClsfcNoNm="통신소프트웨어")
-go("getDlvrReqDtlInfoList", inqryDiv="2", cntrctNo="R26TA01343941")
-go("getDlvrReqDtlInfoList", inqryDiv="2", cntrctNo="002460509")
-go("getDlvrReqDtlInfoList", inqryDiv="3", cntrctNo="002460509")
-go("getDlvrReqInfoList", inqryDiv="1", inqryBgnDate="20260901", inqryEndDate="20260901")
-go("getDlvrReqInfoList", inqryDiv="2", cntrctNo="002460509")
-go("getDlvrReqInfoList", inqryDiv="1", inqryBgnDate="20250101", inqryEndDate="20251231", cntrctNo="002460509")
+for b, e in (("20260801", "20260831"), ("20260701", "20260930"), ("20260101", "20260331")):
+    go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate=b, inqryEndDate=e, prdctIdntNoNm="에스티씨랩")
+for b, e in (("20250401", "20250430"), ("20190101", "20190131"), ("20170301", "20170331"), ("20150301", "20150331")):
+    go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate=b, inqryEndDate=e, prdctIdntNoNm="에스티씨랩")
+    go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate=b, inqryEndDate=e, prdctIdntNoNm="NetFUNNEL")
+go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate="20150301", inqryEndDate="20150301")
+go("getDlvrReqDtlInfoList", inqryDiv="1", inqryBgnDate="20120301", inqryEndDate="20120301")
+go("getDlvrReqDtlInfoList", inqryDiv="3", cntrctNo="002150153")
