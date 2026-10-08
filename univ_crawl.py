@@ -215,6 +215,10 @@ async def read_detail(page, post):
     w = WINNER_RE.search(body)
     a = AMOUNT_RE.search(body)
     winner = re.sub(r"\s+", " ", w.group(2)).strip(" :：-") if w else ""
+    # 회사 이름처럼 보이지 않으면 버림 (예: '가 소정 기일')
+    if winner and not re.search(r"(주식회사|\(주\)|㈜|유한|회사|시스템|정보|테크|텍|소프트|솔루션|네트웍|네트워크|컴퍼니|커뮤니케이션|"
+                                r"아이티|IT|디지털|데이타|데이터|산업|전자|통신|엔지니어링|corp|inc|co\.)", winner, re.I):
+        winner = ""
     return winner, (a.group(2).replace(",", "") if a else ""), url
 
 

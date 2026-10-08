@@ -67,8 +67,31 @@ def univ_lookup(name):
     return None
 
 
-def resolve_region(name, hint=""):
+# 자주 나오는 공공기관 본사 소재지 (조달청 수요기관 지역표가 채워지기 전 임시 보완)
+KNOWN_HQ = {"한국지능정보사회진흥원": "대구", "한국항공우주연구원": "대전", "한국건설기술연구원": "경기", "한국교육학술정보원": "대구",
+            "한국과학기술정보연구원": "대전", "한국인터넷진흥원": "전남", "국방과학연구소": "대전", "국립보건연구원": "충북",
+            "한국생산기술연구원": "충남", "한국지역정보개발원": "서울", "중소벤처기업진흥공단": "경남", "한국고용정보원": "충북",
+            "한국교통안전공단": "경북", "각 수요기관": "중앙(전국)"}
+CODE_REGION = {}
+
+
+def load_code_region():
+    try:
+        with get_engine().begin() as conn:
+            rows = conn.execute(text("SELECT code, region FROM dminstt_region WHERE region <> ''")).fetchall()
+        CODE_REGION.update({str(c): r for c, r in rows})
+    except Exception:
+        pass
+    print(f"[지역표] 수요기관 코드 {len(CODE_REGION):,}곳")
+
+
+def resolve_region(name, hint="", code=""):
     """기관 소재 시·도 (짧은 이름). 순서: ① 원자료 지역 ② 대학 목록 ③ 기관명 속 지역명 ④ 중앙부처 ⑤ 미확인"""
+    if code and str(code) in CODE_REGION:
+        return CODE_REGION[str(code)]
+    for k, v in KNOWN_HQ.items():
+        if k in str(name or ""):
+            return v
     h = str(hint or "").strip()
     if h:
         tok = h.split()[0]
@@ -121,7 +144,8 @@ def _common(df, comp):
     df["_gk"] = df["대표업체"].map(ce.group_key)
     df["대학"] = df["수요기관"].map(univ_type)
     hints = df["_지역힌트"] if "_지역힌트" in df else pd.Series([""] * len(df), index=df.index)
-    df["지역"] = [resolve_region(n, h) for n, h in zip(df["수요기관"], hints)]
+    codes = df["_기관코드"] if "_기관코드" in df else pd.Series([""] * len(df), index=df.index)
+    df["지역"] = [resolve_region(n, h, c) for n, h, c in zip(df["수요기관"], hints, codes)]
     df["담당지역"] = df["지역"].map(lambda r: "Y" if r in MY_REGIONS else "")
     df["기관구분"] = df["대학"].map(lambda u: "대학" if u else "공공")
     hits = df["사업명·제품"].map(solution_hits)
@@ -141,6 +165,7 @@ def load_contracts(comp):
         "출처": "계약", "구분": d["biz_type"], "사업명": d["title"], "제품": "", "수요기관": d["수요기관"],
         "업체목록": d["업체목록"], "금액": d["계약금액"], "일자": d["cntrct_date"], "종료일": d["end_date"],
         "종료추정": d["end_est"], "원문": d["url"], "_key": "계약|" + d["uniq_key"],
+        "_기관코드": d["dminstt_raw"].map(lambda x: (re.findall(r"\[\d+\^([^\^\]]+)\^", str(x)) or [""])[0]),
     })
     ntce = {str(x).split("-")[0] for x in d["ntce_no"] if str(x)}
     return _common(out, comp), ntce
@@ -162,6 +187,7 @@ def load_awards(comp, skip_bid_nos):
         "수요기관": [d or n for d, n in zip(a["dminstt"], a["ntce_instt"])],
         "업체목록": a["winner"].map(lambda w: [w] if w else []), "금액": a["amount"].map(ce._won),
         "일자": a["event_date"], "종료일": a["end_date"], "종료추정": "Y", "원문": a["url"], "_key": "낙찰|" + a["uniq_key"],
+        "_기관코드": a["dminstt_cd"],
     })
     return _common(out, comp)
 
@@ -189,7 +215,7 @@ def load_dlvr(comp, cache_path):
         # 솔루션 납품은 '납품일 + 1년'을 유지보수·재구매 시점으로 봄 (추정)
         "종료일": (pd.to_datetime(d["dlvrReqRcptDate"].map(ce._date), errors="coerce") + pd.Timedelta(days=365)).dt.strftime("%Y-%m-%d"),
         "종료추정": "Y", "원문": "", "_key": "납품|" + d["dlvrReqNo"].astype(str) + "|" + d["prdctSno"].astype(str),
-        "_지역힌트": d["dminsttRgnNm"],
+        "_지역힌트": d["dminsttRgnNm"], "_기관코드": d["dminsttCd"],
     })
     out = _common(out, comp)
     # 경쟁사·비교군 '제품' 납품은 판매업체가 리셀러여도 경쟁사 수주로 표시
@@ -462,6 +488,7 @@ def main():
     ap.add_argument("--dlvr-cache", default="raw_cache.json")
     a = ap.parse_args()
     comp = store.load_competitors()[0]
+    load_code_region()
     cons, ntce = load_contracts(comp)
     awards = load_awards(comp, ntce)
     dlvr = load_dlvr(comp, a.dlvr_cache)

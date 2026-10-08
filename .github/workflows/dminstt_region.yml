@@ -1,0 +1,30 @@
+name: Agency Regions (수요기관 지역표)
+on:
+  schedule:
+    - cron: '20 15 * * *'   # 한국시간 00:20
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  region:
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: set -o pipefail; python dminstt_region.py 2>&1 | tee region_log.txt
+      - if: always()
+        run: |
+          mkdir -p /tmp/exp && cp region_log.txt /tmp/exp/ 2>/dev/null || true
+          cd /tmp/exp && git init -q -b exports-region && git add -A
+          git -c user.name=bot -c user.email=bot@users.noreply.github.com commit -qm region
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-region
