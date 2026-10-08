@@ -582,7 +582,7 @@ def build_excel(df, today=None):
             "주요 기관": g["수요기관"].apply(lambda s: ", ".join(s.value_counts().index[:3])),
             "경쟁사": g["경쟁사"].apply(lambda s: "Y" if (s == "Y").any() else ""),
             "_name": g["업체목록"].agg(lambda s: s.value_counts().index[0]),
-            "다른 표기": g["업체목록"].agg(lambda s: ", ".join(list(dict.fromkeys(s))[1:4])),
+            "다른 표기": g["업체목록"].agg(lambda s: ", ".join([x for x in s.value_counts().index[1:4]])),
         }).sort_values(["진행중", "계약 수"], ascending=False).set_index("_name")
     else:
         summ = pd.DataFrame(columns=["계약 수", "진행중", "곧 완료", "자사 관련", "금액 합계(원)", "최근 계약일", "주요 기관", "경쟁사", "다른 표기"])
