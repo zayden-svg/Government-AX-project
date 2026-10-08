@@ -1133,6 +1133,16 @@ def _cached_contract_meta():
     return load_cache("contract_excel_meta")
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_integrated_meta():
+    return load_cache("integrated_excel_meta")
+
+
+def _integrated_excel_bytes():
+    v, _ = load_cache("integrated_excel")
+    return base64.b64decode(v["b64"]) if v and v.get("b64") else b""
+
+
 def _contract_excel_bytes():
     """버튼을 누를 때만 큰 엑셀 파일을 읽음 (화면 로딩 속도 보호)"""
     v, _ = load_cache("contract_excel")
@@ -2336,7 +2346,15 @@ with main_tab_proc:
                  ("자사 제품 관련", f"{len(_rk['sol'])}건", C['success_text'], "", ("proc", _rk["sol"]))], key="proc")
 
         _cx_meta, _cx_at = _cached_contract_meta()
-        _hd1, _hd2 = st.columns([3, 1], vertical_alignment="center")
+        _ix_meta, _ = _cached_integrated_meta()
+        _hd1, _hd3, _hd2 = st.columns([2.2, 1, 1], vertical_alignment="center")
+        with _hd3:
+            if _ix_meta:
+                st.download_button("📥 수주 통합 현황 (업체검색)", data=_integrated_excel_bytes,
+                                   file_name=_ix_meta.get("filename") or "integrated.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                   key="dl_integrated_excel", type="primary", use_container_width=True,
+                                   help="낙찰·계약·쇼핑몰 납품을 업체 기준으로 합친 엑셀 — 업체검색, 경쟁사 수주, API 관련, 대학 사업, 영업 파트너 후보")
         with _hd1:
             st.markdown("#### 🏆 낙찰·계약 결과 (최근 30일)")
         with _hd2:
