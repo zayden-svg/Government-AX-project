@@ -256,6 +256,7 @@ async def main_async(a):
         await browser.close()
     rows = [r for o, _ in res for r in o]
     report = [r for _, r in res]
+    rows += collect_ebiz4u(ce.it_reason)
     json.dump(rows, open("univ_bids.json", "w", encoding="utf-8"), ensure_ascii=False)
     json.dump(report, open("univ_crawl_report.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     ok = sum(1 for r in report if r["status"] == "성공")
@@ -265,6 +266,46 @@ async def main_async(a):
         save_db(rows, report)
     except Exception as e:
         print(f"[WARN] DB 저장 실패: {type(e).__name__}")
+
+
+EBIZ4U_LIST = "https://www.ebiz4u.co.kr/home.do?cmd=private&subcmd=searchBiddingList&srchServiceType=ebiz4u&srchPrType={t}&srchText="
+
+
+def collect_ebiz4u(it_reason):
+    """이비즈포유(대학 전자입찰 플랫폼: 성균관대·연세대·이화여대·국민대·숭실대·홍익대 등)의 현재 공고 전체.
+    공고는 마감 전까지만 보이므로 매일 받아 쌓음"""
+    import requests
+    import csv
+    master = {re.sub(r"\s+", "", r["학교명"]): r for r in csv.DictReader(open("data/univ_master.csv", encoding="utf-8-sig"))}
+    keys = sorted(master, key=len, reverse=True)
+    out, seen = [], set()
+    for t in ("ALL", "W", "G", "C"):
+        try:
+            r = requests.get(EBIZ4U_LIST.format(t=t), headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+            lst = (r.json() or {}).get("biddingList") or []
+        except Exception as e:
+            print(f"[WARN] 이비즈포유 {t}: {type(e).__name__}")
+            continue
+        for b in lst:
+            k = b.get("rfq_no")
+            if not k or k in seen:
+                continue
+            seen.add(k)
+            title = str(b.get("ttl") or "").strip()
+            reason = it_reason({"cntrctNm": title})
+            if not reason:
+                continue
+            org = str(b.get("org_nm") or "").strip()
+            nm = re.sub(r"\s+", "", org)
+            m = next((master[x] for x in keys if x in nm), None)
+            reg = datetime.fromtimestamp(int(b.get("reg_dt") or 0) / 1000).strftime("%Y-%m-%d") if b.get("reg_dt") else ""
+            out.append({"school": org, "campus": "", "type": (m or {}).get("학제", ""), "region": (m or {}).get("지역", ""),
+                        "found": (m or {}).get("설립구분", ""), "home": "https://www.ebiz4u.co.kr", "title": title, "date": reg,
+                        "kind": "결과" if RESULT_WORDS.search(title) else "공고", "winner": "", "amount": "",
+                        "url": f"https://www.ebiz4u.co.kr/bid/bidding.do?cmd=viewPublic&subcmd=login&aspId={b.get('asp_id', 'u.ebiz4u')}&rfqNo={k}",
+                        "it_reason": reason, "board": "이비즈포유"})
+    print(f"[OK] 이비즈포유: 현재 공고 {len(seen)}건 중 IT 관련 {len(out)}건")
+    return out
 
 
 def save_db(rows, report):
@@ -285,7 +326,8 @@ def save_db(rows, report):
             upd = ", ".join(f"{c}=excluded.{c}" for c in cols[1:])
             conn.execute(text(f"INSERT INTO univ_bids ({', '.join(cols)}) VALUES ({', '.join(':' + c for c in cols)}) "
                               f"ON CONFLICT (uniq_key) DO UPDATE SET {upd}"), data)
-    store.save_cache("univ_crawl_report", report)
+    if report is not None:
+        store.save_cache("univ_crawl_report", report)
 
 
 async def probe(urls):
@@ -347,9 +389,15 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--only", default="")
     ap.add_argument("--probe", default="")
+    ap.add_argument("--ebiz4u-only", action="store_true", help="이비즈포유 공고만 (매일)")
     a = ap.parse_args()
     if a.probe:
         asyncio.run(probe([x for x in a.probe.split(",,") if x]))
+        return 0
+    if a.ebiz4u_only:
+        import contract_export as ce
+        rows = collect_ebiz4u(ce.it_reason)
+        save_db(rows, None)
         return 0
     asyncio.run(main_async(a))
     return 0

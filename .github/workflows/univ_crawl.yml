@@ -2,7 +2,8 @@ name: University Bids (사립대·전문대 홈페이지 입찰 수집)
 
 on:
   schedule:
-    - cron: '0 19 * * 1'   # 매주 화요일 04:00 (한국시간)
+    - cron: '0 19 * * 1'   # 매주 화요일 04:00 (한국시간) — 학교 홈페이지 전체
+    - cron: '0 20 * * *'   # 매일 05:00 — 이비즈포유 공고만 (마감 전까지만 보여서 매일 쌓음)
   workflow_dispatch:
     inputs:
       limit: { description: '학교 수 제한(시험용, 0=전체)', required: false, default: '0' }
@@ -29,7 +30,7 @@ jobs:
           cache: 'pip'
       - run: pip install -r requirements.txt && python -m playwright install --with-deps chromium
       - name: 대학 홈페이지 입찰 게시판 수집
-        run: set -o pipefail; python univ_crawl.py --limit "${{ github.event.inputs.limit || '0' }}" --only "${{ github.event.inputs.only }}" --probe "${{ github.event.inputs.probe }}" 2>&1 | tee univ_log.txt
+        run: set -o pipefail; if [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then python univ_crawl.py --ebiz4u-only 2>&1 | tee univ_log.txt; exit 0; fi; python univ_crawl.py --limit "${{ github.event.inputs.limit || '0' }}" --only "${{ github.event.inputs.only }}" --probe "${{ github.event.inputs.probe }}" 2>&1 | tee univ_log.txt
       - name: 결과를 exports-univ 브랜치에 보관
         if: always()
         run: |
