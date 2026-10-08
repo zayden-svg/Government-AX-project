@@ -7,6 +7,7 @@ on:
     inputs:
       limit: { description: '학교 수 제한(시험용, 0=전체)', required: false, default: '0' }
       only: { description: '특정 학교만 (이름 일부)', required: false, default: '' }
+      probe: { description: '조사용 주소(,,로 구분)', required: false, default: '' }
 
 permissions:
   contents: write
@@ -28,7 +29,7 @@ jobs:
           cache: 'pip'
       - run: pip install -r requirements.txt && python -m playwright install --with-deps chromium
       - name: 대학 홈페이지 입찰 게시판 수집
-        run: set -o pipefail; python univ_crawl.py --limit "${{ github.event.inputs.limit || '0' }}" --only "${{ github.event.inputs.only }}" 2>&1 | tee univ_log.txt
+        run: set -o pipefail; python univ_crawl.py --limit "${{ github.event.inputs.limit || '0' }}" --only "${{ github.event.inputs.only }}" --probe "${{ github.event.inputs.probe }}" 2>&1 | tee univ_log.txt
       - name: 결과를 exports-univ 브랜치에 보관
         if: always()
         run: |

@@ -12,11 +12,10 @@ import argparse
 import asyncio
 import csv
 import json
-import os
 import re
 import sys
 from datetime import datetime, timedelta
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 BOARD_WORDS = re.compile(r"(입찰\s*공고|입찰\s*정보|입찰|구매\s*입찰|구매|조달|계약\s*정보|계약\s*현황|낙찰|공개\s*입찰)")
 BOARD_BAD = re.compile(r"(채용|입학|모집|장학|수강|학사|논문|도서|기숙사|식단|강의)")
@@ -61,19 +60,30 @@ def _date(txt):
     return f"{y:04d}-{mo:02d}-{d:02d}"
 
 
-JS_LINKS = """() => Array.from(document.querySelectorAll('a')).map(a => ({t: (a.innerText||a.title||'').trim().slice(0,60), h: a.href||'', o: a.getAttribute('onclick')||''}))"""
+JS_LINKS = """() => Array.from(document.querySelectorAll('a')).map(a => ({t: ((a.textContent||'').replace(/\\s+/g,' ').trim() || a.title || (a.querySelector('img')||{}).alt || '').slice(0,60), h: a.href||'', o: a.getAttribute('onclick')||''}))"""
 JS_ROWS = """() => {
   const out = [];
-  const rows = document.querySelectorAll('table tbody tr, ul li, .board-list li, .bbs_list li, div[class*=list] > div, dl');
+  const rows = document.querySelectorAll('table tr, ul li, ol li, div[class*=list] > div, div[class*=List] > div, div[class*=row], dl');
   rows.forEach(r => {
     const a = r.querySelector('a');
     if (!a) return;
-    const t = (a.innerText || a.title || '').replace(/\\s+/g,' ').trim();
+    const t = (a.textContent || a.title || '').replace(/\\s+/g,' ').trim();
     if (t.length < 6) return;
-    out.push({title: t.slice(0,200), href: a.href || '', onclick: a.getAttribute('onclick') || '', text: (r.innerText||'').replace(/\\s+/g,' ').slice(0,400)});
+    out.push({title: t.slice(0,200), href: a.href || '', onclick: a.getAttribute('onclick') || '', text: (r.textContent||'').replace(/\\s+/g,' ').slice(0,400)});
   });
   return out;
 }"""
+
+
+async def eval_all(page, js):
+    """메인 문서 + 모든 프레임(iframe/frameset)에서 같은 스크립트 실행"""
+    out = []
+    for fr in page.frames:
+        try:
+            out += await fr.evaluate(js)
+        except Exception:
+            pass
+    return out
 
 
 async def find_board(page, home):
@@ -99,8 +109,8 @@ async def find_board(page, home):
     async def collect(url):
         try:
             await page.goto(url, timeout=25000, wait_until="domcontentloaded")
-            await page.wait_for_timeout(1500)
-            return await page.evaluate(JS_LINKS)
+            await page.wait_for_timeout(2500)
+            return await eval_all(page, JS_LINKS)
         except Exception:
             return []
 
@@ -133,14 +143,11 @@ async def read_board(page, url):
     posts = []
     try:
         await page.goto(url, timeout=25000, wait_until="domcontentloaded")
-        await page.wait_for_timeout(2000)
+        await page.wait_for_timeout(3000)
     except Exception:
         return posts
     for pno in range(1, MAX_PAGES + 1):
-        try:
-            rows = await page.evaluate(JS_ROWS)
-        except Exception:
-            rows = []
+        rows = await eval_all(page, JS_ROWS)
         for r in rows:
             d = _date(r["text"])
             if not d:
@@ -226,7 +233,7 @@ async def crawl_school(browser, sch, overrides, it_reason, sem):
             rep["status"] = f"오류: {type(e).__name__}"
         finally:
             await ctx.close()
-        print(f"[{rep['status']}] {sch['school']} · 글 {rep['posts']} · IT {rep['it_posts']} · {rep['board'][:80]}", flush=True)
+            print(f"[{rep['status']}] {sch['school']} · 글 {rep['posts']} · IT {rep['it_posts']} · {rep['board'][:80]}", flush=True)
         return out, rep
 
 
@@ -281,11 +288,42 @@ def save_db(rows, report):
     store.save_cache("univ_crawl_report", report)
 
 
+async def probe(urls):
+    """조사용: 주소를 열어 프레임별 글자·링크를 출력"""
+    from playwright.async_api import async_playwright
+    async with async_playwright() as p:
+        b = await p.chromium.launch()
+        pg = await (await b.new_context(ignore_https_errors=True, locale="ko-KR")).new_page()
+        for u in urls:
+            try:
+                await pg.goto(u, timeout=30000, wait_until="domcontentloaded")
+                await pg.wait_for_timeout(5000)
+            except Exception as e:
+                print("ERR", u, e)
+                continue
+            print("=====", u, "→", pg.url, "frames", len(pg.frames))
+            for fr in pg.frames:
+                try:
+                    txt = await fr.evaluate("() => (document.body ? document.body.innerText : '').replace(/\\s+/g,' ').slice(0,1500)")
+                    links = await fr.evaluate(JS_LINKS)
+                except Exception:
+                    continue
+                print("--- frame", fr.url[:150]); print(txt)
+                for l in links[:80]:
+                    if l["t"]:
+                        print("   ", l["t"][:40], "|", (l["h"] or l["o"])[:150])
+        await b.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--only", default="")
+    ap.add_argument("--probe", default="")
     a = ap.parse_args()
+    if a.probe:
+        asyncio.run(probe([x for x in a.probe.split(",,") if x]))
+        return 0
     asyncio.run(main_async(a))
     return 0
 
