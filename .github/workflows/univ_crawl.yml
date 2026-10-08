@@ -1,0 +1,38 @@
+name: University Bids (사립대·전문대 홈페이지 입찰 수집)
+
+on:
+  schedule:
+    - cron: '0 19 * * 1'   # 매주 화요일 04:00 (한국시간)
+  workflow_dispatch:
+    inputs:
+      limit: { description: '학교 수 제한(시험용, 0=전체)', required: false, default: '0' }
+      only: { description: '특정 학교만 (이름 일부)', required: false, default: '' }
+
+permissions:
+  contents: write
+
+jobs:
+  univ:
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 300
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PYTHONIOENCODING: utf-8
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt && python -m playwright install --with-deps chromium
+      - name: 대학 홈페이지 입찰 게시판 수집
+        run: set -o pipefail; python univ_crawl.py --limit "${{ github.event.inputs.limit || '0' }}" --only "${{ github.event.inputs.only }}" 2>&1 | tee univ_log.txt
+      - name: 결과를 exports-univ 브랜치에 보관
+        if: always()
+        run: |
+          mkdir -p /tmp/exp && cp univ_log.txt univ_bids.json univ_crawl_report.json /tmp/exp/ 2>/dev/null || true
+          cd /tmp/exp && git init -q -b exports-univ && git add -A
+          git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "대학 입찰 $(date +%F)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-univ
