@@ -112,9 +112,82 @@ def is_competitor_match(text, competitor_keywords=None):
     return any(v in low for v in competitor_variants(competitor_keywords or COMPETITOR_DEFAULT))
 
 
+# ------------------------------------------------------------
+# 자사 관련 단어 찾기 — '포함어' 오탐 차단 (펫티켓·에티켓의 '티켓', 리셀러의 '리셀' 등)
+#   ① 제외어 사전: 이 단어 안에 들어 있는 키워드는 무시
+#   ② 영문 키워드(NFA·API 등)는 앞뒤가 영문자가 아닐 때만 인정 (예: 'INFANT'의 nfa 제외)
+#   ③ 짧은 한글 키워드(2글자)는 제외어로 덮인 위치를 건너뜀
+# ------------------------------------------------------------
+KEYWORD_EXCLUDE_TERMS = [
+    "에티켓", "펫티켓", "네티켓", "매너티켓", "티켓몬스터",          # 티켓
+    "리셀러", "셀러",                                                # 리셀
+    "청약철회",                                                      # 청약(구매 취소 절차 — 접속 폭주와 무관)
+    "매크로경제", "매크로렌즈", "매크로바이오틱",                    # 매크로
+    "대기오염", "대기환경", "대기질", "대기배출",                    # 대기
+    "예매율", "선착순 마감",
+]
+_LATIN_RE = re.compile(r"[A-Za-z]")
+
+
+def keyword_spans(text, keywords):
+    """text 안에서 keywords가 '진짜로' 나온 위치 [(시작, 끝, 키워드)] — 긴 키워드 우선, 제외어 안은 무시"""
+    raw = str(text or "")
+    if not raw or not keywords:
+        return []
+    low = raw.lower()
+    blocked = [False] * len(raw)
+    for ex in KEYWORD_EXCLUDE_TERMS:
+        e = ex.lower()
+        start = low.find(e)
+        while start >= 0:
+            for i in range(start, start + len(e)):
+                blocked[i] = True
+            start = low.find(e, start + 1)
+    taken = [False] * len(raw)
+    spans = []
+    for kw in sorted({k for k in keywords if k}, key=len, reverse=True):
+        k = kw.lower()
+        is_latin = bool(_LATIN_RE.search(k))
+        start = low.find(k)
+        while start >= 0:
+            end = start + len(k)
+            ok = not any(blocked[start:end]) and not any(taken[start:end])
+            if ok and is_latin:      # 영문 키워드는 단어 경계 확인
+                before = raw[start - 1] if start > 0 else " "
+                after = raw[end] if end < len(raw) else " "
+                ok = not (before.isascii() and before.isalpha()) and not (after.isascii() and after.isalpha())
+            if ok:
+                spans.append((start, end, kw))
+                for i in range(start, end):
+                    taken[i] = True
+            start = low.find(k, start + 1)
+    return sorted(spans)
+
+
+def keyword_hits(text, keywords):
+    """실제로 걸린 키워드 목록(중복 제거, 등장 순)"""
+    return list(dict.fromkeys(kw for _, _, kw in keyword_spans(text, keywords)))
+
+
+# 단독으로는 IT 사업이 아닐 수 있는 단어 — 제목에 IT 맥락 단어가 함께 있을 때만 인정
+#   (예: '뮤지컬 관람 티켓 구매 대행 용역'은 제외, '티켓발권시스템 유지관리'는 인정)
+WEAK_SOLUTION_KEYWORDS = {"티켓", "예매", "선착순", "청약", "먹통", "리셀", "되팔이"}
+IT_CONTEXT_WORDS = ["시스템", "솔루션", "플랫폼", "누리집", "홈페이지", "온라인", "모바일", "앱", "전산", "서버",
+                    "웹", "포털", "프로그램 개발", "예매처", "SW", "소프트웨어", "정보화", "구축", "고도화"]
+
+
+def solution_hits(text, keywords=None):
+    """자사 제품 관련 단어 (keywords를 주면 그 제품 단어만) — 포함어·약한 단어 규칙 적용"""
+    hits = keyword_hits(text, keywords or PROCUREMENT_BOOST_KEYWORDS)
+    if hits and all(h in WEAK_SOLUTION_KEYWORDS for h in hits):
+        t = str(text or "")
+        if not any(w in t for w in IT_CONTEXT_WORDS):
+            return []
+    return hits
+
+
 def is_solution_related(text):
-    low = str(text or "").lower()
-    return any(k in low for k in SOLUTION_KEYWORDS_LOWER)
+    return bool(solution_hits(text))
 
 
 def procurement_boost_score(title):
@@ -353,3 +426,27 @@ def validate_email(email):
     if domains and email.split("@")[-1] not in domains:
         return None, f"사내 메일({', '.join('@' + d for d in domains)})만 등록할 수 있습니다."
     return email, None
+
+
+# ------------------------------------------------------------
+# AI 문장 강조 — 화면·PDF 공통. 예산은 무조건 굵게, 마감일·D-n도 굵게, AI가 **표시**한 핵심어도 굵게
+# ------------------------------------------------------------
+_MONEY_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?\s*(?:조|억|천만|백만|만)\s*원?(?:\s*규모)?)")
+_DATE_RE = re.compile(r"((?:마감\s*)?(?:\d{4}[-./]\s?\d{1,2}[-./]\s?\d{1,2}|\d{1,2}/\d{1,2}(?:\([월화수목금토일]\))?|\d{1,2}월\s?\d{1,2}일)(?:까지)?|D-\d+|D-DAY)")
+
+
+def emphasize_html(text, est_html='<span class="gt-est">추정</span>'):
+    """이스케이프 후 강조 → HTML. (추정)은 작은 '추정' 표시로"""
+    from html import escape as _esc
+    h = _esc(str(text or ""))
+    h = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", h)
+    # 이미 <b> 안에 있는 부분은 건드리지 않도록 조각별로 처리
+    parts = re.split(r"(<b>.*?</b>)", h)
+    for i, ptxt in enumerate(parts):
+        if ptxt.startswith("<b>"):
+            continue
+        ptxt = _MONEY_RE.sub(r"<b>\1</b>", ptxt)
+        ptxt = _DATE_RE.sub(r"<b>\1</b>", ptxt)
+        parts[i] = ptxt
+    h = "".join(parts)
+    return re.sub(r"\s*\(추정\)\s*\.?", est_html, h)

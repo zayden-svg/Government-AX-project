@@ -104,6 +104,12 @@ def load_reorder_candidates(competitors=None, horizon_days=180, include_solution
     - 예상 발주 시점 = 계약 종료일 - 60일, 오늘 기준 -30일 ~ +horizon_days 사이만
     반환 컬럼: 구분표시, title, agency, company, amount, end_date, end_est, expected, d_day, url, kind"""
     cols = ["표시", "title", "agency", "company", "amount", "end_date", "end_est", "expected", "d_day", "url", "kind"]
+    if competitors is None:            # 대시보드에서 저장한 공용 경쟁사 키워드 사용
+        try:
+            from store import load_competitors
+            competitors = load_competitors()[0]
+        except Exception:
+            competitors = None
     try:
         ensure_table()
         df = pd.read_sql_query(text(f"SELECT * FROM {TABLE}"), get_engine())

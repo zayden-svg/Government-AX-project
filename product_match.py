@@ -3,7 +3,7 @@
 #   대시보드(app.py)와 아침 배치(briefing_batch.py)가 같은 규칙을 써야 화면 목록과 AI 분석이 일치한다.
 import re
 
-from common import PRODUCT_KEYWORDS, INTEGRATED_RND_DOMAINS, PRODUCT_TO_DOMAIN, owner_org
+from common import PRODUCT_KEYWORDS, INTEGRATED_RND_DOMAINS, PRODUCT_TO_DOMAIN, owner_org, solution_hits
 
 PRODUCT_CODES = {"넷퍼넬 (NF)": "NF", "넷퍼넬API (NFA)": "NFA", "봇매니저 (BM)": "BM", "로드테스터 (LT)": "LT"}
 PRODUCT_TITLES = {   # 화면 제목 (제품 약어 · 이름 · 한 줄 설명)
@@ -26,15 +26,17 @@ AI_PICK_CONTEXT = {
 
 
 def _mask(df, keywords, cols=("title", "matched_keywords")):
+    """제목·매칭키워드에 제품 단어가 '진짜로' 있는 행 (펫티켓의 '티켓' 같은 포함어 제외 — common.solution_hits 규칙)"""
     if df is None or df.empty or not keywords:
         return None
-    pat = "|".join(re.escape(k) for k in keywords)
-    m = None
+    texts = None
     for c in cols:
         if c in df.columns:
-            cm = df[c].astype(str).str.contains(pat, case=False, na=False)
-            m = cm if m is None else (m | cm)
-    return m
+            col = df[c].astype(str)
+            texts = col if texts is None else texts + " " + col
+    if texts is None:
+        return None
+    return texts.map(lambda t: bool(solution_hits(t, keywords)))
 
 
 def match_product(pname, biz_df, rnd_df, news_items, score_col="_score", ai_titles=None):
@@ -76,7 +78,7 @@ def match_product(pname, biz_df, rnd_df, news_items, score_col="_score", ai_titl
         k = re.sub(r"\s+", "", t)[:40]
         if k in seen:
             continue
-        if any(kw.lower() in t.lower() for kw in kws):
+        if solution_hits(t, kws):
             seen.add(k)
             news.append(it)
     news.sort(key=lambda x: -(x.get("_score") or -1))
@@ -108,3 +110,47 @@ def item_line(row, kind, score_col="_score"):
     except (TypeError, ValueError):
         pass
     return " · ".join(p for p in parts if p)
+
+
+# ------------------------------------------------------------
+# 제품별 목록 '한 곳에서만' 만들기 — 통합보기 제품 가이드 · 솔루션 분석 · 아침 배치 AI 가이드 · PDF가 모두 이 결과를 씀
+#   뉴스는 IT 뉴스·솔루션 분석 탭과 같은 '최근 24시간' 기사만
+# ------------------------------------------------------------
+NEWS_RECENT_HOURS = 24
+
+
+def news_pub_dt(it):
+    return it.get("pubDate") or it.get("pub_date")
+
+
+def recent_news(items, hours=NEWS_RECENT_HOURS, now=None):
+    import pandas as pd
+    from datetime import datetime, timedelta
+    now = pd.Timestamp(now or datetime.now())
+    out, seen = [], set()
+    for it in items or []:
+        if not isinstance(it, dict) or not it.get("title"):
+            continue
+        try:
+            t = pd.Timestamp(news_pub_dt(it))
+            if pd.isna(t):
+                continue
+            if t.tzinfo is not None:
+                t = t.tz_convert("Asia/Seoul").tz_localize(None)
+        except Exception:
+            continue
+        if now - t > timedelta(hours=hours) or t - now > timedelta(hours=2):
+            continue
+        k = re.sub(r"\s+", "", str(it["title"]))[:40]
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(it)
+    return out
+
+
+def build_product_map(biz_df, rnd_df, news_items, ai_titles=None, score_col="_score"):
+    """반환: {제품명: {"biz": DataFrame, "rnd": DataFrame, "news": [...]}} — 뉴스는 최근 24시간만"""
+    news = recent_news(news_items)
+    return {p: match_product(p, biz_df, rnd_df, news, score_col=score_col, ai_titles=ai_titles or {})
+            for p in PRODUCT_KEYWORDS}

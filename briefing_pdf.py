@@ -11,7 +11,7 @@ from html import escape
 
 import pandas as pd
 
-from common import PRODUCT_KEYWORDS, owner_org
+from common import PRODUCT_KEYWORDS, owner_org, solution_hits, emphasize_html
 from product_match import PRODUCT_CODES, PRODUCT_TITLES
 
 K_PDF = {"BIZ": "briefing_pdf_biz", "RND": "briefing_pdf_rnd"}      # app_cache 키
@@ -43,9 +43,8 @@ def _md_bold(txt):
 
 
 def _est(txt):
-    """문장 끝 '(추정)' → 작은 '추정' 표시"""
-    h = _md_bold(txt)
-    return re.sub(r"\s*\(추정\)\s*\.?$", '<span class="est">추정</span>', h)
+    """대시보드와 같은 강조 규칙(예산·마감일·AI 핵심어 굵게) + '(추정)' → 작은 표시"""
+    return emphasize_html(txt, est_html='<span class="est">추정</span>')
 
 
 def _due_info(due_raw, today):
@@ -67,9 +66,8 @@ def _md(d):
 
 def products_for(row):
     """공고 1건과 연관된 제품 약어 — 제목·매칭 키워드에 제품 단어가 있으면, NF는 연관도 60점 이상도 포함"""
-    text = f"{row.get('title', '')} {row.get('matched_keywords', '')}".lower()
-    codes = [PRODUCT_CODES[p] for p, info in PRODUCT_KEYWORDS.items()
-             if any(k.lower() in text for k in info["keywords"])]
+    text = f"{row.get('title', '')} {row.get('matched_keywords', '')}"
+    codes = [PRODUCT_CODES[p] for p, info in PRODUCT_KEYWORDS.items() if solution_hits(text, info["keywords"])]
     try:
         if int(row.get("_score", -1)) >= NF_HIGH_SCORE and "NF" not in codes:
             codes.insert(0, "NF")
@@ -327,7 +325,7 @@ def render_html(ctx, font_dir=FONT_DIR):
         if p["quiet"]:
             body = '<div class="product-body"><p>오늘 신규 이슈 없음 — 지속 모니터링</p></div>'
         else:
-            acts = " · ".join(escape(str(a)) for a in p["actions"][:3])
+            acts = " · ".join(_est(a) for a in p["actions"][:3])
             body = ('<div class="product-body">'
                     f'<span class="lbl">관련 이슈</span><p>{_est(p["issue"])}</p>'
                     f'<span class="lbl">우리 사업 영향</span><p>{_est(p["impact"])}</p>'

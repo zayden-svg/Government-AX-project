@@ -16,8 +16,9 @@ from common import (
     detect_regions, region_label,
     DEFAULT_NEWS_KEYWORDS, SOLUTION_NEWS_KEYWORDS, ALERT_MIN_SCORE_DEFAULT, validate_email,
     is_closed, family_key, owner_org, competitor_variants, source_rank,
+    keyword_spans, solution_hits, is_solution_related, emphasize_html,
 )
-from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product
+from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product, build_product_map
 from ai_utils import (
     is_ai_ready, generate_summary, recommend_keywords,
     generate_news_digest, score_news_relevance,
@@ -34,6 +35,7 @@ from pdf_report import build_daily_report_pdf
 from procurement_store import load_results, load_reorder_candidates
 from store import (
     load_cache_many, upsert_subscriber, delete_subscriber, get_subscriber, count_subscribers,
+    load_competitors, save_competitors, reset_competitors,
 )
 try:
     from alert_mailer import smtp_ready, send_welcome     # 메일 알림 등록 직후 확인 메일
@@ -112,6 +114,19 @@ def load_briefing_pdfs():
     except Exception:
         return {}
     return {t: (got.get(k) or (None, None))[0] for t, k in keys.items() if (got.get(k) or (None, None))[0]}
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _shared_competitors():
+    """공용 경쟁사 키워드 (DB) — 1분 캐시"""
+    try:
+        return load_competitors()
+    except Exception:
+        return list(COMPETITOR_DEFAULT), None
+
+
+if "competitor_keywords" not in st.session_state:
+    st.session_state.competitor_keywords = list(_shared_competitors()[0])
 
 
 def _toggle_theme():
@@ -1057,6 +1072,14 @@ def _clear_search():
     st.session_state.int_top_search = ""
 
 
+def product_map():
+    """제품별 관련 사업·과제·뉴스 — 화면 어디서든 이 함수 하나로 (product_match.build_product_map)"""
+    _src = df.rename(columns={COL_AI_SCORE: "_score"})
+    _news = [it for it in (brief(K_NEWS_SOLUTION) or []) + (brief(K_NEWS_DEFAULT) or []) if isinstance(it, dict)]
+    _ai = brief(K_PRODUCT_AI) if isinstance(brief(K_PRODUCT_AI), dict) else {}
+    return build_product_map(_src[_src["_track"] == TRACK_BIZ], _src[_src["_track"] == TRACK_RND], _news, ai_titles=_ai)
+
+
 REC_KEYWORDS = _get_rec_keywords()
 
 chip_box = st.container(key="search_chip_row")
@@ -1872,12 +1895,30 @@ with main_tab_news:
         with st.container(key="mc3_comp_box"):
             st.markdown('<div class="gt-mon-card-label">경쟁사 동향</div>', unsafe_allow_html=True)
             with st.popover("⚙️ 경쟁사 키워드 관리"):
-                if "competitor_keywords" not in st.session_state:
-                    st.session_state.competitor_keywords = list(COMPETITOR_DEFAULT)
-                comp_kw_text = st.text_area("쉼표로 구분 입력 (영/한 둘 다 등록해도 되고, 하나만 입력해도 자동 매칭됩니다)", value=", ".join(st.session_state.competitor_keywords), height=70)
-                if st.button("저장", key="save_comp_kw"):
-                    st.session_state.competitor_keywords = [k.strip() for k in comp_kw_text.split(",") if k.strip()]
-                    st.rerun()
+                comp_kw_text = st.text_area("쉼표로 구분 입력 (영/한 둘 다 등록해도 되고, 하나만 입력해도 자동 매칭됩니다)",
+                                            value=", ".join(st.session_state.competitor_keywords), height=90,
+                                            key=f"comp_kw_text_{len(st.session_state.competitor_keywords)}")
+                ck1, ck2 = st.columns(2)
+                with ck1:
+                    if st.button("저장", key="save_comp_kw", type="primary", use_container_width=True):
+                        try:
+                            st.session_state.competitor_keywords = save_competitors(comp_kw_text.split(","))
+                            _shared_competitors.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"저장 실패: {e}")
+                with ck2:
+                    if st.button("기본값 복원", key="reset_comp_kw", use_container_width=True):
+                        try:
+                            reset_competitors()
+                            st.session_state.competitor_keywords = list(COMPETITOR_DEFAULT)
+                            _shared_competitors.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"복원 실패: {e}")
+                _ckts = _shared_competitors()[1]
+                st.caption("모든 사용자 공용으로 저장됩니다 (다음 접속에도 유지). "
+                           + (f"마지막 수정 {_ckts}" if _ckts else "현재 기본값 사용 중"))
             competitor_keywords = st.session_state.get("competitor_keywords", COMPETITOR_DEFAULT)
             cp_matches = [it for it in all_items_pool if is_competitor_match(it["title"], competitor_keywords)]
             if cp_matches:
@@ -2004,21 +2045,13 @@ with main_tab_trend:
     st.caption(f"📰 뉴스는 최근 24시간 이내 기사만 반영합니다. (대상 {len(solution_news_pool)}건 / 전체 수집 {len(solution_news_pool_all)}건"
                + (f" · 아침 자동수집 {brief_time(K_NEWS_SOLUTION)} 기준)" if isinstance(_stored_sol, list) and _stored_sol else ")"))
 
-    def _count_postings_for(keywords_list):
-        pat = "|".join(re.escape(k) for k in keywords_list)
-        mask = (
-            df[COL_TITLE].astype(str).str.contains(pat, case=False, na=False)
-            | df[COL_KEYWORDS].astype(str).str.contains(pat, case=False, na=False)
-        )
-        return df[mask]
-
-    def _count_news_for(keywords_list):
-        return [it for it in solution_news_pool if any(k.lower() in it["title"].lower() for k in keywords_list)]
-
+    # 통합보기 '제품별 대응 가이드'와 같은 목록을 그대로 사용 (어느 화면에서든 같은 공고·과제·뉴스)
+    _pmap_sol = product_map()
     solution_rows = []
     for sname, sinfo in PRODUCT_KEYWORDS.items():
-        p_rows = _count_postings_for(sinfo["keywords"])
-        n_rows = _count_news_for(sinfo["keywords"])
+        _mt = _pmap_sol[sname]
+        p_rows = pd.concat([_mt["biz"], _mt["rnd"]]).rename(columns={"_score": COL_AI_SCORE})
+        n_rows = _mt["news"]
         solution_rows.append({
             "name": sname, "desc": sinfo["desc"],
             "posting_rows": p_rows, "news_rows": n_rows,
@@ -2129,19 +2162,29 @@ with main_tab_trend:
 _SOL_KWS_SORTED = sorted({k for info in PRODUCT_KEYWORDS.values() for k in info["keywords"] if len(k) >= 2}, key=len, reverse=True)
 
 
-def _highlight(text_val, keywords, on=True):
-    """글자를 안전하게 이스케이프한 뒤 관련 단어만 강조색(.gt-hl)으로 감쌈"""
+def _highlight(text_val, keywords, on=True, solution=False):
+    """글자를 안전하게 이스케이프한 뒤 '진짜로 걸린' 단어만 강조색(.gt-hl)으로 감쌈
+    (펫티켓·에티켓 같은 포함어는 제외 — common.keyword_spans / solution_hits 규칙과 동일)"""
     raw = str(text_val or "")
     if not on or not keywords or not raw:
         return escape(raw)
-    pat = re.compile("|".join(re.escape(k) for k in keywords if k), re.I)
+    if solution and not solution_hits(raw):
+        return escape(raw)
     out, pos = [], 0
-    for m in pat.finditer(raw):
-        out.append(escape(raw[pos:m.start()]))
-        out.append(f'<span class="gt-hl">{escape(m.group(0))}</span>')
-        pos = m.end()
+    for st_, en_, _kw in keyword_spans(raw, keywords):
+        out.append(escape(raw[pos:st_]))
+        out.append(f'<span class="gt-hl">{escape(raw[st_:en_])}</span>')
+        pos = en_
     out.append(escape(raw[pos:]))
     return "".join(out)
+
+
+def _hit_note(title, on):
+    """자사 관련 보기일 때 사업명 아래에 '관련 단어: 티켓·예매' 표시 (왜 걸렸는지 바로 확인)"""
+    if not on:
+        return ""
+    hits = solution_hits(title)
+    return f'<span class="gt-sub">관련 단어: {escape("·".join(hits))}</span>' if hits else ""
 
 
 def _proc_table(rows_html, head_cells, widths, max_h=520):
@@ -2179,7 +2222,7 @@ with main_tab_proc:
     else:
         res_df = res_df.fillna("")
         res_df["_comp"] = res_df["company"].map(lambda c: is_competitor_match(c, _comp_kws))
-        res_df["_sol"] = res_df["title"].map(lambda t: any(k.lower() in str(t).lower() for k in _SOL_KWS_SORTED))
+        res_df["_sol"] = res_df["title"].map(is_solution_related)
         st.markdown(_stat_strip([
             ("낙찰 (30일)", f"{(res_df['kind'] == '낙찰').sum()}건", C['text']),
             ("계약 (30일)", f"{(res_df['kind'] == '계약').sum()}건", C['text']),
@@ -2200,7 +2243,7 @@ with main_tab_proc:
                     f'<tr><td><span class="gt-pill" style="background:{C["surface3"]};color:{kind_c};">{escape(r["kind"])}</span></td>'
                     f'<td>{escape(str(r["event_date"])[2:10] if r["event_date"] else "-")}</td>'
                     f'<td class="l"><a href="{escape(r["url"] or "#")}" target="_blank" title="원문 열기">'
-                    f'{_highlight(r["title"], _SOL_KWS_SORTED, proc_mine)}</a></td>'
+                    f'{_highlight(r["title"], _SOL_KWS_SORTED, proc_mine, solution=True)}</a>{_hit_note(r["title"], proc_mine)}</td>'
                     f'<td>{escape(r["agency"] or "-")}</td>'
                     f'<td>{_highlight(r["company"] or "-", _comp_variants, proc_mine)}</td>'
                     f'<td>{escape(format_budget_eok(r["amount"]) or "-")}</td></tr>'
@@ -2226,7 +2269,7 @@ with main_tab_proc:
             body += (
                 f'<tr><td>{when}</td>'
                 f'<td class="l"><a href="{escape(r["url"] or "#")}" target="_blank" title="원문 열기">'
-                f'{_highlight(r["title"], _SOL_KWS_SORTED, proc_mine)}</a></td>'
+                f'{_highlight(r["title"], _SOL_KWS_SORTED, proc_mine, solution=True)}</a>{_hit_note(r["title"], proc_mine)}</td>'
                 f'<td>{escape(r["agency"] or "-")}</td>'
                 f'<td>{_highlight(r["company"] or "-", _comp_variants, proc_mine)}</td>'
                 f'<td>{escape(format_budget_eok(r["amount"]) or "-")}</td>'
@@ -2480,7 +2523,7 @@ with main_tab_integrated:
     _guide_news = [it for it in (brief(K_NEWS_SOLUTION) or []) + (brief(K_NEWS_DEFAULT) or []) if isinstance(it, dict)]
 
     def _est_html(txt):
-        return escape(str(txt or "")).replace("(추정)", '<span class="gt-est">추정</span>')
+        return emphasize_html(txt)       # 예산·마감일·AI가 고른 핵심어 굵게 + '추정' 표시
 
     def _guide_item_html(title, url, meta, kind, color):
         return (f'<div class="gt-guide-item"><span class="gt-pill" style="background:{C["surface3"]};color:{color};">{kind}</span>'
@@ -2489,12 +2532,14 @@ with main_tab_integrated:
 
     _g_rnd = df[df["_track"] == TRACK_RND].rename(columns={COL_AI_SCORE: "_score"})
     _g_biz = df[df["_track"] == TRACK_BIZ].rename(columns={COL_AI_SCORE: "_score"})
+    _pmap = product_map()        # 솔루션 분석 탭·아침 배치·PDF와 같은 목록 (뉴스는 최근 24시간)
     with st.expander("Ⅳ. 제품별 대응 가이드 — NF · NFA · BM · LT", expanded=True):
-        st.caption("제품 이름을 누르면 관련 사업·과제·뉴스가 펼쳐집니다. 대응 내용은 매일 아침 AI가 오늘 연결된 공고·뉴스를 근거로 작성합니다.")
+        st.caption("제품 이름을 누르면 관련 사업·과제·뉴스(최근 24시간)가 펼쳐집니다. 솔루션 분석 탭과 같은 목록이며, "
+                   "대응 내용은 매일 아침 AI가 이 목록을 근거로 작성합니다.")
         for pname in PRODUCT_KEYWORDS:
             code = PRODUCT_CODES[pname]
             eng, desc = PRODUCT_TITLES[code]
-            mt = match_product(pname, _g_biz, _g_rnd, _guide_news, ai_titles=_product_ai)
+            mt = _pmap[pname]
             nb, nr, nn = len(mt["biz"]), len(mt["rnd"]), len(mt["news"])
             g = _guide_ai.get(code) or {}
             with st.container(border=True):

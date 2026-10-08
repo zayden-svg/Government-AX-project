@@ -20,7 +20,7 @@ from ai_utils import (
     generate_news_digest, simplify_news_titles, match_titles_to_product, generate_product_guide,
     generate_track_brief,
 )
-from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product, item_line
+from product_match import PRODUCT_CODES, PRODUCT_TITLES, match_product, item_line, build_product_map
 from news_pool import build_pool, fetch_keyword_news, SOURCES
 from postings_data import load_active_postings
 from store import save_cache, load_cache
@@ -59,12 +59,12 @@ def _step(name, fn, results):
 
 
 def _match_rows(sub, keywords):
+    """제품 단어가 실제로 걸린 공고 (포함어 제외 규칙은 product_match와 동일)"""
+    from product_match import _mask
     if sub.empty or not keywords:
         return sub.iloc[0:0]
-    pat = "|".join(re.escape(k) for k in keywords)
-    mask = sub["title"].str.contains(pat, case=False, na=False) | \
-        sub["matched_keywords"].str.contains(pat, case=False, na=False)
-    return sub[mask]
+    m = _mask(sub, keywords)
+    return sub[m] if m is not None else sub.iloc[0:0]
 
 
 def run():
@@ -191,11 +191,12 @@ def run():
             def _guide():
                 biz = df[df["_track"] == "BIZ"]
                 rnd = df[df["_track"] == "RND"]
-                news = list(pool_solution) + list(pool_default)
+                # 대시보드(통합보기 가이드·솔루션 분석)와 같은 목록 — 뉴스는 최근 24시간만
+                pmap = build_product_map(biz, rnd, list(pool_solution) + list(pool_default), ai_titles=pai or {})
                 blocks = {}
                 for pname in PRODUCT_KEYWORDS:
                     code = PRODUCT_CODES[pname]
-                    mt = match_product(pname, biz, rnd, news, ai_titles=pai or {})
+                    mt = pmap[pname]
                     items = [item_line(r, "사업") for r in mt["biz"].head(5).to_dict("records")]
                     items += [item_line(r, "R&D") for r in mt["rnd"].head(4).to_dict("records")]
                     items += [f"[뉴스] {it.get('title', '')}" for it in mt["news"][:4]]

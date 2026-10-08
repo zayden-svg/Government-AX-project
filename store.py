@@ -162,3 +162,30 @@ def count_subscribers():
             return int(conn.execute(text(f"SELECT COUNT(*) FROM {SUB_TABLE} WHERE active = 1")).fetchone()[0])
     except Exception:
         return 0
+
+
+# ------------------------------------------------------------
+# 경쟁사 키워드 — 모든 사용자 공용, 영구 저장 (app_cache에 'competitor_keywords' 한 줄)
+# ------------------------------------------------------------
+K_COMPETITORS = "competitor_keywords"
+
+
+def load_competitors():
+    """반환: (키워드 목록, 마지막 수정 시각 또는 None). 저장된 게 없으면 기본 목록"""
+    from common import COMPETITOR_DEFAULT
+    val, ts = load_cache(K_COMPETITORS)
+    if isinstance(val, list) and val:
+        return [str(v) for v in val if str(v).strip()], ts
+    return list(COMPETITOR_DEFAULT), None
+
+
+def save_competitors(keywords):
+    clean = list(dict.fromkeys(str(k).strip() for k in keywords if str(k).strip()))
+    save_cache(K_COMPETITORS, clean)
+    return clean
+
+
+def reset_competitors():
+    ensure_cache_table()
+    with get_engine().begin() as conn:
+        conn.execute(text(f"DELETE FROM {CACHE_TABLE} WHERE cache_key = :k"), {"k": K_COMPETITORS})
