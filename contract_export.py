@@ -202,16 +202,28 @@ class Crawler:
         q = {"serviceKey": self.key, "pageNo": str(page_no), "numOfRows": str(ROWS_PER_PAGE), "type": "json",
              **self.date_params(day)}
         import requests
-        for attempt in range(4):
+        import collectors
+        conn_retry = 0
+        attempt = 0
+        while True:
             with self._lock:
                 self.calls += 1
             try:
                 resp = _g2b_get(url, q)
                 break
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, ConnectionError):
+                # 조달청 서버 접속이 잠깐 끊기는 경우가 잦음 → 쉬었다가 최대 6번 다시 (전체 실행을 멈추지 않도록)
+                conn_retry += 1
+                collectors._G2B_STATE["conn_fail"] = 0
+                if conn_retry > 6:
+                    raise
+                time.sleep(20 * conn_retry)
+                continue
             except requests.exceptions.HTTPError as e:
+                attempt += 1
                 code = getattr(e.response, "status_code", 0)
-                if code == 429 and attempt < 3:          # 너무 빨리 부름 → 잠깐 쉬었다 다시
-                    time.sleep(30 * (attempt + 1))
+                if code == 429 and attempt < 4:          # 너무 빨리 부름 → 잠깐 쉬었다 다시
+                    time.sleep(30 * attempt)
                     continue
                 if code == 429:
                     raise QuotaExceeded("조달청 서버가 호출을 제한함(429)")
