@@ -1,0 +1,89 @@
+{
+ "서울시립대학교": "https://www.uos.ac.kr/korFree/list.do?list_id=FA22",
+ "고려대학교(세종)": "https://sejong.korea.ac.kr/koreaSejong/7909/subview.do",
+ "가톨릭관동대학교": {
+  "url": "https://www.cku.ac.kr/cku_kr/5787/subview.do",
+  "notice": true
+ },
+ "광운대학교": {
+  "url": "https://www.kw.ac.kr/ko/life/notice.jsp",
+  "notice": true
+ },
+ "강서대학교": "https://gangseo.ac.kr/kcua/boardList?menuCode=BC0704",
+ "덕성여자대학교": {
+  "url": "https://www.duksung.ac.kr/bbs/board.do?bsIdx=39&menuId=1060",
+  "notice": true
+ },
+ "동국대학교": "https://gm.dongguk.edu/article/bid/list",
+ "명지대학교": "https://www.mju.ac.kr/mjukr/261/subview.do",
+ "삼육대학교": "https://www.syu.ac.kr/etc/bid-notice/",
+ "서강대학교": "https://purchase.sogang.ac.kr/front/cmsboardlist.do?siteId=purchase&bbsConfigFK=782",
+ "서경대학교": {
+  "url": "https://www.skuniv.ac.kr/notice",
+  "notice": true
+ },
+ "성공회대학교": "https://enter.skhu.ac.kr/skhu/961/subview.do",
+ "성신여자대학교": "https://www.sungshin.ac.kr/main_kor/11118/subview.do",
+ "안양대학교": {
+  "url": "https://www.anyang.ac.kr/main/communication/notice.do?mode=list",
+  "notice": true
+ },
+ "연세대학교": "https://www.yonsei.ac.kr/sc/213/subview.do",
+ "우석대학교": "https://www.woosuk.ac.kr/main/?menu=174",
+ "원광대학교": "https://intra.wku.ac.kr/services/contract/",
+ "이화여자대학교": {
+  "url": "https://www.ewha.ac.kr/ewha/news/notice.do",
+  "notice": true
+ },
+ "인하대학교": "https://www.inha.ac.kr/kr/951/subview.do",
+ "장로회신학대학교": "https://www.puts.ac.kr/www/board/list.general.asp?design=lounge&m1=6&m2=9&m3=1&bd_name=jangshin_zEtc02",
+ "전주대학교": "https://www.jj.ac.kr/jj/community/notice06.do",
+ "조선대학교": "https://www.chosun.ac.kr/user/indexSub.do?codyMenuSeq=453877&siteId=purchase",
+ "한국외국어대학교": "https://www.hufs.ac.kr/hufs/11281/subview.do",
+ "한라대학교": "https://www.halla.ac.kr/kr/250/subview.do",
+ "호남대학교": {
+  "url": "https://www.honam.ac.kr/GeneralNotice",
+  "notice": true
+ },
+ "서울디지털대학교": {
+  "url": "https://www.sdu.ac.kr/ko/cms/FR_CON/index.do?MENU_ID=540",
+  "notice": true
+ },
+ "서울사이버대학교": "https://www.iscu.ac.kr/01_aboutcollege/16_bidding_list.asp",
+ "세종사이버대학교": "https://home.sjcu.ac.kr/ko/academic/purchasebid-notice.do",
+ "원광디지털대학교": "https://www.wdu.ac.kr/newscenter/biddingList.do",
+ "숭실사이버대학교": "https://www.kcu.ac/bbs?menuSeDe=20241002&menuSeq=1",
+ "경인여자대학교": "https://www.kiwu.ac.kr/ko/cms/FR_CON/index.do?MENU_ID=2230",
+ "재능대학교": "https://jeiu.ac.kr/board/list.asp?BoardID=00003",
+ "동아보건대학교": {
+  "url": "https://www.duh.ac.kr/main/bbs.htm?code=_1",
+  "notice": true
+ },
+ "명지전문대학": "https://www.mjc.ac.kr/bbs/data/list.do?menu_idx=2095",
+ "목포과학대학교": "https://www.msu.ac.kr/base/board/list?boardManagementNo=1316&menuLevel=3&menuNo=253",
+ "백제예술대학교": "https://www.paekche.ac.kr/ict/pms/board.php?bo_table=main_cms_003",
+ "서일대학교": "https://www.seoil.ac.kr/global/762/subview.do",
+ "순천제일대학교": "https://www.suncheon.ac.kr/kor/0001/0009/0003/",
+ "숭의여자대학교": {
+  "url": "https://www.sewu.ac.kr/sewu/news/notice.do",
+  "notice": true
+ },
+ "원광보건대학교": "https://www.wu.ac.kr/wu/1355/subview.do",
+ "인덕대학교": "https://www.induk.ac.kr/KR/cms/frCmnCon/index.do?MENU_ID=460",
+ "전북과학대학교": "https://www.jbsc.ac.kr/portal/representation/bbs/list.do?menuId=M0006000700000000",
+ "제주관광대학교": "https://www.jtu.ac.kr/pages/sub.htm?nav_code=jtu1728882083",
+ "조선이공대학교": "https://www.cst.ac.kr/board/?board=bid&mn=1160&site=basic",
+ "강원도립대학교": {
+  "url": "https://www.gw.ac.kr/gsu/community/notice",
+  "notice": true
+ },
+ "서영대학교": "https://www.seoyeong.ac.kr/syu/na/ntt/selectNttList.do?mi=2305&bbsId=54",
+ "인하공업전문대학": [
+  "https://www.inhatc.ac.kr/kr/541/subview.do",
+  "https://www.inhatc.ac.kr/kr/542/subview.do"
+ ],
+ "서울여자간호대학교": {
+  "url": "https://www.snjc.ac.kr/public_2017/sub/square/bid_board_list.jsp",
+  "notice": true
+ }
+}

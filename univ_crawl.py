@@ -226,7 +226,11 @@ async def crawl_school(browser, sch, overrides, it_reason, sem):
         rep = {"school": sch["school"], "home": sch["home"], "board": "", "posts": 0, "it_posts": 0, "status": ""}
         out = []
         try:
-            boards = overrides.get(sch["school"]) or await find_board(page, sch["home"])
+            ov = overrides.get(sch["school"])
+            notice_board = isinstance(ov, dict) and ov.get("notice")
+            if isinstance(ov, dict):
+                ov = ov.get("url")
+            boards = ov or await find_board(page, sch["home"])
             if isinstance(boards, str):
                 boards = [boards]
             if not boards:
@@ -234,11 +238,16 @@ async def crawl_school(browser, sch, overrides, it_reason, sem):
                 return out, rep
             floor = (datetime.now() - timedelta(days=365 * KEEP_YEARS)).strftime("%Y-%m-%d")
             posts = []
-            for b in boards[:2]:
-                ps = await read_board(page, b)
-                if len(ps) >= 3:
-                    posts, rep["board"] = ps, b
-                    break
+            if ov:                                 # 직접 적은 게시판은 여러 개 모두 읽음 (예: 입찰공고 + 입찰결과)
+                for b in boards:
+                    posts += await read_board(page, b)
+                rep["board"] = " , ".join(boards)
+            else:
+                for b in boards[:2]:
+                    ps = await read_board(page, b)
+                    if len(ps) >= 3:
+                        posts, rep["board"] = ps, b
+                        break
             if not posts:
                 rep["status"] = "게시판 글 못 읽음"
                 rep["board"] = boards[0]
@@ -246,6 +255,8 @@ async def crawl_school(browser, sch, overrides, it_reason, sem):
             posts = [p for p in posts if p["date"] >= floor]
             rep["posts"] = len(posts)
             for p in posts:
+                if notice_board and not re.search(r"(입찰|견적|구매|용역|낙찰|선정|계약)", p["title"]):
+                    continue                        # 공지사항 게시판이면 입찰 글만
                 reason = it_reason({"cntrctNm": p["title"]})
                 if not reason:
                     continue
@@ -269,14 +280,16 @@ async def main_async(a):
     from playwright.async_api import async_playwright
     import contract_export as ce
     schools = load_master()
-    if a.only:
-        schools = [s for s in schools if a.only in s["school"]]
-    if a.limit:
-        schools = schools[:a.limit]
     try:
         overrides = json.load(open("data/univ_boards.json", encoding="utf-8"))
     except Exception:
         overrides = {}
+    if a.only == "직접지정":                    # data/univ_boards.json 에 주소를 적은 학교만 다시
+        schools = [s for s in schools if s["school"] in overrides]
+    elif a.only:
+        schools = [s for s in schools if a.only in s["school"]]
+    if a.limit:
+        schools = schools[:a.limit]
     sem = asyncio.Semaphore(CONCURRENCY)
     async with async_playwright() as p:
         browser = await p.chromium.launch()
@@ -354,8 +367,11 @@ def save_db(rows, report):
             upd = ", ".join(f"{c}=excluded.{c}" for c in cols[1:])
             conn.execute(text(f"INSERT INTO univ_bids ({', '.join(cols)}) VALUES ({', '.join(':' + c for c in cols)}) "
                               f"ON CONFLICT (uniq_key) DO UPDATE SET {upd}"), data)
-    if report is not None:
-        store.save_cache("univ_crawl_report", report)
+    if report is not None:                     # 일부 학교만 다시 돈 경우 기존 결과에 덮어씀
+        old, _ = store.load_cache("univ_crawl_report")
+        merged = {r["school"]: r for r in (old or [])}
+        merged.update({r["school"]: r for r in report})
+        store.save_cache("univ_crawl_report", list(merged.values()))
 
 
 async def probe(urls):
