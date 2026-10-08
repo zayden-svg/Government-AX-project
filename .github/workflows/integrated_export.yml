@@ -27,12 +27,12 @@ jobs:
       - name: 쇼핑몰 납품요구 캐시 불러오기
         run: git fetch -q origin exports-dlvr && git show FETCH_HEAD:raw_cache.json > raw_cache.json || echo "캐시 없음"
       - name: 통합 엑셀 만들기
-        run: python integrated_export.py --out integrated.xlsx --dlvr-cache raw_cache.json
+        run: set -o pipefail; python integrated_export.py --out integrated.xlsx --dlvr-cache raw_cache.json 2>&1 | tee integrated_log.txt
       - name: 사본을 exports-integrated 브랜치에 보관
         if: always()
         run: |
-          if [ ! -f integrated.xlsx ]; then exit 0; fi
-          mkdir -p /tmp/exp && cp integrated.xlsx /tmp/exp/
+          mkdir -p /tmp/exp && cp integrated_log.txt /tmp/exp/ 2>/dev/null || true
+          if [ -f integrated.xlsx ]; then cp integrated.xlsx /tmp/exp/; fi
           cd /tmp/exp && git init -q -b exports-integrated && git add -A
           git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "통합 엑셀 $(date +%F)"
           git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-integrated
