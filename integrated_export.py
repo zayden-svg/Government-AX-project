@@ -228,6 +228,14 @@ def build(all_df):
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+
+    def clean(v):
+        return ILLEGAL_CHARACTERS_RE.sub("", v) if isinstance(v, str) else v
+    all_df = all_df.copy()
+    for col in all_df.columns:
+        if all_df[col].dtype == object:
+            all_df[col] = all_df[col].map(clean)
     order = {"곧 완료": 0, "진행중": 1, "종료일 미상": 2, "완료": 3}
     d = all_df.assign(_o=all_df["상태"].map(order), _dd=pd.to_datetime(all_df["일자"], errors="coerce"))
     d = d.sort_values(["_o", "_dd"], ascending=[True, False]).drop(columns=["_o", "_dd"]).reset_index(drop=True)
@@ -436,7 +444,7 @@ def build(all_df):
             ws.column_dimensions[get_column_letter(i)].width = w
         ws.append([c(ws, k, hf, navy) for k in ("학교", "결과", "3년 내 글", "IT 글", "입찰 게시판 주소", "홈페이지")])
         for r in sorted(rep, key=lambda x: (x.get("status") != "성공", -int(x.get("it_posts") or 0))):
-            ws.append([r.get("school"), r.get("status"), r.get("posts"), r.get("it_posts"), r.get("board"), r.get("home")])
+            ws.append([clean(r.get("school")), r.get("status"), r.get("posts"), r.get("it_posts"), clean(r.get("board")), clean(r.get("home"))])
     table("통합 내역", d, helper=True)
     buf = io.BytesIO()
     wb.save(buf)
