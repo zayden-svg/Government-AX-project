@@ -139,6 +139,7 @@ def _fam(spec):
 
 
 PARTIAL = {"stopped": ""}
+OFFLINE = False                   # True면 API를 부르지 않고 캐시 파일만으로 결과 구성 (통합 엑셀용)
 CACHE_FILE = "raw_cache.json"     # 지난 실행에서 받아 둔 결과 (지난달 이전 자료는 바뀌지 않으므로 다시 안 부름)
 WORKERS = 6
 
@@ -153,6 +154,8 @@ def _load_cache():
 def _run_tasks(tasks, cache, log_label):
     """tasks: [(cache_key, params)] → 캐시에 없는 것만 동시에 조회. 한도 초과 시 ApiError"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    if OFFLINE:
+        return
     todo = [(k, p) for k, p in tasks if k not in cache]
     stop = {"err": None}
 
@@ -179,13 +182,15 @@ def collect(years=None):
     cache = _load_cache()
     this_month = datetime.now().strftime("%Y%m")
     # 계약번호 조회와 이번 달 검색은 매번 새로 (새 구매 반영)
-    cache = {k: v for k, v in cache.items() if not (k.startswith("c|") or k.split("|")[-2][:6] == this_month)}
+    if not OFFLINE:
+        cache = {k: v for k, v in cache.items() if not (k.startswith("c|") or k.split("|")[-2][:6] == this_month)}
     try:
         _collect(rows, log, cache)
     except ApiError as e:            # 한도 초과 등 → 모은 데까지 엑셀로 만들고, 다음 실행 때 이어서
         PARTIAL["stopped"] = str(e)
         log.append(f"[중단] {e} — 여기까지 모은 결과로 엑셀 생성 (다음 실행 때 이어서)")
-    json.dump(cache, open(CACHE_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+    if not OFFLINE:
+        json.dump(cache, open(CACHE_FILE, "w", encoding="utf-8"), ensure_ascii=False)
     print("\n".join(log))
     return rows
 

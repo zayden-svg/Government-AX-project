@@ -189,6 +189,10 @@ class Crawler:
         self._lock = threading.Lock()
         self.call_budget = call_budget
         self.deadline = time.time() + time_budget
+        # 아래 3개는 낙찰 수집(award_export.py)에서 바꿔 끼움
+        self.ops = OPS
+        self.row_fn = to_row
+        self.date_params = lambda day: {"inqryDiv": "1", "inqryBgnDate": day, "inqryEndDate": day}
 
     def out_of_budget(self):
         return self.calls >= self.call_budget or time.time() > self.deadline
@@ -196,7 +200,7 @@ class Crawler:
     def _page(self, url, day, page_no):
         from collectors import _g2b_get
         q = {"serviceKey": self.key, "pageNo": str(page_no), "numOfRows": str(ROWS_PER_PAGE), "type": "json",
-             "inqryDiv": "1", "inqryBgnDate": day, "inqryEndDate": day}
+             **self.date_params(day)}
         import requests
         for attempt in range(4):
             with self._lock:
@@ -238,7 +242,7 @@ class Crawler:
 
     def day(self, biz_type, day):
         """하루치 전체 페이지. 반환: (IT 행 목록, 원본 건수) — 예산이 모자라면 None"""
-        url = OPS[biz_type]
+        url = self.ops[biz_type]
         items, total = self._page(url, day, 1)
         per = max(len(items), 1)
         pages = math.ceil(total / per) if total else 1
@@ -250,17 +254,21 @@ class Crawler:
             if not more:
                 break
             allit.extend(more)
-        rows = [r for r in (to_row(it, biz_type) for it in allit) if r]
+        rows = [r for r in (self.row_fn(it, biz_type) for it in allit) if r]
         return rows, len(allit)
 
 
-def crawl():
-    """진행 위치(유형별 '다음에 볼 날짜')에서 이어서 과거로 내려감. 최근 7일은 매번 다시 확인."""
-    cr = Crawler()
+def crawl(cr=None, progress_key=K_PROGRESS, save_fn=None, years_by_type=None, label="계약"):
+    """진행 위치(유형별 '다음에 볼 날짜')에서 이어서 과거로 내려감. 과거분을 다 채운 뒤엔 최근 7일을 매번 다시 확인.
+    낙찰 수집(award_export.py)도 같은 함수를 씀 (cr·progress_key·save_fn·years_by_type만 바꿔서)"""
+    cr = cr or Crawler()
+    save_fn = save_fn or save_rows
+    years_by_type = years_by_type or YEARS_BACK_BY_TYPE
+    OPS_ = cr.ops
     if not cr.key:
-        print("[SKIP] G2B_SERVICE_KEY 없음 → 계약 수집 건너뜀")
+        print(f"[SKIP] G2B_SERVICE_KEY 없음 → {label} 수집 건너뜀")
         return {}
-    prog, _ = store.load_cache(K_PROGRESS)
+    prog, _ = store.load_cache(progress_key)
     prog = prog if isinstance(prog, dict) else {}
     today = datetime.now().date()
     stats = {"calls": 0, "saved": 0, "raw": 0, "stopped": ""}
@@ -271,7 +279,7 @@ def crawl():
         if res is None:
             return False
         rows, raw = res
-        n = save_rows(rows)
+        n = save_fn(rows)
         with lock:
             stats["saved"] += n
             stats["raw"] += raw
@@ -279,16 +287,16 @@ def crawl():
 
     try:
         # ① 최근 7일 새로고침 — 과거분을 다 채우기 전에는 생략 (조회 횟수를 과거분에 집중)
-        backfill_done = all((prog.get(bt) or {}).get("done") for bt in OPS)
-        for bt in (OPS if backfill_done else []):
+        backfill_done = all((prog.get(bt) or {}).get("done") for bt in OPS_)
+        for bt in (OPS_ if backfill_done else []):
             for i in range(RECENT_REFRESH_DAYS):
                 if cr.out_of_budget():
                     raise StopIteration
                 _run_day(bt, (today - timedelta(days=i)).strftime("%Y%m%d"))
         # ② 과거로 이어서 (용역 먼저 끝까지 → 물품)
-        for bt in OPS:
+        for bt in OPS_:
             st_ = prog.get(bt) or {}
-            floor = (today - timedelta(days=365 * YEARS_BACK_BY_TYPE.get(bt, YEARS_BACK))).strftime("%Y%m%d")
+            floor = (today - timedelta(days=365 * years_by_type.get(bt, YEARS_BACK))).strftime("%Y%m%d")
             nxt = st_.get("next") or today.strftime("%Y%m%d")
             while nxt >= floor:
                 if cr.out_of_budget():
@@ -302,7 +310,7 @@ def crawl():
                     raise StopIteration
                 nxt = (base - timedelta(days=len(days))).strftime("%Y%m%d")
                 prog[bt] = {"next": nxt, "done": nxt < floor, "at": datetime.now().strftime("%Y-%m-%d %H:%M")}
-                store.save_cache(K_PROGRESS, prog)
+                store.save_cache(progress_key, prog)
             prog[bt] = {"next": nxt, "done": True, "at": datetime.now().strftime("%Y-%m-%d %H:%M")}
     except StopIteration:
         stats["stopped"] = "이번 실행 호출 한도·시간 도달 → 다음 실행에서 이어서"
@@ -313,8 +321,8 @@ def crawl():
         stats["stopped"] = f"오류로 중단: {type(e).__name__}: {mask_secret(e)[:150]}"
     stats["calls"] = cr.calls
     prog["_last"] = {**stats, "at": datetime.now().strftime("%Y-%m-%d %H:%M")}
-    store.save_cache(K_PROGRESS, prog)
-    print(f"[OK] 계약 수집: API {cr.calls}회 · 원본 {stats['raw']}건 → IT 관련 {stats['saved']}건 저장 · "
+    store.save_cache(progress_key, prog)
+    print(f"[OK] {label} 수집: API {cr.calls}회 · 원본 {stats['raw']}건 → IT 관련 {stats['saved']}건 저장 · "
           + json.dumps({k: v for k, v in prog.items() if k != "_last"}, ensure_ascii=False)
           + (f" · {stats['stopped']}" if stats["stopped"] else ""))
     return prog

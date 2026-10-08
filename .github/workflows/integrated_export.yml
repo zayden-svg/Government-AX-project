@@ -1,0 +1,38 @@
+name: Integrated Award Excel (낙찰·계약·쇼핑몰 납품 통합 엑셀)
+
+on:
+  schedule:
+    - cron: '30 21 * * *'   # 한국시간 06:30 — 밤사이 수집이 끝난 뒤
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrated:
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PYTHONIOENCODING: utf-8
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: 쇼핑몰 납품요구 캐시 불러오기
+        run: git fetch -q origin exports-dlvr && git show FETCH_HEAD:raw_cache.json > raw_cache.json || echo "캐시 없음"
+      - name: 통합 엑셀 만들기
+        run: python integrated_export.py --out integrated.xlsx --dlvr-cache raw_cache.json
+      - name: 사본을 exports-integrated 브랜치에 보관
+        if: always()
+        run: |
+          if [ ! -f integrated.xlsx ]; then exit 0; fi
+          mkdir -p /tmp/exp && cp integrated.xlsx /tmp/exp/
+          cd /tmp/exp && git init -q -b exports-integrated && git add -A
+          git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "통합 엑셀 $(date +%F)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-integrated

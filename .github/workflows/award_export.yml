@@ -1,0 +1,33 @@
+name: G2B Awards (조달청 낙찰 전체 수집)
+
+on:
+  schedule:
+    - cron: '5 15 * * *'   # 한국시간 00:05 — 낙찰정보서비스 하루 한도(약 1,000회)가 새로 시작될 때
+  workflow_dispatch:
+    inputs:
+      call_budget:
+        description: '이번 실행 최대 API 호출 수'
+        required: false
+        default: '950'
+
+jobs:
+  awards:
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 340
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
+      AWARD_CALL_BUDGET: ${{ github.event.inputs.call_budget || '950' }}
+      CONTRACT_TIME_BUDGET: '18600'
+      PYTHONIOENCODING: utf-8
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: 낙찰 수집(이어하기)
+        run: python award_export.py
