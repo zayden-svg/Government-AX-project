@@ -1,0 +1,35 @@
+name: Shopping Mall Delivery Requests (쇼핑몰 납품요구 엑셀)
+
+on:
+  schedule:
+    - cron: '0 21 * * 0'   # 매주 월요일 06:00 (한국시간)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dlvr:
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 60
+    env:
+      G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
+      PYTHONIOENCODING: utf-8
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas openpyxl requests
+      - name: 납품요구 수집 + 엑셀
+        run: python dlvr_export.py --out dlvr.xlsx --years 4
+      - name: 엑셀 사본을 exports-dlvr 브랜치에 보관
+        if: always()
+        run: |
+          [ -f dlvr.xlsx ] || exit 0
+          mkdir -p /tmp/exp && cp dlvr.xlsx /tmp/exp/
+          cd /tmp/exp && git init -q -b exports-dlvr && git add dlvr.xlsx
+          git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "납품요구 엑셀 $(date +%F)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-dlvr
