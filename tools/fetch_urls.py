@@ -3,9 +3,13 @@ import os, re, sys, requests
 from urllib.parse import urljoin
 os.makedirs("out", exist_ok=True)
 H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-for i, u in enumerate([x.strip() for x in sys.argv[1].split(",") if x.strip()]):
+for i, u in enumerate([x.strip() for x in sys.argv[1].split(",,") if x.strip()]):
     try:
-        r = requests.get(u, headers=H, timeout=60)
+        if u.startswith("POST "):        # "POST 주소|키=값;키=값"
+            url, _, body = u[5:].partition("|")
+            r = requests.post(url, data=dict(kv.split("=", 1) for kv in body.split(";") if "=" in kv), headers=H, timeout=120)
+        else:
+            r = requests.get(u, headers=H, timeout=60)
         open(f"out/page_{i}.html", "wb").write(r.content)
         print(i, u, r.status_code, len(r.content))
         t = r.text
