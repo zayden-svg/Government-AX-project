@@ -30,8 +30,59 @@ NATIONAL_UNIV = [
     "교육대학교", "한국과학기술원", "광주과학기술원", "대구경북과학기술원", "울산과학기술원", "KAIST", "GIST", "DGIST", "UNIST", "한국전통문화대학교", "한국예술종합학교", "국립",
     "한국폴리텍", "한국기술교육대학교", "한국농수산대학교", "경찰대학", "육군사관학교", "해군사관학교", "공군사관학교", "국군간호사관학교",
 ]
-COMMON_COLS = ["출처", "구분", "상태", "남은일수", "사업명", "제품", "사업명·제품", "수요기관", "대학", "지역", "담당지역", "업체명", "대표업체",
+COMMON_COLS = ["출처", "구분", "상태", "남은일수", "사업명", "제품", "사업명·제품", "수요기관", "기관구분", "대학", "지역", "담당지역", "업체명", "대표업체",
                "금액", "일자", "종료일", "종료추정", "자사관련", "자사관련단어", "경쟁사", "API관련", "원문", "검색용업체명", "_gk", "_key"]
+
+
+SIDO_SHORT = {"서울특별시": "서울", "서울": "서울", "부산광역시": "부산", "부산": "부산", "대구광역시": "대구", "대구": "대구",
+              "인천광역시": "인천", "인천": "인천", "광주광역시": "광주", "광주": "광주", "대전광역시": "대전", "대전": "대전",
+              "울산광역시": "울산", "울산": "울산", "세종특별자치시": "세종", "세종": "세종", "경기도": "경기", "경기": "경기",
+              "강원특별자치도": "강원", "강원도": "강원", "강원": "강원", "충청북도": "충북", "충북": "충북", "충청남도": "충남", "충남": "충남",
+              "전북특별자치도": "전북", "전라북도": "전북", "전북": "전북", "전라남도": "전남", "전남": "전남",
+              "경상북도": "경북", "경북": "경북", "경상남도": "경남", "경남": "경남", "제주특별자치도": "제주", "제주": "제주"}
+CENTRAL_RE = re.compile(r"(부|처|청|위원회|감사원|국회|대법원|헌법재판소|법원행정처|대통령)$|^(기획재정부|교육부|과학기술정보통신부|외교부|통일부|법무부|국방부|행정안전부|문화체육관광부|농림축산식품부|산업통상자원부|보건복지부|환경부|고용노동부|여성가족부|국토교통부|해양수산부|중소벤처기업부)")
+
+
+def _univ_index():
+    """대학알리미 학교개황(data/univ_master.csv): 학교명 → (지역, 설립구분)"""
+    import csv
+    idx = {}
+    try:
+        for r in csv.DictReader(open("data/univ_master.csv", encoding="utf-8-sig")):
+            nm = re.sub(r"\s+", "", r["학교명"])
+            idx.setdefault(nm, (r["지역"], r["설립구분"]))
+    except Exception:
+        pass
+    return dict(sorted(idx.items(), key=lambda x: -len(x[0])))
+
+
+UNIV_IDX = _univ_index()
+
+
+def univ_lookup(name):
+    n = re.sub(r"\s+", "", str(name or ""))
+    for k, v in UNIV_IDX.items():
+        if k in n:
+            return v
+    return None
+
+
+def resolve_region(name, hint=""):
+    """기관 소재 시·도 (짧은 이름). 순서: ① 원자료 지역 ② 대학 목록 ③ 기관명 속 지역명 ④ 중앙부처 ⑤ 미확인"""
+    h = str(hint or "").strip()
+    if h:
+        tok = h.split()[0]
+        if tok in SIDO_SHORT:
+            return SIDO_SHORT[tok]
+    u = univ_lookup(name)
+    if u and u[0]:
+        return SIDO_SHORT.get(u[0], u[0])
+    r = detect_regions(name)
+    if r:
+        return r[0]
+    if CENTRAL_RE.search(str(name or "").strip()):
+        return "중앙(전국)"
+    return "미확인"
 
 
 UNIV_EXCLUDE = re.compile(r"(병원|협의회|협회|진흥원|연구재단|장학재단|해양과학기술원|부설)")
@@ -41,6 +92,9 @@ def univ_type(name):
     n = str(name or "")
     if not UNIV_RE.search(n) or UNIV_EXCLUDE.search(n):
         return ""
+    u = univ_lookup(n)
+    if u:
+        return "사립" if u[1] == "사립" else "국립·공립"
     return "국립·공립" if any(k in n for k in NATIONAL_UNIV) else "사립"
 
 
@@ -66,9 +120,10 @@ def _common(df, comp):
     df["검색용업체명"] = df["업체목록"].map(ce.search_text)
     df["_gk"] = df["대표업체"].map(ce.group_key)
     df["대학"] = df["수요기관"].map(univ_type)
-    regs = df["수요기관"].map(lambda n: detect_regions(n))
-    df["지역"] = regs.map(lambda r: "·".join(r))
-    df["담당지역"] = regs.map(lambda r: "Y" if set(r) & MY_REGIONS else "")
+    hints = df["_지역힌트"] if "_지역힌트" in df else pd.Series([""] * len(df), index=df.index)
+    df["지역"] = [resolve_region(n, h) for n, h in zip(df["수요기관"], hints)]
+    df["담당지역"] = df["지역"].map(lambda r: "Y" if r in MY_REGIONS else "")
+    df["기관구분"] = df["대학"].map(lambda u: "대학" if u else "공공")
     hits = df["사업명·제품"].map(solution_hits)
     df["자사관련단어"] = hits.map(lambda h: ", ".join(dict.fromkeys(h)) if h else "")
     df["자사관련"] = (df["자사관련단어"] != "").map({True: "Y", False: ""})
@@ -134,6 +189,7 @@ def load_dlvr(comp, cache_path):
         # 솔루션 납품은 '납품일 + 1년'을 유지보수·재구매 시점으로 봄 (추정)
         "종료일": (pd.to_datetime(d["dlvrReqRcptDate"].map(ce._date), errors="coerce") + pd.Timedelta(days=365)).dt.strftime("%Y-%m-%d"),
         "종료추정": "Y", "원문": "", "_key": "납품|" + d["dlvrReqNo"].astype(str) + "|" + d["prdctSno"].astype(str),
+        "_지역힌트": d["dminsttRgnNm"],
     })
     out = _common(out, comp)
     # 경쟁사·비교군 '제품' 납품은 판매업체가 리셀러여도 경쟁사 수주로 표시
@@ -142,6 +198,28 @@ def load_dlvr(comp, cache_path):
     out["API관련"] = ["Y" if (a == "Y" or "API" in str(f)) else "" for a, f in zip(out["API관련"], d["_제품군"])]
     out.loc[[k == "자사" for k in kind], "자사관련"] = "Y"
     return out
+
+
+def load_univ_bids(comp):
+    """사립대·전문대 홈페이지 입찰 게시판에서 모은 글 (univ_crawl.py)"""
+    try:
+        with get_engine().begin() as conn:
+            u = pd.read_sql(text("SELECT * FROM univ_bids"), conn).fillna("")
+    except Exception:
+        return pd.DataFrame(columns=COMMON_COLS)
+    if u.empty:
+        return pd.DataFrame(columns=COMMON_COLS)
+    ev = pd.to_datetime(u["date"], errors="coerce")
+    out = pd.DataFrame({
+        "출처": "대학 홈페이지", "구분": "입찰" + u["kind"], "사업명": u["title"], "제품": "",
+        "수요기관": u["school"] + u["campus"].map(lambda c: "" if c in ("", "본교") else f"({c})"),
+        "업체목록": u["winner"].map(lambda w: [w] if w else []), "금액": u["amount"].map(ce._won),
+        "일자": u["date"],
+        # 공고는 아직 진행 전(공고일+1년을 사업 종료 추정), 결과(낙찰)는 결과일+1년
+        "종료일": (ev + pd.Timedelta(days=365)).dt.strftime("%Y-%m-%d"), "종료추정": "Y",
+        "원문": u["url"], "_key": "대학|" + u["uniq_key"], "_지역힌트": u["region"],
+    })
+    return _common(out, comp)
 
 
 def build(all_df):
@@ -172,13 +250,21 @@ def build(all_df):
 
     VIEW = [("출처", "출처", 9), ("상태", "상태", 9), ("남은일수", "남은일수", 8), ("구분", "구분", 10),
             ("사업명 (누르면 원문)", "사업명", 46), ("제품", "제품", 30), ("업체명", "업체명", 26), ("수요기관", "수요기관", 26),
-            ("대학", "대학", 8), ("지역", "지역", 10), ("담당지역", "담당지역", 7), ("금액(억)", "금액", 10), ("일자", "일자", 11),
+            ("기관구분", "기관구분", 7), ("대학", "대학", 8), ("지역", "지역", 10), ("담당지역", "담당지역", 7), ("금액", "금액", 11), ("일자", "일자", 11),
             ("종료일", "종료일", 11), ("종료 추정", "종료추정", 7), ("자사관련", "자사관련", 7), ("자사관련 단어", "자사관련단어", 14),
-            ("경쟁사", "경쟁사", 7), ("API 관련", "API관련", 7)]
+            ("경쟁사", "경쟁사", 7), ("API 관련", "API관련", 7), ("금액(원, 정렬용)", "_won", 14)]
     EOK = '#,##0.0"억"'
+    WON = '#,##0'
 
     def eok(v):
         return None if v is None or (isinstance(v, float) and pd.isna(v)) or v == "" else round(float(v) / 1e8, 2)
+
+    def money(ws, v):
+        """천만원 이상 → 'N.N억', 미만 → '9,500,000' (원 단위 콤마)"""
+        if v is None or v == "" or (isinstance(v, float) and pd.isna(v)):
+            return c(ws, None)
+        v = float(v)
+        return c(ws, round(v / 1e8, 2), fmt=EOK) if abs(v) >= 1e7 else c(ws, int(v), fmt=WON)
 
     def link(url, title):
         t = str(title or "").replace('"', '""')[:250]
@@ -197,7 +283,11 @@ def build(all_df):
             for t, k, _ in VIEW:
                 v = r.get(k, "")
                 if k == "금액":
-                    row.append(c(ws, eok(v), fmt=EOK))
+                    row.append(money(ws, v))
+                    continue
+                if k == "_won":
+                    w = r.get("금액")
+                    row.append(c(ws, None if w is None or w == "" or pd.isna(w) else int(w), fmt=WON))
                     continue
                 if k == "남은일수":
                     v = None if v is None or pd.isna(v) else int(v)
@@ -223,7 +313,7 @@ def build(all_df):
             "담당지역(진행중·곧완료)": g.apply(lambda x: int(((x["담당지역"] == "Y") & x["상태"].isin(["진행중", "곧 완료"])).sum())),
             "API 관련": g["API관련"].agg(lambda x: int((x == "Y").sum())),
             "자사 관련": g["자사관련"].agg(lambda x: int((x == "Y").sum())),
-            "금액 합계(억)": g["금액"].sum(min_count=1),
+            "금액 합계": g["금액"].sum(min_count=1),
             "최근 일자": g["일자"].max(),
             "주요 기관": g["수요기관"].agg(lambda x: ", ".join(x.value_counts().index[:3])),
             "출처 구성": g["출처"].agg(lambda x: " · ".join(f"{k} {v}" for k, v in x.value_counts().items())),
@@ -235,14 +325,14 @@ def build(all_df):
     def summary_sheet(name, s, note=""):
         ws = wb.create_sheet(name)
         cols = list(s.columns) if not s.empty else ["업체명"]
-        widths = {"업체명": 28, "주요 기관": 46, "출처 구성": 22, "다른 표기": 30, "금액 합계(억)": 12}
+        widths = {"업체명": 28, "주요 기관": 46, "출처 구성": 22, "다른 표기": 30, "금액 합계": 12}
         for i, k in enumerate(cols, 1):
             ws.column_dimensions[get_column_letter(i)].width = widths.get(k, 10)
         if note:
             ws.append([c(ws, note, bold)])
         ws.append([c(ws, k, hf, navy) for k in cols])
         for r in s.to_dict("records"):
-            ws.append([c(ws, eok(r[k]), fmt=EOK) if k == "금액 합계(억)" else r[k] for k in cols])
+            ws.append([money(ws, r[k]) if k == "금액 합계" else r[k] for k in cols])
         ws.freeze_panes = "B3" if note else "B2"
 
     comp_rows = d[d["경쟁사"] == "Y"]
@@ -259,7 +349,9 @@ def build(all_df):
     n = d["출처"].value_counts()
     rows = [
         (c(ws, "공공 IT 수주 통합 현황 (업체 중심)", big), ""), ("기준일", datetime.now().strftime("%Y-%m-%d")),
-        ("출처", f"조달청 나라장터 낙찰 {int(n.get('낙찰', 0)):,}건 · 계약 {int(n.get('계약', 0)):,}건 · 쇼핑몰 납품(자사·경쟁사 솔루션) {int(n.get('쇼핑몰 납품', 0)):,}건"),
+        ("출처", f"조달청 나라장터 낙찰 {int(n.get('낙찰', 0)):,}건 · 계약 {int(n.get('계약', 0)):,}건 · 쇼핑몰 납품(자사·경쟁사 솔루션) {int(n.get('쇼핑몰 납품', 0)):,}건 · 대학 홈페이지 입찰 {int(n.get('대학 홈페이지', 0)):,}건"),
+        ("금액 표시", "천만원 이상은 '억'(예: 10.0억, 0.5억), 천만원 미만은 원 단위(예: 9,500,000). 정렬·합계는 맨 끝 '금액(원, 정렬용)' 칸 사용"),
+        ("지역", "기관 소재 시·도: 원자료 지역 → 대학 목록(대학알리미) → 기관명 속 지역명 순으로 판단. 중앙부처는 '중앙(전국)'"),
         ("범위", "IT 관련만 (정보화사업 표시 또는 사업명에 IT·자사 관련 단어). 같은 공고가 낙찰·계약 둘 다 있으면 계약만 남김"),
         ("", ""), (c(ws, "시트", hf, navy), c(ws, "내용", hf, navy)),
         ("업체검색", "B3에 업체명 일부 입력 → 그 업체의 낙찰·계약·납품 전부 (진행중 먼저). (주)·띄어쓰기·한글/영문 표기 차이 무시"),
@@ -271,17 +363,17 @@ def build(all_df):
         ("통합 내역", "전체 (머리글 ▼ 필터로 검색 가능)"),
         ("", ""),
         ("상태 기준", f"곧 완료 = 종료일까지 {ce.SOON_DAYS}일 이내 · 낙찰은 종료일 정보가 없어 '낙찰일 + 1년' 추정 · 쇼핑몰 납품은 '납품일 + 1년'(유지보수 시점) 추정"),
-        ("한계", "사립대가 자체 입찰·계약(학교 홈페이지)으로 진행한 사업은 나라장터에 없어 빠짐 → 대학 홈페이지 입찰 게시판 수집으로 보완 예정"),
+        ("한계", "대학 홈페이지 수집은 게시판 자동 찾기 방식 — 못 찾은 학교는 '대학 수집 결과' 시트에 표시 (주소를 알려주면 보완)"),
     ]
     for a, b in rows:
         ws.append([a if not isinstance(a, str) else c(ws, a, bold), b])
 
     # 업체검색
     ws = wb.create_sheet("업체검색")
-    show = ["출처", "상태", "남은일수", "구분", "사업명 (누르면 원문)", "제품", "업체명", "수요기관", "대학", "지역", "금액(억)", "일자", "종료일", "경쟁사", "API 관련"]
+    show = ["출처", "상태", "남은일수", "구분", "사업명 (누르면 원문)", "제품", "업체명", "수요기관", "기관구분", "대학", "지역", "금액", "일자", "종료일", "경쟁사", "API 관련"]
     letters = {t: get_column_letter(i + 1) for i, (t, _, _) in enumerate(VIEW)}
     ucol = get_column_letter(len(VIEW) + 1)
-    for i, w in enumerate([9, 9, 8, 10, 46, 30, 26, 26, 8, 10, 10, 11, 11, 7, 7], 1):
+    for i, w in enumerate([9, 9, 8, 10, 46, 30, 26, 26, 7, 8, 9, 11, 11, 11, 7, 7], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     hcol = get_column_letter(len(VIEW) + 3)
     ws.append([c(ws, "업체 검색", big)])
@@ -299,9 +391,15 @@ def build(all_df):
                 f = f'=IFERROR(IF(INDEX({T}!{ucol}:{ucol},{pos})="",INDEX({T}!{col}:{col},{pos})&"",HYPERLINK(INDEX({T}!{ucol}:{ucol},{pos}),INDEX({T}!{col}:{col},{pos})&"")),"")'
                 row.append(f)
                 continue
-            tail = "" if t in ("남은일수", "금액(억)") else '&""'
+            if t == "금액":       # 정렬용 원 단위 칸을 읽어 천만원 이상은 억, 미만은 원으로 표시
+                wc = letters["금액(원, 정렬용)"]
+                f = (f'=IFERROR(IF(INDEX({T}!{wc}:{wc},{pos})="","",IF(INDEX({T}!{wc}:{wc},{pos})>=10000000,'
+                     f'TEXT(INDEX({T}!{wc}:{wc},{pos})/100000000,"#,##0.0")&"억",TEXT(INDEX({T}!{wc}:{wc},{pos}),"#,##0"))),"")')
+                row.append(f)
+                continue
+            tail = "" if t == "남은일수" else '&""'
             f = f"=IFERROR(INDEX({T}!{col}:{col},{pos}){tail},\"\")"
-            row.append(c(ws, f, fmt=EOK) if t == "금액(억)" else f)
+            row.append(f)
         ws.append(row)
 
     summary_sheet("업체별 요약", summ)
@@ -315,7 +413,7 @@ def build(all_df):
         us = pd.DataFrame({
             "대학": g["대학"].first(), "IT 사업 수": g.size(),
             "진행중·곧완료": g["상태"].agg(lambda x: int(x.isin(["진행중", "곧 완료"]).sum())),
-            "금액 합계(억)": g["금액"].sum(min_count=1), "최근 일자": g["일자"].max(),
+            "금액 합계": g["금액"].sum(min_count=1), "최근 일자": g["일자"].max(),
             "주요 업체": g["대표업체"].agg(lambda x: ", ".join(x.value_counts().index[:4])),
             "자사 관련": g["자사관련"].agg(lambda x: int((x == "Y").sum())),
             "경쟁사": g["경쟁사"].agg(lambda x: int((x == "Y").sum())),
@@ -324,12 +422,21 @@ def build(all_df):
         ws = wb.create_sheet("대학별 요약")
         cols = list(us.columns)
         for i, k in enumerate(cols, 1):
-            ws.column_dimensions[get_column_letter(i)].width = {"대학(수요기관)": 34, "주요 업체": 50, "금액 합계(억)": 12}.get(k, 10)
+            ws.column_dimensions[get_column_letter(i)].width = {"대학(수요기관)": 34, "주요 업체": 50, "금액 합계": 12}.get(k, 10)
         ws.append([c(ws, k, hf, navy) for k in cols])
         for r in us.to_dict("records"):
-            ws.append([c(ws, eok(r[k]), fmt=EOK) if k == "금액 합계(억)" else r[k] for k in cols])
+            ws.append([money(ws, r[k]) if k == "금액 합계" else r[k] for k in cols])
         ws.freeze_panes = "B2"
     table("대학 사업", univ_rows)
+    # 대학 홈페이지 수집 결과 (학교별)
+    rep, _ = store.load_cache("univ_crawl_report")
+    if rep:
+        ws = wb.create_sheet("대학 수집 결과")
+        for i, w in enumerate([24, 10, 8, 8, 60, 40], 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+        ws.append([c(ws, k, hf, navy) for k in ("학교", "결과", "3년 내 글", "IT 글", "입찰 게시판 주소", "홈페이지")])
+        for r in sorted(rep, key=lambda x: (x.get("status") != "성공", -int(x.get("it_posts") or 0))):
+            ws.append([r.get("school"), r.get("status"), r.get("posts"), r.get("it_posts"), r.get("board"), r.get("home")])
     table("통합 내역", d, helper=True)
     buf = io.BytesIO()
     wb.save(buf)
@@ -348,7 +455,8 @@ def main():
     cons, ntce = load_contracts(comp)
     awards = load_awards(comp, ntce)
     dlvr = load_dlvr(comp, a.dlvr_cache)
-    parts = [x for x in (cons, awards, dlvr) if not x.empty]
+    univ = load_univ_bids(comp)
+    parts = [x for x in (cons, awards, dlvr, univ) if not x.empty]
     if not parts:
         print("[SKIP] 자료 없음")
         return 1
