@@ -35,7 +35,8 @@ K_PROGRESS = "contract_crawl_progress"
 K_EXCEL = "contract_excel"
 K_EXCEL_META = "contract_excel_meta"   # 대시보드는 이것만 먼저 읽고, 파일은 버튼 누를 때 읽음
 YEARS_BACK = 3                     # 과거 몇 년치 계약까지 훑을지 (진행 중인 계약은 대부분 3년 이내 체결)
-CALL_BUDGET = int(os.getenv("CONTRACT_CALL_BUDGET", "850"))   # 한 번 실행에 쓸 최대 API 호출 수 (하루 한도 보호)
+YEARS_BACK_BY_TYPE = {"용역": 3, "물품": 1}   # 물품은 구매 즉시 납품이 끝나는 경우가 많아 1년이면 충분
+CALL_BUDGET = int(os.getenv("CONTRACT_CALL_BUDGET", "950"))   # 한 번 실행에 쓸 최대 API 호출 수 (하루 한도 보호)
 TIME_BUDGET_SEC = int(os.getenv("CONTRACT_TIME_BUDGET", str(320 * 60)))
 PARALLEL_DAYS = 2                  # 하루치 조회를 동시에 몇 개 돌릴지 (조달청 서버 부담 고려)
 ROWS_PER_PAGE = 999
@@ -262,7 +263,6 @@ def crawl():
     prog, _ = store.load_cache(K_PROGRESS)
     prog = prog if isinstance(prog, dict) else {}
     today = datetime.now().date()
-    floor = (today - timedelta(days=365 * YEARS_BACK)).strftime("%Y%m%d")
     stats = {"calls": 0, "saved": 0, "raw": 0, "stopped": ""}
     lock = threading.Lock()
 
@@ -278,8 +278,9 @@ def crawl():
         return True
 
     try:
-        # ① 최근 7일 새로고침
-        for bt in OPS:
+        # ① 최근 7일 새로고침 — 과거분을 다 채우기 전에는 생략 (조회 횟수를 과거분에 집중)
+        backfill_done = all((prog.get(bt) or {}).get("done") for bt in OPS)
+        for bt in (OPS if backfill_done else []):
             for i in range(RECENT_REFRESH_DAYS):
                 if cr.out_of_budget():
                     raise StopIteration
@@ -287,7 +288,8 @@ def crawl():
         # ② 과거로 이어서 (용역 먼저 끝까지 → 물품)
         for bt in OPS:
             st_ = prog.get(bt) or {}
-            nxt = st_.get("next") or (today - timedelta(days=RECENT_REFRESH_DAYS)).strftime("%Y%m%d")
+            floor = (today - timedelta(days=365 * YEARS_BACK_BY_TYPE.get(bt, YEARS_BACK))).strftime("%Y%m%d")
+            nxt = st_.get("next") or today.strftime("%Y%m%d")
             while nxt >= floor:
                 if cr.out_of_budget():
                     raise StopIteration
@@ -514,7 +516,7 @@ def build_excel(df, today=None):
     ws.column_dimensions["B"].width = 70
     ws.append([cell(ws, "조달청 계약 현황 (IT 관련)", big)])
     ws.append([cell(ws, "기준일"), today_s])
-    ws.append([cell(ws, "출처"), "조달청 나라장터 계약정보 OpenAPI (data.go.kr) — 용역·물품 계약, 최근 3년"])
+    ws.append([cell(ws, "출처"), "조달청 나라장터 계약정보 OpenAPI (data.go.kr) — 용역 계약 최근 3년 · 물품 계약 최근 1년"])
     ws.append([cell(ws, "수록 범위"), "정보화사업(Y) 표시 계약 + 사업명에 IT·자사 관련 단어가 있는 계약 (건물·청소 등 비IT 제외)"])
     ws.append([])
     ws.append([cell(ws, "구분", hfont, navy), cell(ws, "건수 · 기준", hfont, navy)])

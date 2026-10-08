@@ -2341,7 +2341,7 @@ with main_tab_proc:
             st.markdown("#### 🏆 낙찰·계약 결과 (최근 30일)")
         with _hd2:
             if _cx_meta:
-                st.download_button("📥 계약 현황 엑셀 (전체 3년)", data=_contract_excel_bytes,
+                st.download_button("📥 계약 현황 엑셀", data=_contract_excel_bytes,
                                    file_name=_cx_meta.get("filename") or "contracts.xlsx",
                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                    key="dl_contract_excel", type="primary", use_container_width=True,
