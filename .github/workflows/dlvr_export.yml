@@ -24,12 +24,12 @@ jobs:
           python-version: '3.11'
       - run: pip install pandas openpyxl requests
       - name: 납품요구 수집 + 엑셀
-        run: python dlvr_export.py --out dlvr.xlsx --years 12
+        run: set -o pipefail; python dlvr_export.py --out dlvr.xlsx --years 12 2>&1 | tee run_log.txt
       - name: 엑셀 사본을 exports-dlvr 브랜치에 보관
         if: always()
         run: |
-          [ -f dlvr.xlsx ] || exit 0
-          mkdir -p /tmp/exp && cp dlvr.xlsx /tmp/exp/
-          cd /tmp/exp && git init -q -b exports-dlvr && git add dlvr.xlsx
+          mkdir -p /tmp/exp && cp run_log.txt /tmp/exp/ 2>/dev/null || true
+          [ -f dlvr.xlsx ] && cp dlvr.xlsx /tmp/exp/
+          cd /tmp/exp && git init -q -b exports-dlvr && git add -A
           git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "납품요구 엑셀 $(date +%F)"
           git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-dlvr
