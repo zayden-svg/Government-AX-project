@@ -1,0 +1,4 @@
+0 https://www.data.go.kr/data/15129466/openapi.do 200 239943
+   link: closeFileLimitModal();
+   link: fn_fileDownload(
+   js-down: FILE_000000003641691 1
