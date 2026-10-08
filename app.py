@@ -423,6 +423,14 @@ st.markdown(
     .gt-kpi-label {{ font-size:11.5px; color:{C['text_muted']}; margin-top:3px; font-weight:600; }}
     .gt-kpi-sub {{ font-size:11px; color:{C['text_muted']}; margin-top:4px; line-height:1.4; }}
     @media (max-width: 768px) {{ .gt-kpi-row {{ grid-template-columns: repeat(2, 1fr) !important; }} }}
+    /* 누르면 목록이 뜨는 카드: 투명 버튼을 카드 위에 겹침 */
+    [class*="st-key-kc_"] {{ position: relative; gap: 0 !important; }}
+    [class*="st-key-kc_"] .gt-kpi {{ margin-bottom: 8px; transition: border-color .15s, transform .15s, box-shadow .15s; }}
+    [class*="st-key-kc_"]:hover .gt-kpi-click {{ border-color: {C['accent']}; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.10); }}
+    .gt-kpi-more {{ font-size: 11px; color: {C['accent']}; margin-top: 5px; font-weight: 700; }}
+    [class*="st-key-kc_"] [data-testid="stElementContainer"]:has(.stButton) {{ position: absolute; inset: 0 0 8px 0; margin: 0; z-index: 2; }}
+    [class*="st-key-kc_"] .stButton, [class*="st-key-kc_"] .stButton button {{ width: 100% !important; height: 100% !important; }}
+    [class*="st-key-kc_"] .stButton button {{ opacity: 0 !important; cursor: pointer; }}
     /* 테마 전환용 숨은 스크립트 칸 */
     .st-key-gt_theme_js {{ display: none !important; }}
     /* 화면 가운데 '불러오는 중' 안내 — 검색·필터·탭 조작 등으로 화면을 다시 그릴 때 0.4초 이상 걸리면 표시 */
@@ -1134,17 +1142,94 @@ def page_header(tab_name, title, desc):
     )
 
 
-def kpi_row(items):
-    """숫자 카드 줄: items = [(라벨, 값, 색, 보조설명(선택))] — 모든 탭 동일 모양"""
-    cards = ""
-    for it in items:
-        label, value, color = it[0], it[1], it[2]
-        sub = it[3] if len(it) > 3 else ""
-        cards += (f'<div class="gt-kpi"><div class="gt-kpi-num" style="color:{color};">{escape(str(value))}</div>'
-                  f'<div class="gt-kpi-label">{escape(str(label))}</div>'
-                  + (f'<div class="gt-kpi-sub">{escape(str(sub))}</div>' if sub else "") + '</div>')
-    st.markdown(f'<div class="gt-kpi-row" style="grid-template-columns:repeat({len(items)},1fr);">{cards}</div>',
-                unsafe_allow_html=True)
+def _kpi_card_html(label, value, color, sub="", clickable=False):
+    return (f'<div class="gt-kpi{" gt-kpi-click" if clickable else ""}"><div class="gt-kpi-num" style="color:{color};">{escape(str(value))}</div>'
+            f'<div class="gt-kpi-label">{escape(str(label))}</div>'
+            + (f'<div class="gt-kpi-sub">{escape(str(sub))}</div>' if sub else "")
+            + ('<div class="gt-kpi-more">목록 보기 ›</div>' if clickable else "") + '</div>')
+
+
+def kpi_row(items, key=None):
+    """숫자 카드 줄 — 모든 탭 동일 모양.
+    items = [(라벨, 값, 색, 보조설명, 목록)] · 목록(선택) = ("postings", df) | ("proc", df) | ("solution", (df, 뉴스목록))
+    목록이 있으면 카드를 누를 때 해당 공고 목록이 팝업으로 뜸 (key 필요)"""
+    norm = [(it[0], it[1], it[2], it[3] if len(it) > 3 else "", it[4] if len(it) > 4 else None) for it in items]
+    if not key or all(x[4] is None for x in norm):
+        cards = "".join(_kpi_card_html(lb, v, c, sb) for lb, v, c, sb, _ in norm)
+        st.markdown(f'<div class="gt-kpi-row" style="grid-template-columns:repeat({len(items)},1fr);">{cards}</div>',
+                    unsafe_allow_html=True)
+        return
+    cols = st.columns(len(norm))
+    for i, (lb, v, c, sb, payload) in enumerate(norm):
+        with cols[i]:
+            ck = f"kc_{key}_{i}"
+            with st.container(key=ck):
+                st.markdown(_kpi_card_html(lb, v, c, sb, clickable=payload is not None), unsafe_allow_html=True)
+                if payload is not None and st.button(f"{lb} 목록 보기", key=f"{ck}_btn"):
+                    open_list_dialog(f"{lb} · {v}", payload)
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+
+
+def full_list_table_html(table_df, max_h=640):
+    """공고 표 (상세보기·팝업 공통): 사업명 | 주관기관 | 공고기관 | 지역 | 예산 | 마감 | 연관도"""
+    if table_df is None or table_df.empty:
+        return f'<div style="padding:16px;color:{C["text_muted"]};">조건에 맞는 공고가 없습니다.</div>'
+    body = ""
+    for _, r in table_df.iterrows():
+        body += (
+            f'<tr><td class="l"><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" title="원문 공고 열기">'
+            f'{escape(str(r[COL_TITLE]))}</a></td>'
+            f'<td>{escape(str(r.get("_org") or r.get(COL_AGENCY) or "-"))}</td>'
+            f'<td>{escape(str(r.get(COL_AGENCY) or "-"))}</td>'
+            f'<td>{escape(str(r.get("_region_label") or "-"))}</td>'
+            f'<td>{budget_cell_html(r)}</td>'
+            f'<td>{due_cell_html(r.get(COL_DUE_DATE))}</td>'
+            f'<td>{score_badge_html(r.get(COL_AI_SCORE, -1))}</td></tr>'
+        )
+    cols = "".join(f'<col style="width:{w}%">' for w in (33, 13, 13, 8, 10, 8, 15))
+    head = "".join(f"<th>{h}</th>" for h in ("사업명", "주관기관", "공고기관", "지역", "예산", "마감", "연관도"))
+    return (f'<div style="max-height:{max_h}px;overflow-y:auto;border-radius:10px;">'
+            f'<table class="gt-table"><colgroup>{cols}</colgroup><thead><tr>{head}</tr></thead>'
+            f'<tbody>{body}</tbody></table></div>')
+
+
+def _sort_postings(d):
+    by = [c for c in (COL_AI_SCORE, "_reg_date_parsed") if c in d.columns]
+    return d.sort_values(by, ascending=[False] * len(by)) if by else d
+
+
+def open_list_dialog(title, payload):
+    """카드 클릭 → 관련 목록 팝업 (공고 표는 상세보기와 같은 모양)"""
+    kind, data = payload
+
+    def _body():
+        if kind == "postings":
+            d = _sort_postings(data)
+            st.caption(f"총 {len(d)}건 · AI 연관도 높은 순 · 사업명을 누르면 원문 공고로 이동합니다.")
+            st.markdown(full_list_table_html(d, max_h=560), unsafe_allow_html=True)
+        elif kind == "proc":
+            d = data.sort_values("event_date", ascending=False)
+            st.caption(f"총 {len(d)}건 · 최근 순 · 사업명을 누르면 나라장터 원문으로 이동합니다.")
+            st.markdown(proc_list_table_html(d, False, []), unsafe_allow_html=True)
+        elif kind == "solution":
+            prow, news = data
+            st.markdown(f"**사업·과제 {len(prow)}건**")
+            st.markdown(full_list_table_html(_sort_postings(prow), max_h=420), unsafe_allow_html=True)
+            st.markdown(f"**뉴스 (최근 24시간) {len(news)}건**")
+            if not news:
+                st.caption("최근 24시간 관련 뉴스가 없습니다.")
+            for it in news:
+                src = SOURCE_LABEL_KO.get(it.get("_src") or it.get("source"), it.get("_src") or it.get("source") or "")
+                st.markdown(f'<div style="padding:6px 0;border-bottom:1px solid {C["border"]};font-size:13px;">'
+                            f'<a href="{escape(str(it.get("link") or it.get("url") or "#"))}" target="_blank">{escape(str(it.get("title") or ""))}</a>'
+                            f'<span class="gt-muted" style="font-size:11.5px;margin-left:8px;">{escape(str(src))}</span></div>',
+                            unsafe_allow_html=True)
+
+    if hasattr(st, "dialog"):
+        st.dialog(title, width="large")(_body)()
+    else:
+        with st.expander(title, expanded=True):
+            _body()
 
 
 PALETTE_TOTAL = dict(light_bg=C['surface2'], light_text=C['text'], border=C['border'], active_bg=C['navy'], active_text=C['navy_text'])
@@ -1643,35 +1728,19 @@ with main_tab_dash:
     _score_valid_all = filtered[filtered[COL_AI_SCORE] >= 0]
     _avg_score_all = f"{_score_valid_all[COL_AI_SCORE].mean():.0f}점" if not _score_valid_all.empty else "-"
 
-    kpi_row([("전체 공고·과제", f"{_total_cnt_all}건", C['accent']),
-             ("R&D 과제", f"{_rnd_cnt_all}건", _tc("#0F9D58", DARK["success_text"])),
-             ("사업부 과제", f"{_biz_cnt_all}건", _tc("#C2410C", DARK["warn_text"])),
-             ("평균 AI 연관도", _avg_score_all, C['text'])])
-
-    st.markdown(f"<div style='font-size:15px;font-weight:800;color:{C['text']};margin:12px 0 6px;'>사업 구분 필터</div>", unsafe_allow_html=True)
-    rnd_in_filtered = (filtered["_track"] == TRACK_RND).sum()
-    biz_in_filtered = (filtered["_track"] == TRACK_BIZ).sum()
-    total_in_filtered = len(filtered)
-
-    def _reset_track():
-        st.session_state.track_filter = None
-
-    def _toggle_track(value):
-        st.session_state.track_filter = None if st.session_state.track_filter == value else value
-
-    t1, t2, t3 = st.columns(3)
-    with t1:
-        render_toggle_card("전체 보기", total_in_filtered, "trk_all",
-                            st.session_state.track_filter is None, PALETTE_TOTAL,
-                            on_click=_reset_track)
-    with t2:
-        render_toggle_card(TRACK_RND, rnd_in_filtered, "trk_rnd",
-                            st.session_state.track_filter == TRACK_RND, PALETTE_RND,
-                            on_click=_toggle_track, args=(TRACK_RND,))
-    with t3:
-        render_toggle_card(TRACK_BIZ, biz_in_filtered, "trk_biz",
-                            st.session_state.track_filter == TRACK_BIZ, PALETTE_BIZ,
-                            on_click=_toggle_track, args=(TRACK_BIZ,))
+    _fd = filtered
+    _today_ts = pd.Timestamp(today)
+    _soon3 = _fd[_fd["_due_date_parsed"].notna() & (_fd["_due_date_parsed"] >= _today_ts)
+                 & (_fd["_due_date_parsed"] <= _today_ts + timedelta(days=3))]
+    _prog = _fd[_fd[COL_STATUS] == "진행중"]
+    _high = _fd[_fd[COL_AI_SCORE] >= 60]
+    # 카드를 누르면 해당 공고 목록이 팝업으로 뜸 (예전 '사업 구분 필터'·'빠른 필터' 카드를 대신함)
+    kpi_row([("전체 공고·과제", f"{_total_cnt_all}건", C['accent'], f"평균 AI 연관도 {_avg_score_all}", ("postings", _fd)),
+             ("R&D 과제", f"{_rnd_cnt_all}건", _tc("#0F9D58", DARK["success_text"]), "", ("postings", _fd[_fd["_track"] == TRACK_RND])),
+             ("사업부 과제", f"{_biz_cnt_all}건", _tc("#C2410C", DARK["warn_text"]), "", ("postings", _fd[_fd["_track"] == TRACK_BIZ])),
+             ("진행 중인 공고", f"{len(_prog)}건", C['accent'], "", ("postings", _prog)),
+             ("관련 높은 공고", f"{len(_high)}건", C['danger_text'], "AI 연관도 60점 이상", ("postings", _high)),
+             ("마감 3일 이내", f"{len(_soon3)}건", C['warn_text'], "", ("postings", _soon3))], key="dash")
 
     st.caption("💡 각 공고를 클릭하면 AI가 왜 R&D/사업부로 구분했는지 판단 근거를 함께 확인할 수 있습니다.")
 
@@ -1721,90 +1790,13 @@ with main_tab_dash:
             st.markdown("**AI 추천 키워드 적중 분포**")
             st.info("매칭된 키워드 데이터가 없습니다.")
 
-    tab_filtered = filtered
-    if st.session_state.track_filter:
-        tab_filtered = tab_filtered[tab_filtered["_track"] == st.session_state.track_filter]
-
-    tab_filtered = tab_filtered.sort_values(COL_AI_SCORE, ascending=False)
-
-    soon_mask = (
-        tab_filtered["_due_date_parsed"].notna()
-        & (tab_filtered["_due_date_parsed"] >= today)
-        & (tab_filtered["_due_date_parsed"] <= today + timedelta(days=3))
-    )
-    in_progress_count = (tab_filtered[COL_STATUS] == "진행중").sum()
-    high_grade_count = (tab_filtered[COL_AI_SCORE] >= 60).sum()
-    soon_count = soon_mask.sum()
-    total_count = len(tab_filtered)
-
-    st.markdown("---")
-
-    def _reset_quick():
-        st.session_state.quick_filter = None
-
-    def _toggle_quick(value):
-        st.session_state.quick_filter = None if st.session_state.quick_filter == value else value
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        render_toggle_card("전체 공고", total_count, "card_total",
-                            st.session_state.quick_filter is None, PALETTE_FILTER_TOTAL,
-                            on_click=_reset_quick)
-    with c2:
-        render_toggle_card("진행 중인 공고", in_progress_count, "card_in_progress",
-                            st.session_state.quick_filter == "in_progress", PALETTE_PROGRESS,
-                            on_click=_toggle_quick, args=("in_progress",))
-    with c3:
-        render_toggle_card("관련 높은 공고", high_grade_count, "card_high_grade",
-                            st.session_state.quick_filter == "high_grade", PALETTE_HIGH_GRADE,
-                            on_click=_toggle_quick, args=("high_grade",))
-    with c4:
-        render_toggle_card("마감 3일 이내", soon_count, "card_due_soon",
-                            st.session_state.quick_filter == "due_soon", PALETTE_DUE_SOON,
-                            on_click=_toggle_quick, args=("due_soon",))
-
-    if st.session_state.quick_filter:
-        label_map = {"in_progress": "진행중 공고", "high_grade": "AI 연관도 60점 이상 공고", "due_soon": "마감 3일 이내 공고"}
-        st.info(f"🔎 현재 '{label_map[st.session_state.quick_filter]}' 만 보고 있습니다. 카드를 다시 누르면 해제됩니다.")
-
-    display_df = tab_filtered.copy()
-    if st.session_state.quick_filter == "in_progress":
-        display_df = display_df[display_df[COL_STATUS] == "진행중"]
-    elif st.session_state.quick_filter == "high_grade":
-        display_df = display_df[display_df[COL_AI_SCORE] >= 60]
-    elif st.session_state.quick_filter == "due_soon":
-        display_df = display_df[soon_mask]
-
-    display_df = display_df.sort_values([COL_AI_SCORE, "_reg_date_parsed"], ascending=[False, False])
-    display_df = display_df.reset_index(drop=True)
+    display_df = filtered.sort_values([COL_AI_SCORE, "_reg_date_parsed"], ascending=[False, False]).reset_index(drop=True)
     st.markdown("---")
 
     tab_detail, tab_summary = st.tabs(["📑 상세보기", "⭐ AI핵심요약"])
 
-    def _full_list_table_html(table_df):
-        """상세보기: 통합보기 주요사업 표와 같은 순서·모양 — 사업명 | 주관기관 | 공고기관 | 지역 | 예산 | 마감 | 연관도"""
-        if table_df.empty:
-            return f'<div style="padding:16px;color:{C["text_muted"]};">조건에 맞는 공고가 없습니다.</div>'
-        body = ""
-        for _, r in table_df.iterrows():
-            body += (
-                f'<tr><td class="l"><a href="{escape(str(r.get(COL_URL) or "#"))}" target="_blank" title="원문 공고 열기">'
-                f'{escape(str(r[COL_TITLE]))}</a></td>'
-                f'<td>{escape(str(r.get("_org") or r.get(COL_AGENCY) or "-"))}</td>'
-                f'<td>{escape(str(r.get(COL_AGENCY) or "-"))}</td>'
-                f'<td>{escape(str(r.get("_region_label") or "-"))}</td>'
-                f'<td>{budget_cell_html(r)}</td>'
-                f'<td>{due_cell_html(r.get(COL_DUE_DATE))}</td>'
-                f'<td>{score_badge_html(r.get(COL_AI_SCORE, -1))}</td></tr>'
-            )
-        cols = "".join(f'<col style="width:{w}%">' for w in (33, 13, 13, 8, 10, 8, 15))
-        head = "".join(f"<th>{h}</th>" for h in ("사업명", "주관기관", "공고기관", "지역", "예산", "마감", "연관도"))
-        return (f'<div style="max-height:640px;overflow-y:auto;border-radius:10px;">'
-                f'<table class="gt-table"><colgroup>{cols}</colgroup><thead><tr>{head}</tr></thead>'
-                f'<tbody>{body}</tbody></table></div>')
-
     with tab_detail:
-        st.markdown(_full_list_table_html(display_df), unsafe_allow_html=True)
+        st.markdown(full_list_table_html(display_df), unsafe_allow_html=True)
         st.caption("💡 공고명을 클릭하면 바로 원문 공고로 이동합니다.")
 
     with tab_summary:
@@ -2169,8 +2161,9 @@ with main_tab_trend:
                 "넷퍼넬·봇매니저 등 자사 제품과 관련된 공고·과제·최근 24시간 뉴스를 제품별로 모았습니다. (통합보기 제품 가이드와 같은 목록)")
     SOL_COLORS = [C['accent'], C['success_text'], C['warn_text'], C['danger_text']]
     kpi_row([(srow['name'], f"{srow['total']}건", SOL_COLORS[i % len(SOL_COLORS)],
-              f"공고·과제 {len(srow['posting_rows'])}건 · 뉴스(24시간) {len(srow['news_rows'])}건")
-             for i, srow in enumerate(solution_rows)])
+              f"공고·과제 {len(srow['posting_rows'])}건 · 뉴스(24시간) {len(srow['news_rows'])}건",
+              ("solution", (srow["posting_rows"], list(srow["news_rows"]))))
+             for i, srow in enumerate(solution_rows)], key="sol")
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
     kw_chart_df = pd.DataFrame({
@@ -2283,6 +2276,23 @@ def _hit_note(title, on):
     return f'<span class="gt-sub">관련 단어: {escape("·".join(hits))}</span>' if hits else ""
 
 
+def proc_list_table_html(view, mine, comp_variants, max_h=520):
+    """낙찰·계약 표 (낙찰결과 탭·카드 팝업 공통)"""
+    body = ""
+    for r in view.to_dict("records"):
+        kind_c = C['accent'] if r["kind"] == "낙찰" else C['success_text']
+        body += (
+            f'<tr><td><span class="gt-pill" style="background:{C["surface3"]};color:{kind_c};">{escape(r["kind"])}</span></td>'
+            f'<td>{escape(str(r["event_date"])[2:10] if r["event_date"] else "-")}</td>'
+            f'<td class="l"><a href="{escape(r["url"] or "#")}" target="_blank" title="원문 열기">'
+            f'{_highlight(r["title"], _SOL_KWS_SORTED, mine, solution=True)}</a>{_hit_note(r["title"], mine)}</td>'
+            f'<td>{escape(r["agency"] or "-")}</td>'
+            f'<td>{_highlight(r["company"] or "-", comp_variants, mine)}</td>'
+            f'<td>{escape(format_budget_eok(r["amount"]) or "-")}</td></tr>'
+        )
+    return _proc_table(body, ["구분", "일자", "사업명", "수요기관", "수주업체", "금액"], [7, 9, 40, 18, 15, 11], max_h=max_h)
+
+
 def _proc_table(rows_html, head_cells, widths, max_h=520):
     cols = "".join(f'<col style="width:{w}%">' for w in widths)
     head = "".join(f"<th>{h}</th>" for h in head_cells)
@@ -2321,10 +2331,12 @@ with main_tab_proc:
         res_df = res_df.fillna("")
         res_df["_comp"] = res_df["company"].map(lambda c: is_competitor_match(c, _comp_kws))
         res_df["_sol"] = res_df["title"].map(is_solution_related)
-        kpi_row([("낙찰 (30일)", f"{(res_df['kind'] == '낙찰').sum()}건", C['accent']),
-                 ("계약 (30일)", f"{(res_df['kind'] == '계약').sum()}건", C['text']),
-                 ("경쟁사 수주", f"{int(res_df['_comp'].sum())}건", C['danger_text']),
-                 ("자사 제품 관련", f"{int(res_df['_sol'].sum())}건", C['success_text'])])
+        _rk = {k: res_df[m] for k, m in (("낙찰", res_df["kind"] == "낙찰"), ("계약", res_df["kind"] == "계약"),
+                                         ("comp", res_df["_comp"]), ("sol", res_df["_sol"]))}
+        kpi_row([("낙찰 (30일)", f"{len(_rk['낙찰'])}건", C['accent'], "", ("proc", _rk["낙찰"])),
+                 ("계약 (30일)", f"{len(_rk['계약'])}건", C['text'], "", ("proc", _rk["계약"])),
+                 ("경쟁사 수주", f"{len(_rk['comp'])}건", C['danger_text'], "", ("proc", _rk["comp"])),
+                 ("자사 제품 관련", f"{len(_rk['sol'])}건", C['success_text'], "", ("proc", _rk["sol"]))], key="proc")
 
         st.markdown("#### 🏆 낙찰·계약 결과 (최근 30일)")
         view = res_df[res_df["_comp"] | res_df["_sol"]] if proc_mine else res_df
@@ -2332,20 +2344,7 @@ with main_tab_proc:
         if view.empty:
             st.caption("해당 조건의 결과가 없습니다.")
         else:
-            body = ""
-            for r in view.to_dict("records"):
-                kind_c = C['accent'] if r["kind"] == "낙찰" else C['success_text']
-                body += (
-                    f'<tr><td><span class="gt-pill" style="background:{C["surface3"]};color:{kind_c};">{escape(r["kind"])}</span></td>'
-                    f'<td>{escape(str(r["event_date"])[2:10] if r["event_date"] else "-")}</td>'
-                    f'<td class="l"><a href="{escape(r["url"] or "#")}" target="_blank" title="원문 열기">'
-                    f'{_highlight(r["title"], _SOL_KWS_SORTED, proc_mine, solution=True)}</a>{_hit_note(r["title"], proc_mine)}</td>'
-                    f'<td>{escape(r["agency"] or "-")}</td>'
-                    f'<td>{_highlight(r["company"] or "-", _comp_variants, proc_mine)}</td>'
-                    f'<td>{escape(format_budget_eok(r["amount"]) or "-")}</td></tr>'
-                )
-            st.markdown(_proc_table(body, ["구분", "일자", "사업명", "수요기관", "수주업체", "금액"],
-                                    [7, 9, 40, 18, 15, 11]), unsafe_allow_html=True)
+            st.markdown(proc_list_table_html(view, proc_mine, _comp_variants), unsafe_allow_html=True)
             st.caption(f"총 {len(view)}건 · 사업명을 누르면 나라장터 원문으로 이동합니다. "
                        "출처: 조달청 나라장터 낙찰정보·계약정보 서비스(공공데이터포털), IT 관련 사업만 수집.")
 
@@ -2472,10 +2471,13 @@ with main_tab_integrated:
         KPI_ORANGE = _tc("#C2410C", C["warn_text"])
         KPI_GREEN = _tc("#0F9D58", C["success_text"])
 
-        kpi_row([("오늘 수집 신규 공고", f"{len(today_new_df)}건", KPI_BLUE),
-                 ("대응 필요 공고", f"{need_action_n}건", KPI_RED),
-                 ("D-14 이내 마감", f"{due_soon14_n}건", KPI_ORANGE),
-                 ("연구개발(R&D) 과제", f"{len(rnd_df)}건", KPI_GREEN)])
+        _due14_df = df[df["_due_date_parsed"].notna()
+                       & (df["_due_date_parsed"] >= pd.Timestamp(now_dt.date()))
+                       & (df["_due_date_parsed"] <= pd.Timestamp(now_dt.date()) + timedelta(days=14))]
+        kpi_row([("오늘 수집 신규 공고", f"{len(today_new_df)}건", KPI_BLUE, "", ("postings", today_new_df)),
+                 ("대응 필요 공고", f"{need_action_n}건", KPI_RED, "AI 연관도 60점 이상", ("postings", df[df[COL_AI_SCORE] >= 60])),
+                 ("D-14 이내 마감", f"{due_soon14_n}건", KPI_ORANGE, "", ("postings", _due14_df)),
+                 ("연구개발(R&D) 과제", f"{len(rnd_df)}건", KPI_GREEN, "", ("postings", rnd_df))], key="intg")
 
         st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
 
