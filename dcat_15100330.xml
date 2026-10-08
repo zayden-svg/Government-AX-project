@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:dct="http://purl.org/dc/terms/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dcat="http://www.w3.org/ns/dcat#" xmlns:vcard="http://www.w3.org/2006/vcard/ns#">
+    <dcat:Catalog>
+        <dcat:dataset>
+            <dcat:Dataset>
+                <dct:description xml:lang="kr">학교별 다양한 정보를 제공하는 개황 리스트에 관한 내용으로, 학교 구분과 지역, 학제, 설립 구분, 관련 법인명, 학교 상태 및 우편번호 등 세부 정보를 포함합니다. 이용자는 대학알리미 자료실에서 학교 개황 리스트를 검색하여 2015년 이후의 데이터를 확인할 수 있습니다. 이는 학교별 현황 파악에 유용하며, 다양한 학교 정보를 한눈에 살필 수 있도록 구성되어 있습니다.<br/><br/>(제공데이터)<br/>학교구분, 학교코드, 학교명, 본분교, 학제, 지역, 설립구분, 관련법령, 법인명, 학교상태, 중문학교명, 영문학교명, 주소, 영문주소, 중문주소, 우편번호, 학교개교일, 학교홈페이지, 총장(대학원장), 학교대표번호, 학교대표팩스번호</dct:description>
+                <dct:description xml:lang="en">This is about the general status list that provides various information about each school, and includes detailed information such as school type and region, school system, establishment type, related legal entity name, school status, and postal code. Users can search the school general status list in the University Information Data Room to check data from 2015 onwards. This is useful for understanding the current status of each school, and is organized so that various school information can be viewed at a glance. (Data provided) School type, school code, school name, main branch school, school system, region, establishment type, related laws, legal entity name, school status, Chinese school name, English school name, address, English address, Chinese address, postal code, school opening date, school homepage, president (graduate school dean), school representative number, school representative fax number</dct:description>
+                <dct:title xml:lang="kr">교육부_대학교개황리스트</dct:title>
+                <dct:title xml:lang="en">Ministry of Education_University Overview List</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2022-05-18</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-05-28</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>교육부</foaf:name>
+                        
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>교육데이터담당관</vcard:organization-unit>
+                        <vcard:hasTelephone rdf:resource="044-203-6633"/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:conformsTo ></dct:conformsTo>
+                <dcat:theme>교육 - 고등교육</dcat:theme>
+                <dcat:keyword xml:lang="kr">학교,지역,학교구분,학제,설립구분,법인명,학교상태,우편번호</dcat:keyword>
+                <dcat:keyword xml:lang="en">school,region,School classification,Interdisciplinary,Establishment classification,Corporate name,School status,Postal code</dcat:keyword>
+                <dct:rights>이용허락범위 제한 없음</dct:rights>
+                <dct:accrualPeriodicity>수시</dct:accrualPeriodicity>
+                
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15100330/fileData.do"/>
+                
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:Dataset>
+        </dcat:dataset>
+
+        <dcat:service>
+            <dcat:DataService>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>교육데이터담당관</vcard:organization-unit>
+                        <vcard:hasTelephone/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:description>학교별 다양한 정보를 제공하는 개황 리스트에 관한 내용으로, 학교 구분과 지역, 학제, 설립 구분, 관련 법인명, 학교 상태 및 우편번호 등 세부 정보를 포함합니다. 이용자는 대학알리미 자료실에서 학교 개황 리스트를 검색하여 2015년 이후의 데이터를 확인할 수 있습니다. 이는 학교별 현황 파악에 유용하며, 다양한 학교 정보를 한눈에 살필 수 있도록 구성되어 있습니다.<br/><br/>(제공데이터)<br/>학교구분, 학교코드, 학교명, 본분교, 학제, 지역, 설립구분, 관련법령, 법인명, 학교상태, 중문학교명, 영문학교명, 주소, 영문주소, 중문주소, 우편번호, 학교개교일, 학교홈페이지, 총장(대학원장), 학교대표번호, 학교대표팩스번호</dct:description>
+                <dct:title>교육부_대학교개황리스트</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2022-05-18</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-05-28</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>교육부</foaf:name>
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:format></dcat:format>
+                <dcat:theme>교육 - 고등교육</dcat:theme>
+                <dcat:keyword>학교,지역,학교구분,학제,설립구분,법인명,학교상태,우편번호</dcat:keyword>
+                <dcat:keyword>school,region,School classification,Interdisciplinary,Establishment classification,Corporate name,School status,Postal code</dcat:keyword>
+                <dct:rights >이용허락범위 제한 없음</dct:rights>
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15100330/openapi.do"/>
+                <dcat:endpointURL/>
+                <dcat:accessURL/>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:DataService>
+        </dcat:service>
+    </dcat:Catalog>
+</rdf:RDF>

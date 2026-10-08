@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:dct="http://purl.org/dc/terms/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dcat="http://www.w3.org/ns/dcat#" xmlns:vcard="http://www.w3.org/2006/vcard/ns#">
+    <dcat:Catalog>
+        <dcat:dataset>
+            <dcat:Dataset>
+                <dct:description xml:lang="kr">이 데이터는 전국 439개 대학의 이름, 지역, 설립 유형, 연락처, 홈페이지, 학제 등의 세부 정보를 담고 있습니다. 단순한 대학 정보 집합을 넘어, 사회적 이슈와도 깊은 연관성을 가집니다.<br/><br/>예를 들어 지역 균형 발전 문제와 관련하여, 수도권과 지방에 위치한 대학의 분포를 파악함으로써 교육 자원의 불균형을 확인할 수 있습니다. 이는 청년층의 수도권 집중 현상, 지방 소멸 문제와 직결되며 정책 수립에도 중요한 근거 자료가 됩니다. 또한 대학 구조조정 및 학령인구 감소라는 사회적 이슈와도 밀접합니다. 대학별 학제나 상태, 설립 유형을 분석하면 어떤 대학이 존속 위기에 있는지, 국공립과 사립의 생존 전략이 어떻게 다른지를 파악할 수 있습니다.<br/><br/>나아가 디지털 전환과 접근성 문제도 살펴볼 수 있습니다. 대학 홈페이지나 온라인 서비스 제공 여부, 로고와 같은 시각적 정체성 자료는 교육기관의 디지털 역량을 가늠하게 해주며, 이는 비대면 교육 확대, 온라인 학습 격차 등과 맞물립니다.<br/><br/>따라서 이 자료는 단순한 대학 목록이 아니라, 청년 인구 이동, 지역 불균형, 고등교육 정책, 디지털 교육 격차 등 다양한 사회적 이슈를 분석하고 해결책을 모색하는 데 중요한 기초 데이터를 제공합니다.</dct:description>
+                <dct:description xml:lang="en">This data contains detailed information on 439 universities nationwide, including their names, regions, establishment types, contact information, websites, and academic systems. Beyond simply collecting university information, it also has a profound impact on social issues. For example, regarding the issue of balanced regional development, understanding the distribution of universities in the metropolitan area and other regions can help identify imbalances in educational resources. This information directly relates to the concentration of young people in the metropolitan area and the disappearance of local universities, providing valuable evidence for policymaking. It also plays a crucial role in addressing social issues such as university restructuring and the declining school-age population. Analyzing each university&amp;#39;s academic system, status, and establishment type can help identify which universities are at risk of extinction and how public and private institutions differ in their survival strategies. Furthermore, it can also help examine digital transformation and accessibility issues. Visual identity data, such as university websites, online services, and logos, can help assess an educational institution&amp;#39;s digital capabilities, which is intertwined with issues such as the expansion of remote education and the online learning gap. Therefore, this resource is not simply a list of universities; it provides crucial basic data for analyzing and exploring solutions to various social issues, such as youth population migration, regional imbalances, higher education policy, and the digital education gap.</dct:description>
+                <dct:title xml:lang="kr">경상남도교육청_대학정보</dct:title>
+                <dct:title xml:lang="en">Gyeongsangnam-do Office of Education_University Information</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-09-25</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-11-10</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>경상남도교육청</foaf:name>
+                        
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>진로교육과</vcard:organization-unit>
+                        <vcard:hasTelephone rdf:resource="055-210-5114"/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:conformsTo ></dct:conformsTo>
+                <dcat:theme>교육 - 유아및초·중등교육</dcat:theme>
+                <dcat:keyword xml:lang="kr">대학이름,대학지역,진로선택,진학지도,입시</dcat:keyword>
+                <dcat:keyword xml:lang="en">University name,University area,Career choice,College guidance,entrance exam</dcat:keyword>
+                <dct:rights>이용허락범위 제한 없음</dct:rights>
+                <dct:accrualPeriodicity>연간</dct:accrualPeriodicity>
+                
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15150589/fileData.do"/>
+                <dcat:distribution>
+                    <dcat:Distribution>
+                        <dct:accessURL ></dct:accessURL>
+                        <dcat:description></dcat:description>
+                        <dcat:format>csv</dcat:format>
+                        <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-10-08</dct:issued>
+                        <dcat:title>경상남도교육청_대학정보_20250918</dcat:title>
+                    </dcat:Distribution>
+                </dcat:distribution>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:Dataset>
+        </dcat:dataset>
+
+        <dcat:service>
+            <dcat:DataService>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>진로교육과</vcard:organization-unit>
+                        <vcard:hasTelephone/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:description>이 데이터는 전국 439개 대학의 이름, 지역, 설립 유형, 연락처, 홈페이지, 학제 등의 세부 정보를 담고 있습니다. 단순한 대학 정보 집합을 넘어, 사회적 이슈와도 깊은 연관성을 가집니다.<br/><br/>예를 들어 지역 균형 발전 문제와 관련하여, 수도권과 지방에 위치한 대학의 분포를 파악함으로써 교육 자원의 불균형을 확인할 수 있습니다. 이는 청년층의 수도권 집중 현상, 지방 소멸 문제와 직결되며 정책 수립에도 중요한 근거 자료가 됩니다. 또한 대학 구조조정 및 학령인구 감소라는 사회적 이슈와도 밀접합니다. 대학별 학제나 상태, 설립 유형을 분석하면 어떤 대학이 존속 위기에 있는지, 국공립과 사립의 생존 전략이 어떻게 다른지를 파악할 수 있습니다.<br/><br/>나아가 디지털 전환과 접근성 문제도 살펴볼 수 있습니다. 대학 홈페이지나 온라인 서비스 제공 여부, 로고와 같은 시각적 정체성 자료는 교육기관의 디지털 역량을 가늠하게 해주며, 이는 비대면 교육 확대, 온라인 학습 격차 등과 맞물립니다.<br/><br/>따라서 이 자료는 단순한 대학 목록이 아니라, 청년 인구 이동, 지역 불균형, 고등교육 정책, 디지털 교육 격차 등 다양한 사회적 이슈를 분석하고 해결책을 모색하는 데 중요한 기초 데이터를 제공합니다.</dct:description>
+                <dct:title>경상남도교육청_대학정보</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-09-25</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-11-10</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>경상남도교육청</foaf:name>
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:format></dcat:format>
+                <dcat:theme>교육 - 유아및초·중등교육</dcat:theme>
+                <dcat:keyword>대학이름,대학지역,진로선택,진학지도,입시</dcat:keyword>
+                <dcat:keyword>University name,University area,Career choice,College guidance,entrance exam</dcat:keyword>
+                <dct:rights >이용허락범위 제한 없음</dct:rights>
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15150589/openapi.do"/>
+                <dcat:endpointURL/>
+                <dcat:accessURL/>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:DataService>
+        </dcat:service>
+    </dcat:Catalog>
+</rdf:RDF>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:dct="http://purl.org/dc/terms/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dcat="http://www.w3.org/ns/dcat#" xmlns:vcard="http://www.w3.org/2006/vcard/ns#">
+    <dcat:Catalog>
+        <dcat:dataset>
+            <dcat:Dataset>
+                <dct:description xml:lang="kr">이 데이터는 전국 전문대학의 학교별 입학정원 현황을 정리하여 제공하는 공공데이터입니다. 교육부와 한국교육개발원 교육통계센터(국가교육통계센터)의 공식 통계를 기반으로 작성되었습니다.<br/><br/>데이터에는 전국 전문대학별 정원 내 입학정원이 포함되어 있으며, 주간 과정, 야간 과정, 원격 과정으로 구분하여 제공됩니다. 각 대학의 총 입학정원 수가 함께 수록되어 있어 대학별 정원 규모를 확인할 수 있으며, 설립 유형(공립, 사립)과 지역 정보도 함께 제공됩니다. 이를 통해 특정 대학의 입학정원이 어떤 형태로 편성되어 있는지, 지역별·설립별 차이가 어떻게 나타나는지 확인할 수 있습니다.<br/><br/>본 데이터는 학교 단위로 세부 현황이 제공되므로, 대학 간 비교나 지역별 통계 분석에 활용할 수 있습니다. 학생과 학부모는 대학별 모집 규모를 확인하는 기초 자료로 활용할 수 있고, 언론과 연구자는 전문대학 입학정원 현황을 분석하거나 시기별 변화를 파악하는 참고 자료로 사용할 수 있습니다. 지방자치단체 및 교육 관련 기관은 지역 고등교육 여건을 검토하거나 정책 수립 시 참고 자료로 이용할 수 있습니다.<br/><br/>데이터는 공공데이터포털을 통해 누구나 내려받을 수 있으며, 엑셀 형식으로 제공됩니다. 사용자는 해당 파일을 활용하여 대학별·지역별 정원 분포를 직접 분석할 수 있습니다. 본 데이터는 학년도별로 갱신되며, 대학별 학사 운영이나 정책 조정 등에 따라 실제 운영 정원에는 변동이 있을 수 있으므로 활용 시 주의가 필요합니다.</dct:description>
+                <dct:description xml:lang="en">This data is public data that compiles and provides information on the number of students admitted to each technical college nationwide. It is based on official statistics from the Ministry of Education and the Korea Educational Development Institute&amp;#39;s Education Statistics Center (National Education Statistics Center). The data includes the number of students admitted to each technical college nationwide, categorized by daytime, evening, and distance learning programs. The total number of students admitted to each university is also included, allowing for a detailed understanding of the size of each university&amp;#39;s enrollment. Information on the type of institution (public or private) and region is also provided. This allows for insight into how specific universities&amp;#39; enrollment quotas are structured and how differences exist across regions and institutions. Because the data provides detailed information at the school level, it can be used for cross-university comparisons and regional statistical analyses. Students and parents can use it as a baseline for assessing university enrollment, while the media and researchers can use it as a reference for analyzing the number of students admitted to technical colleges and understanding changes over time. Local governments and education-related organizations can use it as a reference when reviewing local higher education conditions or formulating policies. The data is available for download through the Public Data Portal and is provided in Excel format. Users can use this file to directly analyze the distribution of enrollment by university and region. This data is updated annually, and actual enrollment may fluctuate depending on university academic operations or policy adjustments, so caution is advised when using it.</dct:description>
+                <dct:title xml:lang="kr">교육부_전문대학 학교별 입학정원 현황</dct:title>
+                <dct:title xml:lang="en">Ministry of Education_Current status of admissions to each vocational college</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-09-05</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-09-16</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>교육부</foaf:name>
+                        
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>교육데이터정책과</vcard:organization-unit>
+                        <vcard:hasTelephone rdf:resource="044-203-6635"/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:conformsTo ></dct:conformsTo>
+                <dcat:theme>교육 - 고등교육</dcat:theme>
+                <dcat:keyword xml:lang="kr">주야구분,전국,학생수,전문대학,입학정원,고등교육통계,주간,야간</dcat:keyword>
+                <dcat:keyword xml:lang="en">Day and night distinction,Nationwide,Number of students,technical college,Admission quota,Higher Education Statistics,weekly,nighttime</dcat:keyword>
+                <dct:rights>공공저작물 : 출처표시, 상업적 이용금지 (제 2유형)</dct:rights>
+                <dct:accrualPeriodicity>연간</dct:accrualPeriodicity>
+                
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15136349/fileData.do"/>
+                
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:Dataset>
+        </dcat:dataset>
+
+        <dcat:service>
+            <dcat:DataService>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>교육데이터정책과</vcard:organization-unit>
+                        <vcard:hasTelephone/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:description>이 데이터는 전국 전문대학의 학교별 입학정원 현황을 정리하여 제공하는 공공데이터입니다. 교육부와 한국교육개발원 교육통계센터(국가교육통계센터)의 공식 통계를 기반으로 작성되었습니다.<br/><br/>데이터에는 전국 전문대학별 정원 내 입학정원이 포함되어 있으며, 주간 과정, 야간 과정, 원격 과정으로 구분하여 제공됩니다. 각 대학의 총 입학정원 수가 함께 수록되어 있어 대학별 정원 규모를 확인할 수 있으며, 설립 유형(공립, 사립)과 지역 정보도 함께 제공됩니다. 이를 통해 특정 대학의 입학정원이 어떤 형태로 편성되어 있는지, 지역별·설립별 차이가 어떻게 나타나는지 확인할 수 있습니다.<br/><br/>본 데이터는 학교 단위로 세부 현황이 제공되므로, 대학 간 비교나 지역별 통계 분석에 활용할 수 있습니다. 학생과 학부모는 대학별 모집 규모를 확인하는 기초 자료로 활용할 수 있고, 언론과 연구자는 전문대학 입학정원 현황을 분석하거나 시기별 변화를 파악하는 참고 자료로 사용할 수 있습니다. 지방자치단체 및 교육 관련 기관은 지역 고등교육 여건을 검토하거나 정책 수립 시 참고 자료로 이용할 수 있습니다.<br/><br/>데이터는 공공데이터포털을 통해 누구나 내려받을 수 있으며, 엑셀 형식으로 제공됩니다. 사용자는 해당 파일을 활용하여 대학별·지역별 정원 분포를 직접 분석할 수 있습니다. 본 데이터는 학년도별로 갱신되며, 대학별 학사 운영이나 정책 조정 등에 따라 실제 운영 정원에는 변동이 있을 수 있으므로 활용 시 주의가 필요합니다.</dct:description>
+                <dct:title>교육부_전문대학 학교별 입학정원 현황</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-09-05</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-09-16</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>교육부</foaf:name>
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:format></dcat:format>
+                <dcat:theme>교육 - 고등교육</dcat:theme>
+                <dcat:keyword>주야구분,전국,학생수,전문대학,입학정원,고등교육통계,주간,야간</dcat:keyword>
+                <dcat:keyword>Day and night distinction,Nationwide,Number of students,technical college,Admission quota,Higher Education Statistics,weekly,nighttime</dcat:keyword>
+                <dct:rights >공공저작물 : 출처표시, 상업적 이용금지 (제 2유형)</dct:rights>
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15136349/openapi.do"/>
+                <dcat:endpointURL/>
+                <dcat:accessURL/>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:DataService>
+        </dcat:service>
+    </dcat:Catalog>
+</rdf:RDF>

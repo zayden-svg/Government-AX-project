@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:dct="http://purl.org/dc/terms/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dcat="http://www.w3.org/ns/dcat#" xmlns:vcard="http://www.w3.org/2006/vcard/ns#">
+    <dcat:Catalog>
+        <dcat:dataset>
+            <dcat:Dataset>
+                <dct:description xml:lang="kr">대전광역시 관내 19개 대학에 대한 상세 현황 자료로, 각 대학의 명칭, 설립 구분(국립, 사립 등), 소재지 주소, 연락처, 홈페이지 주소 등의 정보를 포함하고 있습니다. 이 데이터는 지역 내 고등교육 기관의 기본 정보를 체계적으로 제공하여 교육 관계자 및 시민들이 대학별 특징과 위치를 쉽게 파악할 수 있도록 구성되었습니다. 또한 대학 분포 현황과 설립 유형별 분류가 가능하며, 이를 통해 교육 정책 수립이나 지역사회 교육 인프라 분석에 필요한 기초 자료로 활용될 수 있습니다. 표준화된 형식으로 정리되어 데이터 관리와 분석에 용이합니다.</dct:description>
+                <dct:description xml:lang="en">This is detailed information on 19 universities in Daejeon Metropolitan City, including the name of each university, establishment type (national, private, etc.), address, contact information, and website address. This data was organized to systematically provide basic information on higher education institutions in the region, so that education officials and citizens can easily understand the characteristics and locations of each university. In addition, the distribution status of universities and classification by establishment type are possible, and this can be used as basic data necessary for establishing education policies or analyzing local education infrastructure. It is organized in a standardized format, making it easy to manage and analyze data.</dct:description>
+                <dct:title xml:lang="kr">대전광역시_대학교 현황</dct:title>
+                <dct:title xml:lang="en">Daejeon Metropolitan City_University Status</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2022-08-25</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-07-23</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>대전광역시</foaf:name>
+                        
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>AI정책담당관</vcard:organization-unit>
+                        <vcard:hasTelephone rdf:resource="042-270-3462"/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:conformsTo ></dct:conformsTo>
+                <dcat:theme>교육 - 교육일반</dcat:theme>
+                <dcat:keyword xml:lang="kr">대학교,현황,교육기관,대학정보,설립 구분</dcat:keyword>
+                <dcat:keyword xml:lang="en">university,current situation,Educational Institution,University Information,Establishment classification</dcat:keyword>
+                <dct:rights>이용허락범위 제한 없음</dct:rights>
+                <dct:accrualPeriodicity>연간</dct:accrualPeriodicity>
+                
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15060941/fileData.do"/>
+                <dcat:distribution>
+                    <dcat:Distribution>
+                        <dct:accessURL ></dct:accessURL>
+                        <dcat:description></dcat:description>
+                        <dcat:format>csv</dcat:format>
+                        <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2022-08-25</dct:issued>
+                        <dcat:title>대전광역시_대학교 현황_20220824</dcat:title>
+                    </dcat:Distribution>
+                </dcat:distribution>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:Dataset>
+        </dcat:dataset>
+
+        <dcat:service>
+            <dcat:DataService>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>AI정책담당관</vcard:organization-unit>
+                        <vcard:hasTelephone/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:description>대전광역시 관내 19개 대학에 대한 상세 현황 자료로, 각 대학의 명칭, 설립 구분(국립, 사립 등), 소재지 주소, 연락처, 홈페이지 주소 등의 정보를 포함하고 있습니다. 이 데이터는 지역 내 고등교육 기관의 기본 정보를 체계적으로 제공하여 교육 관계자 및 시민들이 대학별 특징과 위치를 쉽게 파악할 수 있도록 구성되었습니다. 또한 대학 분포 현황과 설립 유형별 분류가 가능하며, 이를 통해 교육 정책 수립이나 지역사회 교육 인프라 분석에 필요한 기초 자료로 활용될 수 있습니다. 표준화된 형식으로 정리되어 데이터 관리와 분석에 용이합니다.</dct:description>
+                <dct:title>대전광역시_대학교 현황</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2022-08-25</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2025-07-23</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>대전광역시</foaf:name>
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:format></dcat:format>
+                <dcat:theme>교육 - 교육일반</dcat:theme>
+                <dcat:keyword>대학교,현황,교육기관,대학정보,설립 구분</dcat:keyword>
+                <dcat:keyword>university,current situation,Educational Institution,University Information,Establishment classification</dcat:keyword>
+                <dct:rights >이용허락범위 제한 없음</dct:rights>
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15060941/openapi.do"/>
+                <dcat:endpointURL/>
+                <dcat:accessURL/>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:DataService>
+        </dcat:service>
+    </dcat:Catalog>
+</rdf:RDF>

@@ -1,0 +1,15 @@
+HTTP/1.1 200 OK
+Date: Thu, 08 Oct 2026 18:05:06 GMT
+Server: Apache
+Expires: 0
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Set-Cookie: JSESSIONID=IsD9eaRf0jkmIBwYglHLaIVLshMl6Avw1wwoMYdl.portal21; path=/
+X-XSS-Protection: 1; mode=block
+Pragma: no-cache
+X-Frame-Options: DENY
+Content-Disposition: attachment; filename="대입정보센터_MDT_UNIV_20251109_수정.csv"
+X-Content-Type-Options: nosniff
+Strict-Transport-Security: max-age=31536000 ; includeSubDomains
+Content-Length: 42627
+Content-Type: application/octet-stream; charset=UTF-8
+

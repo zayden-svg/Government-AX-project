@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:dct="http://purl.org/dc/terms/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dcat="http://www.w3.org/ns/dcat#" xmlns:vcard="http://www.w3.org/2006/vcard/ns#">
+    <dcat:Catalog>
+        <dcat:dataset>
+            <dcat:Dataset>
+                <dct:description xml:lang="kr">EDSS 데이터 제공 세부목록의 주요 데이터 대영역(카테고리) 및 내용<br/><br/>1. 교육통계 (유·초·중등): 전국 유치원 및 초·중·고등학교의 학교 현황, 학급 및 학생 수, 교직원 수, 학교 시설 및 환경 정보<br/>2. 학교정보공시: 초·중·고등학교별 주요 공시 정보(학교 현황, 교복 구매 현황, 교육과정 운영 등)<br/>3. 특수교육통계: 특수학교 및 일반학교 내 특수학급/통합학급 현황, 장애학생 진로 및 진학·취업 정보<br/>4. 나이스(NEIS) 교무 데이터: 학생 체력평가(PAPS) 결과, 체력 우수 학생 현황, 과목별/교사별 교육과정 운영 현황<br/>5. 학업성취도 및 수능 데이터: 국가수준 학업성취도 평가 결과(중·고등) 및 대학수학능력시험 연계 데이터<br/>6. 고등교육통계: 전문대, 대학교, 대학원 등 고등교육기관의 학교/학과 개황, 재학생 및 졸업생 현황<br/>7. 대학정보공시: 대학별 과목 성적 평가 분포, 졸업생 성적 분포, 대학 입학 전형 및 모집 계획<br/>8. 취업 및 평생교육통계: 고등교육기관 졸업생의 취업 및 진학 현황, 전국 평생교육기관 및 교육 프로그램, 강사 현황<br/><br/>상세한 내용은 파일을 다운로드 받으셔서 검색하시면 됩니다.</dct:description>
+                <dct:description xml:lang="en">Major Data Categories and Contents in the Detailed List of EDSS Data Provision 1. Education Statistics (Kindergarten, Elementary, Secondary): School status, number of classes and students, number of faculty and staff, and information on school facilities and environment for kindergartens, elementary, middle, and high schools nationwide. 2. School Information Disclosure: Key disclosed information by elementary, middle, and high school (school status, school uniform purchase status, curriculum operation, etc.). 3. Special Education Statistics: Status of special schools and special/integrated classes within general schools; career paths, further education, and employment information for students with disabilities. 4. NEIS Academic Affairs Data: Student Physical Fitness Assessment (PAPS) results; status of physically high-performing students; curriculum operation status by subject and teacher. 5. Academic Achievement and CSAT Data: Results of the National Academic Achievement Assessment (Middle and High School) and data linked to the College Scholastic Ability Test (CSAT). 6. Higher Education Statistics: Overview of schools and departments, and status of enrolled and graduate students for higher education institutions such as junior colleges, universities, and graduate schools. 7. University Information Disclosure: Subject grade evaluations by university. Distribution, distribution of graduate grades, university admission procedures and recruitment plans. 8. Employment and Lifelong Education Statistics: Employment and advancement status of graduates from higher education institutions, nationwide lifelong education institutions and educational programs, and instructor status. For detailed information, please download the file and search.</dct:description>
+                <dct:title xml:lang="kr">교육부_에듀데이터서비스(EDSS) 교육관련 데이터 제공 세부 목록</dct:title>
+                <dct:title xml:lang="en">Detailed list of education-related data provided by the Ministry of Education_Edu Data Service (EDSS)</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-07-21</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-07-21</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>교육부</foaf:name>
+                        
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>교육데이터정책과</vcard:organization-unit>
+                        <vcard:hasTelephone rdf:resource="044-203-6635"/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:conformsTo >교육관련기관의 정보공개에 관한 특례법 및 동법 시행령</dct:conformsTo>
+                <dcat:theme>교육 - 교육일반</dcat:theme>
+                <dcat:keyword xml:lang="kr">연구자,주요제공항목,제공년도,제공수준,학교,대영역,대학수학능력시험,국가수준학업성취도</dcat:keyword>
+                <dcat:keyword xml:lang="en">Researcher,Main items provided,Year of provision,Level of provision,school,Large area,College Scholastic Ability Test,National level academic achievement</dcat:keyword>
+                <dct:rights>이용허락범위 제한 없음</dct:rights>
+                <dct:accrualPeriodicity>수시</dct:accrualPeriodicity>
+                
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15160434/fileData.do"/>
+                
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:Dataset>
+        </dcat:dataset>
+
+        <dcat:service>
+            <dcat:DataService>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>교육데이터정책과</vcard:organization-unit>
+                        <vcard:hasTelephone/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:description>EDSS 데이터 제공 세부목록의 주요 데이터 대영역(카테고리) 및 내용<br/><br/>1. 교육통계 (유·초·중등): 전국 유치원 및 초·중·고등학교의 학교 현황, 학급 및 학생 수, 교직원 수, 학교 시설 및 환경 정보<br/>2. 학교정보공시: 초·중·고등학교별 주요 공시 정보(학교 현황, 교복 구매 현황, 교육과정 운영 등)<br/>3. 특수교육통계: 특수학교 및 일반학교 내 특수학급/통합학급 현황, 장애학생 진로 및 진학·취업 정보<br/>4. 나이스(NEIS) 교무 데이터: 학생 체력평가(PAPS) 결과, 체력 우수 학생 현황, 과목별/교사별 교육과정 운영 현황<br/>5. 학업성취도 및 수능 데이터: 국가수준 학업성취도 평가 결과(중·고등) 및 대학수학능력시험 연계 데이터<br/>6. 고등교육통계: 전문대, 대학교, 대학원 등 고등교육기관의 학교/학과 개황, 재학생 및 졸업생 현황<br/>7. 대학정보공시: 대학별 과목 성적 평가 분포, 졸업생 성적 분포, 대학 입학 전형 및 모집 계획<br/>8. 취업 및 평생교육통계: 고등교육기관 졸업생의 취업 및 진학 현황, 전국 평생교육기관 및 교육 프로그램, 강사 현황<br/><br/>상세한 내용은 파일을 다운로드 받으셔서 검색하시면 됩니다.</dct:description>
+                <dct:title>교육부_에듀데이터서비스(EDSS) 교육관련 데이터 제공 세부 목록</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-07-21</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-07-21</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>교육부</foaf:name>
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:format></dcat:format>
+                <dcat:theme>교육 - 교육일반</dcat:theme>
+                <dcat:keyword>연구자,주요제공항목,제공년도,제공수준,학교,대영역,대학수학능력시험,국가수준학업성취도</dcat:keyword>
+                <dcat:keyword>Researcher,Main items provided,Year of provision,Level of provision,school,Large area,College Scholastic Ability Test,National level academic achievement</dcat:keyword>
+                <dct:rights >이용허락범위 제한 없음</dct:rights>
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15160434/openapi.do"/>
+                <dcat:endpointURL/>
+                <dcat:accessURL/>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:DataService>
+        </dcat:service>
+    </dcat:Catalog>
+</rdf:RDF>

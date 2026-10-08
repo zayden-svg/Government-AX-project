@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:dct="http://purl.org/dc/terms/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dcat="http://www.w3.org/ns/dcat#" xmlns:vcard="http://www.w3.org/2006/vcard/ns#">
+    <dcat:Catalog>
+        <dcat:dataset>
+            
+        </dcat:dataset>
+
+        <dcat:service>
+            <dcat:DataService>
+                <dcat:contactPoint>
+                    <vcard:Organization>
+                        <vcard:organization-unit>대학정보공시센터</vcard:organization-unit>
+                        <vcard:hasTelephone/>
+                    </vcard:Organization>
+                </dcat:contactPoint>
+                <dct:description>표준데이터셋으로 제공하는 '한국대학교육협의회_대학 및 전문대학정보'를 API로 제공,
+대학 및 전문대학의 학교구분, 설립형태, 소재지 등의 정보를 포함하여 학제 구분, 운영 형태, 설립 주체, 지역별 분포, 학교 유형별 특성, 규모 및 기본 현황 등 다양한 세부 정보를 함께 제공하며, 교육기관 현황을 체계적으로 파악하고 분석·활용할 수 있도록 지원하고, 관련 서비스 개발 및 정책 수립, 연구·통계 분석 등에 활용 가능한 기반 데이터로 제공하며, 공공데이터 활용도를 높이고 다양한 분야에서의 연계 활용을 지원</dct:description>
+                <dct:title>한국대학교육협의회_대학 및 전문대학정보_GW</dct:title>
+                <dct:issued rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2023-07-19</dct:issued>
+                <dct:modified rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2026-04-29</dct:modified>
+                <dct:publisher>
+                    <foaf:Organization>
+                        <foaf:name>한국대학교육협의회</foaf:name>
+                    </foaf:Organization>
+                </dct:publisher>
+                <dcat:format>XML</dcat:format>
+                <dcat:theme>교육 - 고등교육</dcat:theme>
+                <dcat:keyword>대학,전문대학,학교정보,학교개황,대학학제,대학전문대학,대학정보,대학현황</dcat:keyword>
+                <dcat:keyword>university,junior colleges,School Information,School Overview,university system,Colleges and junior colleges,University Information,University Status</dcat:keyword>
+                <dct:rights >이용허락범위 제한 없음</dct:rights>
+                <dcat:landingPage rdf:resource="https://www.data.go.kr/data/15158665/openapi.do"/>
+                <dcat:endpointURL/>
+                <dcat:accessURL/>
+                <dct:spatial></dct:spatial>
+                <dct:temporal></dct:temporal>
+            </dcat:DataService>
+        </dcat:service>
+    </dcat:Catalog>
+</rdf:RDF>
