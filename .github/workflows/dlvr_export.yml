@@ -2,7 +2,7 @@ name: Shopping Mall Delivery Requests (쇼핑몰 납품요구 엑셀)
 
 on:
   schedule:
-    - cron: '0 21 * * 0'   # 매주 월요일 06:00 (한국시간)
+    - cron: '30 15 * * *'   # 매일 00:30 (한국시간) — 하루 한도가 새로 시작된 직후. 지난 자료는 캐시로 건너뛰어 보통 수십 회로 끝남
   workflow_dispatch:
 
 permissions:
