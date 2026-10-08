@@ -1,0 +1,20 @@
+name: Fetch URLs (조사용)
+on:
+  workflow_dispatch:
+    inputs:
+      urls: { description: '쉼표로 구분한 주소', required: true }
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install requests
+      - run: python tools/fetch_urls.py "${{ github.event.inputs.urls }}" 2>&1 | tee log.txt; mv log.txt out/
+      - if: always()
+        run: |
+          cd out && git init -q -b fetched && git add -A
+          git -c user.name=bot -c user.email=bot@users.noreply.github.com commit -qm fetched
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" fetched

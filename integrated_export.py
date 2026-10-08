@@ -30,7 +30,7 @@ NATIONAL_UNIV = [
     "교육대학교", "한국과학기술원", "광주과학기술원", "대구경북과학기술원", "울산과학기술원", "KAIST", "GIST", "DGIST", "UNIST", "한국전통문화대학교", "한국예술종합학교", "국립",
     "한국폴리텍", "한국기술교육대학교", "한국농수산대학교", "경찰대학", "육군사관학교", "해군사관학교", "공군사관학교", "국군간호사관학교",
 ]
-COMMON_COLS = ["출처", "구분", "상태", "남은일수", "사업명·제품", "수요기관", "대학", "지역", "담당지역", "업체명", "대표업체",
+COMMON_COLS = ["출처", "구분", "상태", "남은일수", "사업명", "제품", "사업명·제품", "수요기관", "대학", "지역", "담당지역", "업체명", "대표업체",
                "금액", "일자", "종료일", "종료추정", "자사관련", "자사관련단어", "경쟁사", "API관련", "원문", "검색용업체명", "_gk", "_key"]
 
 
@@ -54,6 +54,9 @@ def _status(end, today):
 def _common(df, comp):
     """공통 칼럼 채우기 (각 출처에서 사업명·수요기관·업체목록·금액·일자·종료일을 만든 뒤 호출)"""
     today = pd.Timestamp(datetime.now().date())
+    if "제품" not in df:
+        df["제품"] = ""
+    df["사업명·제품"] = (df["사업명"].astype(str) + " " + df["제품"].astype(str)).str.strip()
     end = pd.to_datetime(df["종료일"], errors="coerce")
     st = [_status(e, today) for e in end]
     df["상태"] = [s for s, _ in st]
@@ -80,7 +83,7 @@ def load_contracts(comp):
         return pd.DataFrame(columns=COMMON_COLS), set()
     d = ce.prepare(raw, competitors=comp)
     out = pd.DataFrame({
-        "출처": "계약", "구분": d["biz_type"], "사업명·제품": d["title"], "수요기관": d["수요기관"],
+        "출처": "계약", "구분": d["biz_type"], "사업명": d["title"], "제품": "", "수요기관": d["수요기관"],
         "업체목록": d["업체목록"], "금액": d["계약금액"], "일자": d["cntrct_date"], "종료일": d["end_date"],
         "종료추정": d["end_est"], "원문": d["url"], "_key": "계약|" + d["uniq_key"],
     })
@@ -100,7 +103,7 @@ def load_awards(comp, skip_bid_nos):
     a = a[~a["bid_no"].isin(skip_bid_nos)]
     a = a.sort_values("updated_at", ascending=False).drop_duplicates(subset=["bid_no", "bid_ord", "winner"], keep="first")
     out = pd.DataFrame({
-        "출처": "낙찰", "구분": a["biz_type"], "사업명·제품": a["title"],
+        "출처": "낙찰", "구분": a["biz_type"], "사업명": a["title"], "제품": "",
         "수요기관": [d or n for d, n in zip(a["dminstt"], a["ntce_instt"])],
         "업체목록": a["winner"].map(lambda w: [w] if w else []), "금액": a["amount"].map(ce._won),
         "일자": a["event_date"], "종료일": a["end_date"], "종료추정": "Y", "원문": a["url"], "_key": "낙찰|" + a["uniq_key"],
@@ -124,7 +127,8 @@ def load_dlvr(comp, cache_path):
     spec = d["prdctIdntNoNm"].astype(str)
     out = pd.DataFrame({
         "출처": "쇼핑몰 납품", "구분": "쇼핑몰(" + d["_구분"].astype(str) + ")",
-        "사업명·제품": spec.map(lambda s: ", ".join([x.strip() for x in s.split(",")[1:4]]) or s) + " — " + d["dlvrReqNm"].astype(str),
+        "사업명": d["dlvrReqNm"].astype(str),
+        "제품": spec.map(lambda s: " · ".join([x.strip() for x in s.split(",")[1:4]]) or s),
         "수요기관": d["dminsttNm"], "업체목록": d["corpNm"].map(lambda w: [w] if w else []), "금액": d["prdctAmt"].map(ce._won),
         "일자": d["dlvrReqRcptDate"].map(ce._date),
         # 솔루션 납품은 '납품일 + 1년'을 유지보수·재구매 시점으로 봄 (추정)
@@ -167,33 +171,42 @@ def build(all_df):
         return x
 
     VIEW = [("출처", "출처", 9), ("상태", "상태", 9), ("남은일수", "남은일수", 8), ("구분", "구분", 10),
-            ("사업명·제품", "사업명·제품", 50), ("업체명", "업체명", 26), ("수요기관", "수요기관", 26), ("대학", "대학", 8),
-            ("지역", "지역", 10), ("담당지역", "담당지역", 7), ("금액(원)", "금액", 14), ("일자", "일자", 11),
+            ("사업명 (누르면 원문)", "사업명", 46), ("제품", "제품", 30), ("업체명", "업체명", 26), ("수요기관", "수요기관", 26),
+            ("대학", "대학", 8), ("지역", "지역", 10), ("담당지역", "담당지역", 7), ("금액(억)", "금액", 10), ("일자", "일자", 11),
             ("종료일", "종료일", 11), ("종료 추정", "종료추정", 7), ("자사관련", "자사관련", 7), ("자사관련 단어", "자사관련단어", 14),
-            ("경쟁사", "경쟁사", 7), ("API 관련", "API관련", 7), ("원문", "원문", 8)]
+            ("경쟁사", "경쟁사", 7), ("API 관련", "API관련", 7)]
+    EOK = '#,##0.0"억"'
+
+    def eok(v):
+        return None if v is None or (isinstance(v, float) and pd.isna(v)) or v == "" else round(float(v) / 1e8, 2)
+
+    def link(url, title):
+        t = str(title or "").replace('"', '""')[:250]
+        return f'=HYPERLINK("{url}","{t}")' if str(url).startswith("http") else str(title or "")
 
     def table(name, sub, helper=False):
         ws = wb.create_sheet(name)
         for i, (_, _, w) in enumerate(VIEW, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
         ws.freeze_panes = "F2"
-        titles = [t for t, _, _ in VIEW] + (["검색용 업체명(자동)", "검색키(수정 금지)"] if helper else [])
+        titles = [t for t, _, _ in VIEW] + (["원문 주소", "검색용 업체명(자동)", "검색키(수정 금지)"] if helper else [])
         ws.append([c(ws, t, hf, navy) for t in titles])
-        scol = get_column_letter(len(VIEW) + 1)
+        scol = get_column_letter(len(VIEW) + 2)
         for rn, r in enumerate(sub.to_dict("records"), 2):
             row = []
             for t, k, _ in VIEW:
                 v = r.get(k, "")
                 if k == "금액":
-                    row.append(c(ws, None if v is None or pd.isna(v) else int(v), fmt="#,##0"))
+                    row.append(c(ws, eok(v), fmt=EOK))
                     continue
                 if k == "남은일수":
                     v = None if v is None or pd.isna(v) else int(v)
-                if k == "원문":
-                    v = f'=HYPERLINK("{v}","열기")' if str(v).startswith("http") else ""
+                if k == "사업명":
+                    v = link(r.get("원문", ""), v)
                 row.append(v)
             if helper:
-                row += [r.get("검색용업체명", ""), f'=IF(업체검색!$F$3="","",IF(ISNUMBER(SEARCH(업체검색!$F$3,{scol}{rn})),ROW(),""))']
+                row += [r.get("원문", ""), r.get("검색용업체명", ""),
+                        f'=IF(업체검색!$F$3="","",IF(ISNUMBER(SEARCH(업체검색!$F$3,{scol}{rn})),ROW(),""))']
             ws.append(row)
         ws.auto_filter.ref = f"A1:{get_column_letter(len(titles))}{max(len(sub) + 1, 2)}"
 
@@ -210,7 +223,7 @@ def build(all_df):
             "담당지역(진행중·곧완료)": g.apply(lambda x: int(((x["담당지역"] == "Y") & x["상태"].isin(["진행중", "곧 완료"])).sum())),
             "API 관련": g["API관련"].agg(lambda x: int((x == "Y").sum())),
             "자사 관련": g["자사관련"].agg(lambda x: int((x == "Y").sum())),
-            "금액 합계(원)": g["금액"].sum(min_count=1),
+            "금액 합계(억)": g["금액"].sum(min_count=1),
             "최근 일자": g["일자"].max(),
             "주요 기관": g["수요기관"].agg(lambda x: ", ".join(x.value_counts().index[:3])),
             "출처 구성": g["출처"].agg(lambda x: " · ".join(f"{k} {v}" for k, v in x.value_counts().items())),
@@ -222,14 +235,14 @@ def build(all_df):
     def summary_sheet(name, s, note=""):
         ws = wb.create_sheet(name)
         cols = list(s.columns) if not s.empty else ["업체명"]
-        widths = {"업체명": 28, "주요 기관": 46, "출처 구성": 22, "다른 표기": 30, "금액 합계(원)": 16}
+        widths = {"업체명": 28, "주요 기관": 46, "출처 구성": 22, "다른 표기": 30, "금액 합계(억)": 12}
         for i, k in enumerate(cols, 1):
             ws.column_dimensions[get_column_letter(i)].width = widths.get(k, 10)
         if note:
             ws.append([c(ws, note, bold)])
         ws.append([c(ws, k, hf, navy) for k in cols])
         for r in s.to_dict("records"):
-            ws.append([c(ws, None if pd.isna(r[k]) else int(r[k]), fmt="#,##0") if k == "금액 합계(원)" else r[k] for k in cols])
+            ws.append([c(ws, eok(r[k]), fmt=EOK) if k == "금액 합계(억)" else r[k] for k in cols])
         ws.freeze_panes = "B3" if note else "B2"
 
     comp_rows = d[d["경쟁사"] == "Y"]
@@ -265,23 +278,30 @@ def build(all_df):
 
     # 업체검색
     ws = wb.create_sheet("업체검색")
-    show = ["출처", "상태", "남은일수", "구분", "사업명·제품", "업체명", "수요기관", "대학", "지역", "금액(원)", "일자", "종료일", "경쟁사", "API 관련"]
+    show = ["출처", "상태", "남은일수", "구분", "사업명 (누르면 원문)", "제품", "업체명", "수요기관", "대학", "지역", "금액(억)", "일자", "종료일", "경쟁사", "API 관련"]
     letters = {t: get_column_letter(i + 1) for i, (t, _, _) in enumerate(VIEW)}
-    for i, w in enumerate([9, 9, 8, 10, 50, 26, 26, 8, 10, 14, 11, 11, 7, 7], 1):
+    ucol = get_column_letter(len(VIEW) + 1)
+    for i, w in enumerate([9, 9, 8, 10, 46, 30, 26, 26, 8, 10, 10, 11, 11, 7, 7], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
-    hcol = get_column_letter(len(VIEW) + 2)
+    hcol = get_column_letter(len(VIEW) + 3)
     ws.append([c(ws, "업체 검색", big)])
-    ws.append(["노란 칸(B3)에 업체명 일부를 넣으세요. (주)·주식회사·띄어쓰기·대소문자·한글/영문 표기 차이는 무시합니다. 최대 1,000건 (진행중 먼저)."])
+    ws.append(["노란 칸(B3)에 업체명 일부를 넣으세요. (주)·주식회사·띄어쓰기·대소문자·한글/영문 표기 차이는 무시합니다. 최대 1,000건 (진행중 먼저). 사업명을 누르면 원문이 열립니다."])
     ws.append([c(ws, "업체명 →", bold), c(ws, "", fill=yellow), c(ws, "결과 건수", bold),
                f"=IF(F3=\"\",\"\",COUNT('통합 내역'!{hcol}:{hcol}))", c(ws, "인식한 검색어", bold), f'={ce.excel_norm_formula("B3")}'])
     ws.append([c(ws, t, hf, navy) for t in show])
+    T = "'통합 내역'"
     for k in range(1, 1001):
         row = []
+        pos = f"SMALL({T}!${hcol}:${hcol},{k})"
         for t in show:
             col = letters[t]
-            tail = "" if t in ("남은일수", "금액(원)") else '&""'
-            f = f"=IFERROR(INDEX('통합 내역'!{col}:{col},SMALL('통합 내역'!${hcol}:${hcol},{k})){tail},\"\")"
-            row.append(c(ws, f, fmt="#,##0") if t == "금액(원)" else f)
+            if t.startswith("사업명"):
+                f = f'=IFERROR(IF(INDEX({T}!{ucol}:{ucol},{pos})="",INDEX({T}!{col}:{col},{pos})&"",HYPERLINK(INDEX({T}!{ucol}:{ucol},{pos}),INDEX({T}!{col}:{col},{pos})&"")),"")'
+                row.append(f)
+                continue
+            tail = "" if t in ("남은일수", "금액(억)") else '&""'
+            f = f"=IFERROR(INDEX({T}!{col}:{col},{pos}){tail},\"\")"
+            row.append(c(ws, f, fmt=EOK) if t == "금액(억)" else f)
         ws.append(row)
 
     summary_sheet("업체별 요약", summ)
@@ -295,7 +315,7 @@ def build(all_df):
         us = pd.DataFrame({
             "대학": g["대학"].first(), "IT 사업 수": g.size(),
             "진행중·곧완료": g["상태"].agg(lambda x: int(x.isin(["진행중", "곧 완료"]).sum())),
-            "금액 합계(원)": g["금액"].sum(min_count=1), "최근 일자": g["일자"].max(),
+            "금액 합계(억)": g["금액"].sum(min_count=1), "최근 일자": g["일자"].max(),
             "주요 업체": g["대표업체"].agg(lambda x: ", ".join(x.value_counts().index[:4])),
             "자사 관련": g["자사관련"].agg(lambda x: int((x == "Y").sum())),
             "경쟁사": g["경쟁사"].agg(lambda x: int((x == "Y").sum())),
@@ -304,10 +324,10 @@ def build(all_df):
         ws = wb.create_sheet("대학별 요약")
         cols = list(us.columns)
         for i, k in enumerate(cols, 1):
-            ws.column_dimensions[get_column_letter(i)].width = {"대학(수요기관)": 34, "주요 업체": 50, "금액 합계(원)": 16}.get(k, 10)
+            ws.column_dimensions[get_column_letter(i)].width = {"대학(수요기관)": 34, "주요 업체": 50, "금액 합계(억)": 12}.get(k, 10)
         ws.append([c(ws, k, hf, navy) for k in cols])
         for r in us.to_dict("records"):
-            ws.append([c(ws, None if pd.isna(r[k]) else int(r[k]), fmt="#,##0") if k == "금액 합계(원)" else r[k] for k in cols])
+            ws.append([c(ws, eok(r[k]), fmt=EOK) if k == "금액 합계(억)" else r[k] for k in cols])
         ws.freeze_panes = "B2"
     table("대학 사업", univ_rows)
     table("통합 내역", d, helper=True)
