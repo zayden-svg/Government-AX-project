@@ -236,6 +236,8 @@ def load_univ_bids(comp):
     if u.empty:
         return pd.DataFrame(columns=COMMON_COLS)
     ev = pd.to_datetime(u["date"], errors="coerce")
+    corp_like = re.compile(r"(주식회사|\(주\)|㈜|유한|회사|시스템|정보|테크|텍|소프트|솔루션|네트웍|네트워크|컴퍼니|커뮤니케이션|아이티|IT|디지털|데이타|데이터|산업|전자|통신|엔지니어링|corp|inc)", re.I)
+    u["winner"] = u["winner"].map(lambda w: w if corp_like.search(str(w)) else "")
     out = pd.DataFrame({
         "출처": "대학 홈페이지", "구분": "입찰" + u["kind"], "사업명": u["title"], "제품": "",
         "수요기관": u["school"] + u["campus"].map(lambda c: "" if c in ("", "본교") else f"({c})"),
