@@ -294,14 +294,41 @@ async def probe(urls):
     async with async_playwright() as p:
         b = await p.chromium.launch()
         pg = await (await b.new_context(ignore_https_errors=True, locale="ko-KR")).new_page()
+        xhr = []
+
+        async def on_resp(r):
+            try:
+                if r.request.resource_type in ("xhr", "fetch", "document"):
+                    body = ""
+                    try:
+                        body = (await r.text())[:600]
+                    except Exception:
+                        pass
+                    xhr.append((r.request.method, r.url, (r.request.post_data or "")[:400], body))
+            except Exception:
+                pass
+        pg.on("response", lambda r: asyncio.ensure_future(on_resp(r)))
         for u in urls:
+            click = ""
+            if " >> " in u:                      # "주소 >> 누를 글자"
+                u, click = u.split(" >> ", 1)
             try:
                 await pg.goto(u, timeout=30000, wait_until="domcontentloaded")
                 await pg.wait_for_timeout(5000)
             except Exception as e:
                 print("ERR", u, e)
                 continue
+            if click:
+                for t in click.split(" > "):
+                    try:
+                        await pg.get_by_text(t, exact=True).first.click(timeout=6000)
+                        await pg.wait_for_timeout(4000)
+                    except Exception as e:
+                        print("click fail", t, type(e).__name__)
             print("=====", u, "→", pg.url, "frames", len(pg.frames))
+            for m, xu, pd_, body in xhr:
+                print("  XHR", m, xu[:200], "| post:", pd_[:300], "| body:", body[:300].replace("\n", " "))
+            xhr.clear()
             for fr in pg.frames:
                 try:
                     txt = await fr.evaluate("() => (document.body ? document.body.innerText : '').replace(/\\s+/g,' ').slice(0,1500)")
