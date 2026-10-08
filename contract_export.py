@@ -48,13 +48,17 @@ OPS = {
     "물품": "https://apis.data.go.kr/1230000/ao/CntrctInfoService/getCntrctInfoListThngPPSSrch",
 }
 
-IT_WORDS = [
-    "정보시스템", "정보화", "시스템", "홈페이지", "누리집", "포털", "플랫폼", "소프트웨어", "SW", "S/W",
-    "클라우드", "보안", "데이터", "AI", "인공지능", "전산", "서버", "네트워크", "웹", "앱", "모바일",
-    "예약", "수강신청", "대기열", "트래픽", "부하테스트", "부하시험", "성능시험", "ISP", "ISMP", "차세대",
-    "라이선스", "라이센스", "유지관리", "DB", "빅데이터", "디지털", "전자", "온라인", "통합관리",
-]
-_NON_IT = re.compile(r"(냉난방|공조|소방|승강기|조경|청소|경비|급식|방역|건축|토목|전기공사|도장|배관)")
+# IT 판정 — 강한 단어는 그대로 인정, 약한 단어는 '구축·고도화·유지보수' 같은 IT 작업 단어가 같이 있어야 인정
+STRONG_IT = ["정보시스템", "정보화", "홈페이지", "누리집", "포털", "플랫폼", "소프트웨어", "SW", "S/W", "클라우드",
+             "서버", "네트워크", "학내망", "전산망", "모바일", "앱", "웹", "차세대", "ISP", "ISMP", "라이선스", "라이센스",
+             "빅데이터", "데이터베이스", "수강신청", "대기열", "트래픽", "부하테스트", "부하시험", "성능시험",
+             "정보보호", "보안관제", "사이버", "솔루션", "전산시스템", "API"]
+WEAK_IT = ["시스템", "데이터", "전산", "AI", "인공지능", "보안", "예약", "디지털", "온라인", "DB"]
+_IT_WORK = re.compile(r"(구축|고도화|개발|유지보수|유지관리|운영|개선|도입|전환|이중화|재구축|통합|기능개선|구현)")
+_NON_IT = re.compile(r"(냉난방|공조|소방|승강기|조경|청소|경비|급식|방역|건축|토목|전기공사|도장|배관|정수기|공기청정기|비데|"
+                     r"복합기|복사기|차량|버스|행사|워크숍|연수|홍보|영상|측량|공사|수질|하천|녹지|어장|놀이시설|기계설비|"
+                     r"설계용역|실시설계|감정평가|발굴|조사용역|위탁선임|임차|렌탈)")
+IT_WORDS = STRONG_IT + WEAK_IT   # (하위 호환)
 
 # API 원본 필드 → 저장 칼럼 (가능한 한 많이 보관)
 FIELD_MAP = [
@@ -140,12 +144,16 @@ def it_reason(it):
     title = str(it.get("cntrctNm") or "")
     if solution_hits(title):
         return "자사 관련"
+    title = re.sub(r"웹툰|웹소설|앱솔루트", "", title)   # '웹'·'앱'이 들어간 비IT 단어
     if str(it.get("infoBizYn") or "").upper() == "Y":
         return "정보화사업"
-    if _NON_IT.search(title):
+    strong = next((w for w in STRONG_IT if w in title), "")
+    if _NON_IT.search(title) and not strong:
         return ""
-    hit = next((w for w in IT_WORDS if w in title), "")
-    return f"사업명({hit})" if hit else ""
+    if strong:
+        return f"사업명({strong})"
+    weak = next((w for w in WEAK_IT if w in title), "")
+    return f"사업명({weak}+{_IT_WORK.search(title).group(1)})" if weak and _IT_WORK.search(title) else ""
 
 
 def to_row(it, biz_type):
@@ -323,6 +331,12 @@ def _won(v):
 def prepare(df, competitors=None, today=None):
     today = pd.Timestamp(today or datetime.now().date())
     df = df.copy().fillna("")
+    # 예전 기준으로 저장된 행도 지금 기준으로 다시 판정 (정수기·공기청정기 유지관리 등 제외)
+    df["it_reason"] = [it_reason({"cntrctNm": t, "infoBizYn": y}) for t, y in zip(df["title"], df["info_biz"])]
+    df = df[df["it_reason"] != ""]
+    # 변경계약 등으로 같은 계약이 여러 번 들어온 경우 → 가장 최근 등록본만
+    df = (df.sort_values(["rgst_dt", "chg_dt"], ascending=False)
+            .drop_duplicates(subset=["biz_type", "title", "corp_raw", "dminstt_raw", "start_date"], keep="first"))
     df["업체목록"] = df["corp_raw"].map(corp_names)
     df["업체명"] = df["업체목록"].map(lambda xs: " / ".join(xs))
     df["대표업체"] = df["업체목록"].map(lambda xs: xs[0] if xs else "")

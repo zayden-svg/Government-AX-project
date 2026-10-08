@@ -9,6 +9,10 @@ on:
         description: '이번 실행 최대 API 호출 수 (조달청 하루 한도 약 1,000회 — 아침 8시 수집 몫 남김)'
         required: false
         default: '850'
+      excel_only:
+        description: '수집 없이 엑셀만 다시 만들기 (true/false)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -32,7 +36,7 @@ jobs:
           cache: 'pip'
       - run: pip install -r requirements.txt
       - name: 계약 수집(이어하기) + 엑셀 생성
-        run: python contract_export.py --out contracts.xlsx
+        run: python contract_export.py --out contracts.xlsx ${{ github.event.inputs.excel_only == 'true' && '--excel' || '' }}
       - name: 엑셀 사본을 exports 브랜치에 보관 (최신 1개만)
         if: always()
         run: |
