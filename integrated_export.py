@@ -248,7 +248,8 @@ def load_univ_bids(comp):
         if c not in u.columns:
             u[c] = ""
     corp_like = re.compile(r"(주식회사|\(주\)|㈜|유한|회사|시스템|정보|기술|테크|텍|소프트|솔루션|네트웍|네트워크|컴퍼니|커뮤니케이션|아이티|IT|디지털|데이타|데이터|산업|전자|통신|엔지니어링|corp|inc)", re.I)
-    u["winner"] = u["winner"].map(lambda w: w if corp_like.search(str(w)) else "")
+    # 계약공개 표의 '거래처/계약상대자' 칸은 그대로, 본문에서 뽑은 업체명은 회사 이름 같을 때만
+    u["winner"] = [w if (k == "계약공개" and len(str(w).strip()) >= 2) or corp_like.search(str(w)) else "" for w, k in zip(u["winner"], u["kind"])]
     # 금액: 낙찰·계약금액 → 없으면 공고 예산(추정가격·기초금액)
     amt = u["amount"].where(u["amount"].astype(str).str.strip() != "", u["budget"])
     # 사업 종료일: 본문·첨부의 계약(사업)기간 → 없으면 공고(결과)일 + 1년 추정
