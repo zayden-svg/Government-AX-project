@@ -85,5 +85,31 @@
  "서울여자간호대학교": {
   "url": "https://www.snjc.ac.kr/public_2017/sub/square/bid_board_list.jsp",
   "notice": true
+ },
+ "강원대학교": {
+  "url": "https://wwwk.kangwon.ac.kr/www/selectBbsNttList.do?bbsNo=6&key=73",
+  "result": [
+   "https://www.kangwon.ac.kr/www/selectBbsNttList.do?bbsNo=11&key=83"
+  ]
+ },
+ "서울대학교": {
+  "url": "https://www.snu.ac.kr/snunow/notice/bidding",
+  "result": [
+   "https://clean.snu.ac.kr/%EC%88%98%EC%9D%98%EA%B3%84%EC%95%BD%ED%98%84%ED%99%A9/"
+  ]
+ },
+ "충남대학교": "https://plus.cnu.ac.kr/_prog/_board/?code=sub06_060401&site_dvs_cd=kr&menu_dvs_cd=060401",
+ "성결대학교": "https://www.sungkyul.ac.kr/skukr/350/subview.do",
+ "연세대학교(미래)": "https://mirae.yonsei.ac.kr/sc/213/subview.do",
+ "단국대학교": "https://www.dankook.ac.kr/bid",
+ "세명대학교": "https://www.semyung.ac.kr/prog/vwBoard/bbs02/kor/sub08_02_05/list.do",
+ "부산장신대학교": "https://www.bpu.ac.kr/Board/BoardList.aspx?BoardMstNo=9&CategoryNo=1",
+ "동양대학교": {
+  "url": "https://www.dyu.ac.kr/plaza/news/news-inform/",
+  "notice": true
+ },
+ "위덕대학교": {
+  "url": "https://www.uu.ac.kr/home/uu_notice_01/",
+  "notice": true
  }
 }

@@ -243,15 +243,23 @@ def load_univ_bids(comp):
     if u.empty:
         return pd.DataFrame(columns=COMMON_COLS)
     ev = pd.to_datetime(u["date"], errors="coerce")
-    corp_like = re.compile(r"(주식회사|\(주\)|㈜|유한|회사|시스템|정보|테크|텍|소프트|솔루션|네트웍|네트워크|컴퍼니|커뮤니케이션|아이티|IT|디지털|데이타|데이터|산업|전자|통신|엔지니어링|corp|inc)", re.I)
+    for c in ("budget", "deadline", "period_end"):          # 예전 수집분에는 없는 칸
+        if c not in u.columns:
+            u[c] = ""
+    corp_like = re.compile(r"(주식회사|\(주\)|㈜|유한|회사|시스템|정보|기술|테크|텍|소프트|솔루션|네트웍|네트워크|컴퍼니|커뮤니케이션|아이티|IT|디지털|데이타|데이터|산업|전자|통신|엔지니어링|corp|inc)", re.I)
     u["winner"] = u["winner"].map(lambda w: w if corp_like.search(str(w)) else "")
+    # 금액: 낙찰·계약금액 → 없으면 공고 예산(추정가격·기초금액)
+    amt = u["amount"].where(u["amount"].astype(str).str.strip() != "", u["budget"])
+    # 사업 종료일: 본문·첨부의 계약(사업)기간 → 없으면 공고(결과)일 + 1년 추정
+    pe = pd.to_datetime(u["period_end"], errors="coerce")
+    est = (ev + pd.Timedelta(days=365)).dt.strftime("%Y-%m-%d")
+    end = pe.dt.strftime("%Y-%m-%d").where(pe.notna(), est)
+    kind = u["kind"].map(lambda k: {"공고": "입찰공고", "결과": "입찰결과", "계약공개": "계약공개"}.get(k, "입찰" + str(k)))
     out = pd.DataFrame({
-        "출처": "대학 홈페이지", "구분": "입찰" + u["kind"], "사업명": u["title"], "제품": "",
+        "출처": "대학 홈페이지", "구분": kind, "사업명": u["title"], "제품": "",
         "수요기관": u["school"] + u["campus"].map(lambda c: "" if c in ("", "본교") else f"({c})"),
-        "업체목록": u["winner"].map(lambda w: [w] if w else []), "금액": u["amount"].map(ce._won),
-        "일자": u["date"],
-        # 공고는 아직 진행 전(공고일+1년을 사업 종료 추정), 결과(낙찰)는 결과일+1년
-        "종료일": (ev + pd.Timedelta(days=365)).dt.strftime("%Y-%m-%d"), "종료추정": "Y",
+        "업체목록": u["winner"].map(lambda w: [w] if w else []), "금액": amt.map(ce._won),
+        "일자": u["date"], "종료일": end, "종료추정": pe.isna().map(lambda x: "Y" if x else ""),
         "원문": u["url"], "_key": "대학|" + u["uniq_key"], "_지역힌트": u["region"],
     })
     return _common(out, comp)

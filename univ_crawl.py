@@ -31,23 +31,168 @@ DATE_SHORT_RE = re.compile(r"(?<!\d)(2\d)[.\-/](\d{2})[.\-/](\d{2})(?!\d)")
 WINNER_RE = re.compile(r"(낙\s*찰\s*자|낙찰\s*업체|낙찰\s*예정자|계약\s*상대자|계약\s*업체|선정\s*업체|우선\s*협상\s*대상자|업\s*체\s*명|상\s*호)\s*[:：\-]?\s*"
                        r"([\(（]?[주유재사]?[\)）]?\s*[가-힣A-Za-z0-9&\.\(\)（）·\s]{2,40}?)(?=\s{2,}|\n|\s*\(|\s*대표|\s*사업자|\s*/|\s*,|$)")
 AMOUNT_RE = re.compile(r"(낙찰\s*금액|계약\s*금액|낙찰가|투찰\s*금액)[^\d]{0,20}([\d,]{6,})\s*원?")
+CONTRACT_WORDS = re.compile(r"(낙찰|입찰\s*결과|개찰|계약\s*정보|계약\s*현황|수의\s*계약|계약\s*공개|계약\s*내역|계약\s*체결\s*현황)")
 KEEP_YEARS = 3
 MAX_PAGES = 3
-CONCURRENCY = 5
+CONCURRENCY = 6
+MAX_VISIT = 22            # 게시판 찾기: 학교마다 최대 몇 쪽까지 둘러볼지
+MAX_DETAIL = 45           # 학교마다 상세 글을 열어 볼 최대 개수 (IT 글만)
+
+MONEY_RE = re.compile(r"([\d,]+(?:\.\d+)?)\s*(억\s*원|억|천\s*만\s*원|백\s*만\s*원|만\s*원|천\s*원|원)")
+BUDGET_LBL = re.compile(r"(추정\s*가격|기초\s*금액|사업\s*예산|소요\s*예산|배정\s*예산|예정\s*가격|사업\s*비|사업\s*금액|총\s*사업비|예산\s*액|예\s*산|구매\s*예정\s*금액|계약\s*예정\s*금액)")
+AWARD_LBL = re.compile(r"(낙찰\s*금액|계약\s*금액|낙찰\s*가|투찰\s*금액|계약\s*액)")
+PERIOD_LBL = re.compile(r"(계약\s*기간|사업\s*기간|용역\s*기간|수행\s*기간|과업\s*기간|납품\s*기한|납품\s*기간|구축\s*기간|이행\s*기간)")
+DEADLINE_LBL = re.compile(r"(입찰\s*마감|제출\s*마감|접수\s*마감|마감\s*일시|제출\s*기한|투찰\s*마감|접수\s*기간|제출\s*기간|입찰서\s*제출|전자\s*입찰\s*기간)")
+REL_RE = re.compile(r"(계약\s*일|착수\s*일|계약\s*체결\s*일)[^\d]{0,12}(?:로부터|부터|후)?\s*(\d{1,4})\s*(개월|일|년)")
+CORP_LIKE = re.compile(r"(주식회사|\(주\)|㈜|유한|회사|시스템|정보|기술|테크|텍|소프트|솔루션|네트웍|네트워크|컴퍼니|커뮤니케이션|"
+                       r"아이티|IT|디지털|데이타|데이터|산업|전자|통신|엔지니어링|corp|inc|co\.)", re.I)
+
+
+def _won(num, unit):
+    try:
+        v = float(num.replace(",", ""))
+    except ValueError:
+        return ""
+    u = re.sub(r"\s+", "", unit)
+    mul = {"억원": 1e8, "억": 1e8, "천만원": 1e7, "백만원": 1e6, "만원": 1e4, "천원": 1e3, "원": 1}.get(u, 1)
+    v *= mul
+    return str(int(v)) if v >= 100000 else ""
+
+
+def _after(t, end, span=110):
+    """라벨 바로 뒤 값: 같은 줄(값이 비어 있으면 다음 줄)"""
+    seg = t[end:end + span]
+    nl = seg.find("\n")
+    if nl != -1:
+        first = seg[:nl]
+        if len(first.strip(" :：-·)]")) < 3:
+            rest = seg[nl + 1:]
+            nl2 = rest.find("\n")
+            first = rest[:nl2] if nl2 != -1 else rest
+        seg = first
+    return seg
+
+
+def _money_after(text, lbl_re):
+    for m in lbl_re.finditer(text):
+        mm = MONEY_RE.search(_after(text, m.end()))
+        if mm:
+            v = _won(mm.group(1), mm.group(2))
+            if v:
+                return v
+    return ""
+
+
+def _all_dates(seg):
+    out = []
+    for m in DATE_RE.finditer(seg):
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= mo <= 12 and 1 <= d <= 31:
+            out.append(f"{y:04d}-{mo:02d}-{d:02d}")
+    return out
+
+
+WINNER_LBL = re.compile(r"(낙\s*찰\s*자|낙찰\s*업체|낙찰\s*예정자|계약\s*상대자|계약\s*업체|선정\s*업체|우선\s*협상\s*대상자|업\s*체\s*명|상\s*호)")
+WINNER_CUT = re.compile(r"(\s{2,}|\s*대표|\s*사업자|\s*/|,|\s*낙찰|\s*계약|\s*금액|\s*주소|\s*투찰|\s*\||\s*\d{3,}|\s*입니다|\s*으로|\s*로\s)")
+STRONG_CORP = re.compile(r"(주식회사|\(주\)|㈜|\(유\)|유한회사|\(사\)|협동조합)")
+
+
+def find_winner(t):
+    for m in WINNER_LBL.finditer(t):
+        seg = _after(t, m.end(), 70).lstrip(" :：-·\t")
+        c = WINNER_CUT.search(seg)
+        cand = (seg[:c.start()] if c else seg).strip(" :：-·")
+        if not (2 <= len(cand) <= 40) or cand.startswith(("는", "은", "을", "의", "가", "이", "및")):
+            continue
+        if STRONG_CORP.search(cand) or (CORP_LIKE.search(cand) and len(cand) <= 20 and cand.count(" ") <= 1):
+            return cand
+    return ""
+
+
+def parse_detail(body, post_date=""):
+    """공고·결과 본문에서 예산·낙찰(계약)금액·마감일·사업 종료일·낙찰업체"""
+    t = re.sub(r"[ \t\u00a0]+", " ", body or "")
+    info = {"budget": _money_after(t, BUDGET_LBL), "amount": _money_after(t, AWARD_LBL), "deadline": "", "period_end": "",
+            "winner": find_winner(t)}
+    for m in DEADLINE_LBL.finditer(t):
+        ds = _all_dates(_after(t, m.end()))
+        if ds:
+            info["deadline"] = ds[-1]
+            break
+    for m in PERIOD_LBL.finditer(t):
+        seg = _after(t, m.end())
+        ds = _all_dates(seg)
+        if ds:
+            info["period_end"] = max(ds)
+            break
+        r = REL_RE.search(seg) or re.search(r"(\d{1,4})\s*(개월|일|년)\s*(?:이내|간|까지)?", seg)
+        if r and post_date:
+            n, unit = int(r.groups()[-2]), r.groups()[-1]
+            base = datetime.strptime(post_date, "%Y-%m-%d")
+            days = n * (30 if unit == "개월" else 365 if unit == "년" else 1)
+            if 7 <= days <= 365 * 5:
+                info["period_end"] = (base + timedelta(days=days + 14)).strftime("%Y-%m-%d")   # 계약까지 2주 가정
+            break
+    return info
+
+
+JS_TABLES = """() => Array.from(document.querySelectorAll('table')).map(tb => {
+  const head = Array.from(tb.querySelectorAll('thead th, tr:first-child th, tr:first-child td')).map(x => (x.textContent||'').replace(/\\s+/g,' ').trim());
+  const rows = Array.from(tb.querySelectorAll('tbody tr')).slice(0, 80).map(tr => {
+    const cells = Array.from(tr.querySelectorAll('td,th')).map(x => (x.textContent||'').replace(/\\s+/g,' ').trim());
+    const a = tr.querySelector('a');
+    return {cells, href: a ? (a.href||'') : ''};
+  });
+  return {head, rows};
+})"""
+COL_RULES = {"title": r"(계약명|건명|사업명|용역명|공사명|품명|제목|입찰명|과제명)", "vendor": r"(업체|상대자|계약자|낙찰자|상호|업체명)",
+             "amount": r"(금액|계약액|낙찰가|낙찰액)", "date": r"(계약일|체결일|일자|등록일|낙찰일|개찰일)", "period": r"(기간|완료|준공|납품기한|만료)"}
+
+
+def parse_contract_tables(tables):
+    """정보공개 '계약현황·수의계약현황·입찰결과' 표 → 계약 행 (사업명·업체·금액·일자·기간)"""
+    out = []
+    for tb in tables:
+        head = tb.get("head") or []
+        idx = {}
+        for k, rx in COL_RULES.items():
+            for i, h in enumerate(head):
+                if re.search(rx, h) and i not in idx.values():
+                    idx[k] = i
+                    break
+        if "title" not in idx or ("vendor" not in idx and "amount" not in idx):
+            continue
+        for r in tb.get("rows") or []:
+            cells = r.get("cells") or []
+            if len(cells) <= idx["title"]:
+                continue
+
+            def g(k):
+                i = idx.get(k)
+                return cells[i] if i is not None and i < len(cells) else ""
+            title = g("title")
+            if len(title) < 4:
+                continue
+            am = MONEY_RE.search(g("amount") + "원") if g("amount") else None
+            ds = _all_dates(g("period"))
+            out.append({"title": title, "date": _date(g("date")) or _date(" ".join(cells)), "winner": g("vendor"),
+                        "amount": _won(am.group(1), am.group(2)) if am else "", "period_end": max(ds) if ds else "",
+                        "href": r.get("href", "")})
+    return out
+
 
 
 def load_master(path="data/univ_master.csv"):
     rows = list(csv.DictReader(open(path, encoding="utf-8-sig")))
     seen, out = set(), []
     for r in rows:
-        if r["설립구분"] not in ("사립", "공립"):
-            continue
         hp = (r["학교홈페이지"] or "").strip()
         if not hp:
             continue
         if not hp.startswith("http"):
             hp = "https://" + hp
-        host = urlparse(hp).netloc.lower().replace("www.", "")
+        pu = urlparse(hp)
+        host = pu.netloc.lower().replace("www.", "") + pu.path.rstrip("/").lower()   # 같은 도메인의 분교(/wj 등)는 따로
         if host in seen:
             continue
         seen.add(host)
@@ -97,30 +242,28 @@ async def eval_all(page, js):
 
 
 async def find_board(page, home):
-    """홈페이지에서 입찰 게시판 주소 후보를 점수 순으로"""
-    cands = {}
+    """홈페이지를 최대 MAX_VISIT쪽 둘러보며 ① 입찰공고 게시판 ② 입찰결과·계약정보 공개 페이지 후보를 점수 순으로"""
+    bid, res = {}, {}
+    dom = urlparse(home).netloc.replace("www.", "")
 
-    def score(t, h):
-        s = 0
+    def score_bid(t, h):
+        s_ = 0
         if re.search(r"입찰\s*공고", t):
-            s += 10
+            s_ += 10
         elif re.search(r"입찰", t):
-            s += 7
+            s_ += 7
         elif re.search(r"구매|조달", t):
-            s += 4
-        elif re.search(r"계약\s*정보|계약\s*현황", t):
-            s += 3
+            s_ += 4
         if BOARD_BAD.search(t):
-            s -= 8
-        if re.search(r"bid|ipchal|purchase|buying|contract", h, re.I):
-            s += 3
-        return s
+            s_ -= 8
+        if re.search(r"bid|ipchal|purchase|buying", h, re.I):
+            s_ += 3
+        return s_
 
     async def collect(url):
-        """링크 목록 + 화면 HTML 속 숨은 메뉴(JSON·스크립트)에서 '입찰' 링크까지"""
         try:
-            await page.goto(url, timeout=45000, wait_until="domcontentloaded")
-            await page.wait_for_timeout(2500)
+            await page.goto(url, timeout=40000, wait_until="domcontentloaded")
+            await page.wait_for_timeout(2200)
         except Exception:
             return []
         links = await eval_all(page, JS_LINKS)
@@ -137,33 +280,38 @@ async def find_board(page, home):
                 links.append({"t": t, "h": urljoin(fr.url or base, h.replace("\\/", "/")), "o": ""})
         return links
 
-    def take(links, bonus=0):
+    queue, seen = [home], set()
+    visited = 0
+    root = ""
+    while queue and visited < MAX_VISIT:
+        u = queue.pop(0)
+        if u in seen:
+            continue
+        seen.add(u)
+        links = await collect(u)
+        visited += 1
+        if not root:
+            pu = urlparse(page.url or home)
+            root = f"{pu.scheme}://{pu.netloc}"
+            queue = [root + p_ for p_ in SITEMAP_PATHS[:6]] + queue      # 사이트맵 먼저
         menus = []
         for l in links:
             t, h = l["t"], l["h"]
-            if not h.startswith("http"):
+            if not h.startswith("http") or "javascript" in h:
                 continue
-            sc = score(t, h)
-            if sc > 0 and BOARD_WORDS.search(t + " " + h):
-                cands[h] = max(cands.get(h, 0), sc + bonus)
-            elif MENU_WORDS.search(t) and urlparse(h).netloc.replace("www.", "") == urlparse(home).netloc.replace("www.", ""):
+            same = urlparse(h).netloc.replace("www.", "").endswith(dom) or dom.endswith(urlparse(h).netloc.replace("www.", ""))
+            sb = score_bid(t, h)
+            if sb > 0 and BOARD_WORDS.search(t + " " + h):
+                bid[h] = max(bid.get(h, 0), sb)
+            if CONTRACT_WORDS.search(t) and not BOARD_BAD.search(t):
+                res[h] = max(res.get(h, 0), 5 + (3 if re.search(r"계약\s*(정보|현황)|수의", t) else 0))
+            if same and (MENU_WORDS.search(t) or re.search(r"(정보\s*공개|행정\s*정보|청렴|투명|재정|예산|회계)", t)):
                 menus.append(h)
-        return menus
-
-    menus = take(await collect(home))
-    root = f"{urlparse(page.url or home).scheme}://{urlparse(page.url or home).netloc}"
-    if not cands:                              # 사이트맵 먼저 (메뉴 전체가 한 화면에 있음)
-        sm = [m for m in menus if re.search(r"sitemap|사이트", m, re.I)] + [root + p_ for p_ in SITEMAP_PATHS]
-        for m in sm[:8]:
-            take(await collect(m), -1)
-            if cands:
-                break
-    if not cands:
-        for m in list(dict.fromkeys(menus))[:12]:
-            take(await collect(m), -1)
-            if cands:
-                break
-    return [h for h, _ in sorted(cands.items(), key=lambda x: -x[1])][:3]
+        queue += [m for m in dict.fromkeys(menus) if m not in seen][:15]
+        if bid and res and visited >= 4:
+            break
+    rank = lambda d_: [h for h, _ in sorted(d_.items(), key=lambda x: -x[1])]
+    return rank(bid)[:3], rank(res)[:2]
 
 
 async def read_board(page, url):
@@ -199,7 +347,7 @@ async def read_board(page, url):
 
 
 async def read_detail(page, post):
-    """결과 글 본문에서 업체명·금액 찾기"""
+    """글 본문(+필요하면 첫 첨부 hwp/pdf)에서 예산·금액·마감·종료일·낙찰업체"""
     try:
         if post["href"]:
             await page.goto(post["href"], timeout=25000, wait_until="domcontentloaded")
@@ -208,82 +356,173 @@ async def read_detail(page, post):
             await page.wait_for_timeout(1200)
             await page.get_by_text(post["title"][:30], exact=False).first.click(timeout=6000)
         await page.wait_for_timeout(1500)
-        body = await page.evaluate("() => document.body.innerText")
+        body = ""
+        for fr in page.frames:
+            try:
+                body += "\n" + await fr.evaluate("() => document.body ? document.body.innerText : ''")
+            except Exception:
+                pass
         url = page.url
     except Exception:
-        return "", "", post.get("href", "")
-    w = WINNER_RE.search(body)
-    a = AMOUNT_RE.search(body)
-    winner = re.sub(r"\s+", " ", w.group(2)).strip(" :：-") if w else ""
-    # 회사 이름처럼 보이지 않으면 버림 (예: '가 소정 기일')
-    if winner and not re.search(r"(주식회사|\(주\)|㈜|유한|회사|시스템|정보|테크|텍|소프트|솔루션|네트웍|네트워크|컴퍼니|커뮤니케이션|"
-                                r"아이티|IT|디지털|데이타|데이터|산업|전자|통신|엔지니어링|corp|inc|co\.)", winner, re.I):
-        winner = ""
-    return winner, (a.group(2).replace(",", "") if a else ""), url
+        return {}, post.get("href", "")
+    info = parse_detail(body, post.get("date", ""))
+    if not (info["budget"] or info["amount"]) or not info["period_end"]:
+        try:                                         # 본문에 없으면 첨부 공고문(hwp/hwpx/pdf) 첫 개
+            from collectors import attachments_from_html
+            from doc_text import bytes_to_text
+            atts = attachments_from_html(await page.content(), url)
+            if atts:
+                name, aurl = atts[0]
+                resp = await page.request.get(aurl, timeout=30000)
+                if resp.ok:
+                    txt = bytes_to_text(await resp.body(), name) or ""
+                    extra = parse_detail(txt, post.get("date", ""))
+                    for k, v in extra.items():
+                        if v and not info.get(k):
+                            info[k] = v
+        except Exception:
+            pass
+    return info, url
+
+
+SCHOOL_TIMEOUT = 720      # 한 학교 최대 12분 (넘으면 그때까지 모은 것만)
 
 
 async def crawl_school(browser, sch, overrides, it_reason, sem):
     async with sem:
+        rep = {"school": sch["school"], "home": sch["home"], "board": "", "result_board": "", "posts": 0, "it_posts": 0,
+               "contracts": 0, "status": ""}
+        out = []
+        try:
+            await asyncio.wait_for(_crawl_school(browser, sch, overrides, it_reason, out, rep), SCHOOL_TIMEOUT)
+        except asyncio.TimeoutError:
+            rep["status"] = "성공" if out else "시간 초과"
+            rep["it_posts"] = len(out)
+            print(f"[시간 초과] {sch['school']} · 모은 IT {len(out)}", flush=True)
+        return out, rep
+
+
+async def _crawl_school(browser, sch, overrides, it_reason, out, rep):
+    if True:
         ctx = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36",
                                         ignore_https_errors=True, locale="ko-KR")
         page = await ctx.new_page()
-        rep = {"school": sch["school"], "home": sch["home"], "board": "", "posts": 0, "it_posts": 0, "status": ""}
-        out = []
         try:
             ov = overrides.get(sch["school"])
             notice_board = isinstance(ov, dict) and ov.get("notice")
+            res_boards = []
             if isinstance(ov, dict):
+                res_boards = ov.get("result") or []
                 ov = ov.get("url")
-            boards = ov or await find_board(page, sch["home"])
-            if isinstance(boards, str):
-                boards = [boards]
-            if not boards:
-                rep["status"] = "게시판 못 찾음"
-                return out, rep
+            if isinstance(ov, str):
+                ov = [ov]
+            if isinstance(res_boards, str):
+                res_boards = [res_boards]
+            if ov:
+                boards = ov
+                if not res_boards:
+                    _, res_boards = await find_board(page, sch["home"])
+            else:
+                boards, found_res = await find_board(page, sch["home"])
+                res_boards = res_boards or found_res
             floor = (datetime.now() - timedelta(days=365 * KEEP_YEARS)).strftime("%Y-%m-%d")
             posts = []
-            if ov:                                 # 직접 적은 게시판은 여러 개 모두 읽음 (예: 입찰공고 + 입찰결과)
-                for b in boards:
-                    posts += await read_board(page, b)
-                rep["board"] = " , ".join(boards)
-            else:
-                for b in boards[:2]:
-                    ps = await read_board(page, b)
-                    if len(ps) >= 3:
-                        posts, rep["board"] = ps, b
+            for b in (boards if ov else boards[:2]):
+                ps = await read_board(page, b)
+                if ps:
+                    posts += ps
+                    rep["board"] = (rep["board"] + " , " if rep["board"] else "") + b
+                    if not ov and len(ps) >= 3:
                         break
-            if not posts:
-                rep["status"] = "게시판 글 못 읽음"
-                rep["board"] = boards[0]
-                return out, rep
+            # 입찰결과·계약정보 공개: 표(계약명·업체·금액)면 바로 계약 행, 게시판이면 글 목록
+            contract_rows = []
+            for b in res_boards[:2]:
+                try:
+                    await page.goto(b, timeout=30000, wait_until="domcontentloaded")
+                    await page.wait_for_timeout(2500)
+                    tables = await eval_all(page, JS_TABLES)
+                except Exception:
+                    tables = []
+                cr = parse_contract_tables(tables)
+                if cr:
+                    contract_rows += cr
+                    rep["result_board"] = b
+                else:
+                    ps = await read_board(page, b)
+                    for p_ in ps:
+                        p_["_result"] = True
+                    if ps:
+                        posts += ps
+                        rep["result_board"] = b
+            if not posts and not contract_rows:
+                rep["status"] = "게시판 못 찾음" if not boards and not res_boards else "게시판 글 못 읽음"
+                rep["board"] = rep["board"] or (boards[0] if boards else "")
+                return
             posts = [p for p in posts if p["date"] >= floor]
             rep["posts"] = len(posts)
+            n_detail = 0
             for p in posts:
-                if notice_board and not re.search(r"(입찰|견적|구매|용역|낙찰|선정|계약)", p["title"]):
+                if notice_board and not p.get("_result") and not re.search(r"(입찰|견적|구매|용역|낙찰|선정|계약)", p["title"]):
                     continue                        # 공지사항 게시판이면 입찰 글만
                 reason = it_reason({"cntrctNm": p["title"]})
                 if not reason:
                     continue
-                kind = "결과" if RESULT_WORDS.search(p["title"]) else "공고"
-                winner, amount, durl = ("", "", p["href"])
-                if kind == "결과":
-                    winner, amount, durl = await read_detail(page, p)
-                out.append({**sch, "title": p["title"], "date": p["date"], "kind": kind, "winner": winner, "amount": amount,
-                            "url": durl or p["href"] or p["list_url"], "it_reason": reason, "board": rep["board"]})
+                kind = "결과" if (p.get("_result") or RESULT_WORDS.search(p["title"])) else "공고"
+                info, durl = {}, p["href"]
+                if n_detail < MAX_DETAIL:
+                    info, durl = await read_detail(page, p)
+                    n_detail += 1
+                rep["it_posts"] = len(out) + 1
+                out.append({**sch, "title": p["title"], "date": p["date"], "kind": kind, "winner": info.get("winner", ""),
+                            "amount": info.get("amount", ""), "budget": info.get("budget", ""), "deadline": info.get("deadline", ""),
+                            "period_end": info.get("period_end", ""), "url": durl or p["href"] or p["list_url"],
+                            "it_reason": reason, "board": rep["board"]})
+            for cr in contract_rows:
+                if cr["date"] and cr["date"] < floor:
+                    continue
+                reason = it_reason({"cntrctNm": cr["title"]})
+                if not reason:
+                    continue
+                out.append({**sch, "title": cr["title"], "date": cr["date"], "kind": "계약공개", "winner": cr["winner"],
+                            "amount": cr["amount"], "budget": "", "deadline": "", "period_end": cr["period_end"],
+                            "url": cr["href"] or rep["result_board"], "it_reason": reason, "board": rep["result_board"]})
+                rep["contracts"] += 1
             rep["it_posts"] = len(out)
             rep["status"] = "성공"
         except Exception as e:
             rep["status"] = f"오류: {type(e).__name__}"
         finally:
             await ctx.close()
-            print(f"[{rep['status']}] {sch['school']} · 글 {rep['posts']} · IT {rep['it_posts']} · {rep['board'][:80]}", flush=True)
-        return out, rep
+            print(f"[{rep['status']}] {sch['school']} · 글 {rep['posts']} · IT {rep['it_posts']} · 계약공개 {rep['contracts']} · "
+                  f"{rep['board'][:70]} | {rep['result_board'][:60]}", flush=True)
+
+
+def _order(s_):
+    t = s_["type"]
+    return 0 if t in ("대학교", "교육대학", "산업대학") else 1 if t == "전문대학" else 2
+
+
+def finish(rows, report):
+    """수집 결과 저장(파일 + DB) — 이비즈포유 공고도 함께"""
+    import contract_export as ce
+    rows = rows + collect_ebiz4u(ce.it_reason)
+    json.dump(rows, open("univ_bids.json", "w", encoding="utf-8"), ensure_ascii=False)
+    json.dump(report, open("univ_crawl_report.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    ok = sum(1 for r in report if r["status"] == "성공")
+    print(f"[OK] 대학 홈페이지 수집: 학교 {len(report)}곳 중 성공 {ok}곳 · IT 관련 {len(rows)}건 "
+          f"(결과 {sum(1 for r in rows if r['kind'] == '결과')} · 계약공개 {sum(1 for r in rows if r['kind'] == '계약공개')} · "
+          f"업체명 {sum(1 for r in rows if r.get('winner'))} · 예산/금액 {sum(1 for r in rows if r.get('budget') or r.get('amount'))} · "
+          f"종료일 {sum(1 for r in rows if r.get('period_end'))})")
+    try:
+        save_db(rows, report)
+    except Exception as e:
+        print(f"[WARN] DB 저장 실패: {type(e).__name__}")
 
 
 async def main_async(a):
     from playwright.async_api import async_playwright
     import contract_export as ce
-    schools = load_master()
+    schools = sorted(load_master(), key=_order)
     try:
         overrides = json.load(open("data/univ_boards.json", encoding="utf-8"))
     except Exception:
@@ -292,8 +531,12 @@ async def main_async(a):
         schools = [s for s in schools if s["school"] in overrides]
     elif a.only:
         schools = [s for s in schools if a.only in s["school"]]
+    if a.shard:                                # "0/4" → 4대 중 0번 컴퓨터 몫
+        i, n = map(int, a.shard.split("/"))
+        schools = [s for k, s in enumerate(schools) if k % n == i]
     if a.limit:
         schools = schools[:a.limit]
+    print(f"대상 학교 {len(schools)}곳", flush=True)
     sem = asyncio.Semaphore(CONCURRENCY)
     async with async_playwright() as p:
         browser = await p.chromium.launch()
@@ -301,16 +544,11 @@ async def main_async(a):
         await browser.close()
     rows = [r for o, _ in res for r in o]
     report = [r for _, r in res]
-    rows += collect_ebiz4u(ce.it_reason)
-    json.dump(rows, open("univ_bids.json", "w", encoding="utf-8"), ensure_ascii=False)
-    json.dump(report, open("univ_crawl_report.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    ok = sum(1 for r in report if r["status"] == "성공")
-    print(f"[OK] 대학 홈페이지 수집: 학교 {len(report)}곳 중 성공 {ok}곳 · IT 관련 글 {len(rows)}건 "
-          f"(결과 {sum(1 for r in rows if r['kind'] == '결과')} · 업체명 찾음 {sum(1 for r in rows if r['winner'])})")
-    try:
-        save_db(rows, report)
-    except Exception as e:
-        print(f"[WARN] DB 저장 실패: {type(e).__name__}")
+    if a.out:                                  # 나눠 돌리는 중: 파일만 남기고 합치기 단계에서 저장
+        json.dump({"rows": rows, "report": report}, open(a.out, "w", encoding="utf-8"), ensure_ascii=False)
+        print(f"[OK] {a.out}: 학교 {len(report)} · 성공 {sum(1 for r in report if r['status'] == '성공')} · IT {len(rows)}")
+        return
+    finish(rows, report)
 
 
 EBIZ4U_LIST = "https://www.ebiz4u.co.kr/home.do?cmd=private&subcmd=searchBiddingList&srchServiceType=ebiz4u&srchPrType={t}&srchText="
@@ -357,9 +595,17 @@ def save_db(rows, report):
     from sqlalchemy import text
     from db2 import get_engine
     import store
-    cols = ["uniq_key", "school", "campus", "type", "region", "found", "title", "date", "kind", "winner", "amount", "url", "it_reason", "board", "updated_at"]
+    cols = ["uniq_key", "school", "campus", "type", "region", "found", "title", "date", "kind", "winner", "amount", "url", "it_reason", "board",
+            "budget", "deadline", "period_end", "updated_at"]
     with get_engine().begin() as conn:
         conn.execute(text("CREATE TABLE IF NOT EXISTS univ_bids (uniq_key TEXT PRIMARY KEY, " + ", ".join(f"{c} TEXT" for c in cols[1:]) + ")"))
+    for col in ("budget", "deadline", "period_end"):           # 예전 표에 새 칸 추가
+        try:
+            with get_engine().begin() as conn:
+                conn.execute(text(f"ALTER TABLE univ_bids ADD COLUMN {col} TEXT"))
+        except Exception:
+            pass
+    with get_engine().begin() as conn:
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         data = []
         for r in rows:
@@ -438,7 +684,22 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--probe", default="")
     ap.add_argument("--ebiz4u-only", action="store_true", help="이비즈포유 공고만 (매일)")
+    ap.add_argument("--shard", default="", help="나눠 돌리기 i/n")
+    ap.add_argument("--out", default="", help="나눠 돌린 결과 파일")
+    ap.add_argument("--merge", nargs="*", default=None, help="나눠 돌린 결과 파일들을 합쳐 저장")
     a = ap.parse_args()
+    if a.merge is not None:
+        rows, report = [], []
+        for f in a.merge:
+            try:
+                d = json.load(open(f, encoding="utf-8"))
+            except Exception:
+                print(f"[WARN] {f} 읽기 실패")
+                continue
+            rows += d["rows"]
+            report += d["report"]
+        finish(rows, report)
+        return 0
     if a.probe:
         asyncio.run(probe([x for x in a.probe.split(",,") if x]))
         return 0

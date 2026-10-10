@@ -1,40 +1,102 @@
-name: University Bids (사립대·전문대 홈페이지 입찰 수집)
+name: University Bids (대학 홈페이지 입찰·계약 수집)
 
 on:
   schedule:
-    - cron: '0 19 * * 1'   # 매주 화요일 04:00 (한국시간) — 학교 홈페이지 전체
+    - cron: '0 19 * * 1'   # 매주 화요일 04:00 (한국시간) — 학교 홈페이지 전체 (4대 나눠서)
     - cron: '0 20 * * *'   # 매일 05:00 — 이비즈포유 공고만 (마감 전까지만 보여서 매일 쌓음)
   workflow_dispatch:
     inputs:
-      limit: { description: '학교 수 제한(시험용, 0=전체)', required: false, default: '0' }
-      only: { description: '특정 학교만 (이름 일부)', required: false, default: '' }
+      limit: { description: '컴퓨터 1대당 학교 수 제한(시험용, 0=전체)', required: false, default: '0' }
+      only: { description: '특정 학교만 (이름 일부, 직접지정=주소 적은 학교만)', required: false, default: '' }
       probe: { description: '조사용 주소(,,로 구분)', required: false, default: '' }
 
 permissions:
   contents: write
 
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  PYTHONIOENCODING: utf-8
+  PYTHONUNBUFFERED: '1'
+
 jobs:
-  univ:
+  ebiz4u:
+    if: github.event.schedule == '0 20 * * *'
     runs-on: ubuntu-latest
     environment: gov-tracker
-    timeout-minutes: 300
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      PYTHONIOENCODING: utf-8
-      PYTHONUNBUFFERED: '1'
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+        with: { python-version: '3.11', cache: 'pip' }
+      - run: pip install -r requirements.txt
+      - run: python univ_crawl.py --ebiz4u-only
+
+  probe:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.probe != ''
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: 'pip' }
       - run: pip install -r requirements.txt && python -m playwright install --with-deps chromium
-      - name: 대학 홈페이지 입찰 게시판 수집
-        run: set -o pipefail; if [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then python univ_crawl.py --ebiz4u-only 2>&1 | tee univ_log.txt; exit 0; fi; python univ_crawl.py --limit "${{ github.event.inputs.limit || '0' }}" --only "${{ github.event.inputs.only }}" --probe "${{ github.event.inputs.probe }}" 2>&1 | tee univ_log.txt
+      - run: set -o pipefail; python univ_crawl.py --probe "${{ github.event.inputs.probe }}" 2>&1 | tee univ_log.txt
       - name: 결과를 exports-univ 브랜치에 보관
         if: always()
         run: |
-          mkdir -p /tmp/exp && cp univ_log.txt univ_bids.json univ_crawl_report.json /tmp/exp/ 2>/dev/null || true
+          mkdir -p /tmp/exp && cp univ_log.txt /tmp/exp/ 2>/dev/null || true
+          cd /tmp/exp && git init -q -b exports-univ && git add -A
+          git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "대학 조사 $(date +%F)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-univ
+
+  shard:
+    if: github.event.schedule == '0 19 * * 1' || (github.event_name == 'workflow_dispatch' && github.event.inputs.probe == '')
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: 'pip' }
+      - run: pip install -r requirements.txt && python -m playwright install --with-deps chromium
+      - name: 학교 홈페이지 수집 (4대 중 ${{ matrix.shard }}번)
+        timeout-minutes: 310
+        run: set -o pipefail; python univ_crawl.py --shard "${{ matrix.shard }}/4" --limit "${{ github.event.inputs.limit || '0' }}" --only "${{ github.event.inputs.only }}" --out "shard_${{ matrix.shard }}.json" 2>&1 | tee "log_${{ matrix.shard }}.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: univ-shard-${{ matrix.shard }}
+          path: |
+            shard_${{ matrix.shard }}.json
+            log_${{ matrix.shard }}.txt
+          if-no-files-found: warn
+
+  merge:
+    needs: shard
+    if: always() && needs.shard.result != 'skipped'
+    runs-on: ubuntu-latest
+    environment: gov-tracker
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: 'pip' }
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: univ-shard-*
+          merge-multiple: true
+      - name: 4대 결과 합쳐 저장
+        run: set -o pipefail; python univ_crawl.py --merge shard_*.json 2>&1 | tee univ_log.txt
+      - name: 결과를 exports-univ 브랜치에 보관
+        if: always()
+        run: |
+          mkdir -p /tmp/exp && cp univ_log.txt log_*.txt univ_bids.json univ_crawl_report.json /tmp/exp/ 2>/dev/null || true
           cd /tmp/exp && git init -q -b exports-univ && git add -A
           git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "대학 입찰 $(date +%F)"
           git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-univ
