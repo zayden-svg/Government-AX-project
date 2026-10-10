@@ -634,19 +634,53 @@ def build(all_df):
         ("열 구성", "모든 표 공통: 기관특성 · 대학구분 · 업체명 · 수요기관 · 지역(고정) | 사업명 · 제품 · 금액 · 사업종료일 · 종료 · 종료 D-day"),
         ("종료", f"진행중 / 종료 임박(종료일까지 {ce.SOON_DAYS}일 이내, 빨간 칸) / 종료 / 미상"),
         ("금액", "천만원 이상 '억'(예: 10.0억, 0.5억), 미만은 원 단위(예: 9,500,000)"),
-        ("사업종료일", "계약은 계약 종료일. 낙찰·쇼핑몰 납품·대학 공고는 종료일 정보가 없어 일자 + 1년으로 추정"),
+        ("사업종료일", "계약은 계약 종료일. 대학은 공고문·첨부의 계약(사업)기간, 계약공개 표의 계약종료일. 그 밖(낙찰·쇼핑몰 납품 등)은 일자 + 1년 추정"),
+        ("대학 수집", "나라장터(계약·낙찰) + 대학 홈페이지 입찰게시판·입찰결과·수의계약 현황(정보공개) + 이비즈포유. 학교별 확보 건수는 '대학 수집 결과' 시트"),
         ("경쟁사", "업체: 데브와이·스크립터스·에버스핀·소프트베이스·가온아이 / 제품: DynaPath(스크립터스)·에버세이프(에버스핀)·xQueue(소프트베이스)"),
         ("지역", "수요기관 소재 시·도. 확인 못 한 기관은 '미확인'"),
     ]:
         ws.append([c(ws, a, bold), b])
+    # 대학별 확보 현황: 모든 대학(대학알리미 목록) × 출처별 건수 → 0건 학교가 한눈에
     rep, _ = store.load_cache("univ_crawl_report")
-    if rep:
+    rep = {r.get("school"): r for r in (rep or [])}
+    try:
+        master = pd.read_csv("data/univ_master.csv", dtype=str).fillna("")
+    except Exception:
+        master = pd.DataFrame()
+    if not master.empty:
         ws = wb.create_sheet("대학 수집 결과")
-        for i, w in enumerate([24, 12, 8, 8, 60, 40], 1):
+        widths = [24, 9, 9, 7, 11, 9, 12, 8, 22, 55]
+        for i, w in enumerate(widths, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
-        ws.append([c(ws, k, hf, navy) for k in ("학교", "결과", "3년 내 글", "IT 글", "입찰 게시판 주소", "홈페이지")])
-        for r in sorted(rep, key=lambda x: (x.get("status") != "성공", -int(x.get("it_posts") or 0))):
-            ws.append([clean(r.get("school")), r.get("status"), r.get("posts"), r.get("it_posts"), clean(r.get("board")), clean(r.get("home"))])
+        ws.append([c(ws, "대학별 IT 사업 확보 현황 — 합계 0건(빨간 칸)은 어느 출처에서도 아직 못 찾은 학교", bold)])
+        ws.append([c(ws, k, hf, navy) for k in ("학교", "구분", "설립", "지역", "나라장터(계약·낙찰)", "쇼핑몰 납품",
+                                                 "홈페이지·전자입찰", "합계", "홈페이지 수집 결과", "입찰 게시판 주소")])
+        org = d["수요기관"].astype(str)
+        src = d["출처"].astype(str)
+        rows_ = []
+        seen_ = set()
+        for _, m in master.iterrows():
+            nm = m["학교명"]
+            if nm in seen_:
+                continue
+            seen_.add(nm)
+            base = re.sub(r"\(.*?\)", "", nm).strip()
+            hit = org.str.contains(base, regex=False)
+            g2b = int((hit & src.isin(["계약", "낙찰"])).sum())
+            mall = int((hit & (src == "쇼핑몰 납품")).sum())
+            hp = int((hit & (src == "대학 홈페이지")).sum())
+            kind = "4년제" if m["학제"] in ("대학교", "교육대학", "산업대학") else "전문대" if m["학제"] == "전문대학" else m["학제"]
+            fd = "국·공립" if ("국립" in m["설립구분"] or "공립" in m["설립구분"]) else "사립"
+            r_ = rep.get(nm) or {}
+            rows_.append((0 if kind == "4년제" else 1 if kind == "전문대" else 2, g2b + mall + hp, nm, kind, fd, m["지역"], g2b, mall, hp,
+                          r_.get("status", "-"), r_.get("board", "")))
+        red_fill = PatternFill("solid", fgColor="FDE2E1")
+        for row in sorted(rows_, key=lambda x: (x[0], x[1] > 0, x[2])):
+            cells = [clean(row[2]), row[3], row[4], row[5], row[6], row[7], row[8], row[1], clean(row[9]), clean(row[10])]
+            if row[1] == 0:
+                cells = [c(ws, v, None, red_fill) for v in cells]
+            ws.append(cells)
+        ws.freeze_panes = "B3"
 
     buf = io.BytesIO()
     wb.save(buf)
