@@ -87,7 +87,7 @@
   "notice": true
  },
  "강원대학교": {
-  "url": "https://wwwk.kangwon.ac.kr/www/selectBbsNttList.do?bbsNo=6&key=73",
+  "url": "https://www.kangwon.ac.kr/www/selectBbsNttList.do?bbsNo=6&key=73",
   "result": [
    "https://www.kangwon.ac.kr/www/selectBbsNttList.do?bbsNo=11&key=83"
   ]
@@ -165,8 +165,8 @@
  },
  "서원대학교": {
   "url": [
-   "https://www.seowon.ac.kr/seowon/437/subview.do",
-   "https://www.seowon.ac.kr/bbs/seowon/397/artclList.do"
+   "https://www.seowon.ac.kr/bbs/seowon/397/artclList.do",
+   "https://www.seowon.ac.kr/seowon/437/subview.do"
   ]
  },
  "수원대학교": {

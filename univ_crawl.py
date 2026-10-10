@@ -237,9 +237,11 @@ JS_ROWS = """() => {
   const out = [];
   const rows = document.querySelectorAll('table tr, ul li, ol li, div[class*=list] > div, div[class*=List] > div, div[class*=row], dl');
   rows.forEach(r => {
-    const a = r.querySelector('a');
-    if (!a) return;
-    const t = (a.textContent || a.title || '').replace(/\\s+/g,' ').trim();
+    const as = Array.from(r.querySelectorAll('a'));
+    if (!as.length) return;
+    const txt = x => (x.textContent || x.title || '').replace(/\\s+/g,' ').trim();
+    const a = as.reduce((b, x) => txt(x).length > txt(b).length ? x : b, as[0]);   // 제목 링크 = 글자가 가장 긴 링크
+    const t = txt(a);
     if (t.length < 6) return;
     out.push({title: t.slice(0,200), href: a.href || '', onclick: a.getAttribute('onclick') || '', text: (r.textContent||'').replace(/\\s+/g,' ').slice(0,400)});
   });
@@ -481,6 +483,15 @@ async def _crawl_school(browser, sch, overrides, it_reason, out, rep):
         page = await ctx.new_page()
         try:
             ov = overrides.get(sch["school"])
+            if not ov:                                # 홈페이지 자체가 안 열리면(해외 접속 차단 등) 바로 기록
+                try:
+                    await page.goto(sch["home"], timeout=35000, wait_until="domcontentloaded")
+                except Exception as e:
+                    msg = str(e)
+                    why = ("주소 없음(DNS)" if "NAME_NOT_RESOLVED" in msg else "응답 없음" if "Timeout" in msg
+                           else "연결 거부" if ("REFUSED" in msg or "RESET" in msg or "chrome-error" in msg) else type(e).__name__)
+                    rep["status"] = f"접속 불가({why})"
+                    return
             notice_board = isinstance(ov, dict) and ov.get("notice")
             res_boards = []
             if isinstance(ov, dict):
