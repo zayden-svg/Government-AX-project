@@ -32,6 +32,10 @@ WINNER_RE = re.compile(r"(낙\s*찰\s*자|낙찰\s*업체|낙찰\s*예정자|계
                        r"([\(（]?[주유재사]?[\)）]?\s*[가-힣A-Za-z0-9&\.\(\)（）·\s]{2,40}?)(?=\s{2,}|\n|\s*\(|\s*대표|\s*사업자|\s*/|\s*,|$)")
 AMOUNT_RE = re.compile(r"(낙찰\s*금액|계약\s*금액|낙찰가|투찰\s*금액)[^\d]{0,20}([\d,]{6,})\s*원?")
 CONTRACT_WORDS = re.compile(r"(낙찰|입찰\s*결과|개찰|계약\s*정보|계약\s*현황|수의\s*계약|계약\s*공개|계약\s*내역|계약\s*체결\s*현황)")
+LIST_POST_RE = re.compile(r"(계약\s*(현황|내역|정보|체결\s*현황)|수의\s*계약|계약\s*공개|입찰\s*결과\s*공개|낙찰\s*현황|입찰\s*현황|계약\s*대장)")
+BID_TITLE_RE = re.compile(r"(입찰|견적|구매|용역|낙찰|선정|계약|개찰|공모|제안)")
+SHEET_EXT_RE = re.compile(r"\.(xlsx|xls|csv)\b", re.I)
+MAX_LIST_POSTS = 24      # 학교마다 '수의계약 현황' 같은 월별 목록 글을 열어 볼 최대 개수
 KEEP_YEARS = 3
 MAX_PAGES = 3
 CONCURRENCY = 6
@@ -346,8 +350,33 @@ async def read_board(page, url):
     return list(uniq.values())
 
 
-async def read_detail(page, post):
-    """글 본문(+필요하면 첫 첨부 hwp/pdf)에서 예산·금액·마감·종료일·낙찰업체"""
+def _sheet_tables(data, name):
+    """엑셀·CSV 첨부 → 표 [{head, rows}] (머리줄은 '계약명/업체/금액' 단어가 있는 줄)"""
+    import io
+    import pandas as pd
+    try:
+        if name.lower().endswith(".csv"):
+            sheets = {"csv": pd.read_csv(io.BytesIO(data), header=None, dtype=str, encoding_errors="ignore")}
+        else:
+            sheets = pd.read_excel(io.BytesIO(data), header=None, dtype=str, sheet_name=None)
+    except Exception:
+        return []
+    out = []
+    for df in sheets.values():
+        df = df.fillna("")
+        vals = [[str(x).strip() for x in row] for row in df.values.tolist()]
+        for i, row in enumerate(vals[:15]):
+            line = " ".join(row)
+            if re.search(COL_RULES["title"], line) and (re.search(COL_RULES["vendor"], line) or re.search(COL_RULES["amount"], line)):
+                out.append({"head": row, "rows": [{"cells": r, "href": ""} for r in vals[i + 1:i + 400]]})
+                break
+    return out
+
+
+async def read_detail(page, post, want_tables=False):
+    """글 본문(+필요하면 첨부 공고문)에서 예산·금액·마감·종료일·낙찰업체.
+    want_tables: '수의계약 현황' 같은 목록 글이면 본문 표·엑셀 첨부의 계약 행도 함께"""
+    crows = []
     try:
         if post["href"]:
             await page.goto(post["href"], timeout=25000, wait_until="domcontentloaded")
@@ -363,14 +392,34 @@ async def read_detail(page, post):
             except Exception:
                 pass
         url = page.url
+        html = await page.content()
     except Exception:
-        return {}, post.get("href", "")
+        return {}, post.get("href", ""), crows
     info = parse_detail(body, post.get("date", ""))
+    if want_tables:
+        try:
+            crows = parse_contract_tables(await eval_all(page, JS_TABLES))
+        except Exception:
+            crows = []
+        if not crows:                                   # 본문에 표가 없으면 엑셀 첨부
+            try:
+                from bs4 import BeautifulSoup
+                for a_ in BeautifulSoup(html, "html.parser").find_all("a"):
+                    nm = a_.get_text(" ", strip=True)
+                    hr = (a_.get("href") or "").strip()
+                    if SHEET_EXT_RE.search(nm) and hr and not hr.startswith(("#", "javascript")):
+                        resp = await page.request.get(urljoin(url, hr), timeout=30000)
+                        if resp.ok:
+                            crows = parse_contract_tables(_sheet_tables(await resp.body(), nm))
+                        break
+            except Exception:
+                pass
+        return info, url, crows
     if not (info["budget"] or info["amount"]) or not info["period_end"]:
-        try:                                         # 본문에 없으면 첨부 공고문(hwp/hwpx/pdf) 첫 개
+        try:                                         # 본문에 없으면 첨부 공고문(hwp/hwpx/pdf) 중 공고문다운 것 1개
             from collectors import attachments_from_html
-            from doc_text import bytes_to_text
-            atts = attachments_from_html(await page.content(), url)
+            from doc_text import bytes_to_text, rank_attachments
+            atts = rank_attachments(attachments_from_html(html, url))
             if atts:
                 name, aurl = atts[0]
                 resp = await page.request.get(aurl, timeout=30000)
@@ -382,7 +431,7 @@ async def read_detail(page, post):
                             info[k] = v
         except Exception:
             pass
-    return info, url
+    return info, url, crows
 
 
 SCHOOL_TIMEOUT = 720      # 한 학교 최대 12분 (넘으면 그때까지 모은 것만)
@@ -460,17 +509,25 @@ async def _crawl_school(browser, sch, overrides, it_reason, out, rep):
                 return
             posts = [p for p in posts if p["date"] >= floor]
             rep["posts"] = len(posts)
-            n_detail = 0
+            n_detail, n_list = 0, 0
             for p in posts:
-                if notice_board and not p.get("_result") and not re.search(r"(입찰|견적|구매|용역|낙찰|선정|계약)", p["title"]):
-                    continue                        # 공지사항 게시판이면 입찰 글만
+                if LIST_POST_RE.search(p["title"]) and n_list < MAX_LIST_POSTS:    # 월별 '수의계약 현황' 등 → 표 안의 계약들
+                    n_list += 1
+                    _, durl, crows = await read_detail(page, p, want_tables=True)
+                    for cr in crows:
+                        cr["date"] = cr["date"] or p["date"]
+                        cr["href"] = cr["href"] or durl
+                    contract_rows += crows
+                    continue
+                if (notice_board or p.get("_result")) and not BID_TITLE_RE.search(p["title"]):
+                    continue                        # 공지사항·정보공개 게시판이면 입찰·계약 글만
                 reason = it_reason({"cntrctNm": p["title"]})
                 if not reason:
                     continue
                 kind = "결과" if (p.get("_result") or RESULT_WORDS.search(p["title"])) else "공고"
                 info, durl = {}, p["href"]
                 if n_detail < MAX_DETAIL:
-                    info, durl = await read_detail(page, p)
+                    info, durl, _ = await read_detail(page, p)
                     n_detail += 1
                 rep["it_posts"] = len(out) + 1
                 out.append({**sch, "title": p["title"], "date": p["date"], "kind": kind, "winner": info.get("winner", ""),
@@ -487,6 +544,8 @@ async def _crawl_school(browser, sch, overrides, it_reason, out, rep):
                             "amount": cr["amount"], "budget": "", "deadline": "", "period_end": cr["period_end"],
                             "url": cr["href"] or rep["result_board"], "it_reason": reason, "board": rep["result_board"]})
                 rep["contracts"] += 1
+            seen_ = set()                              # 같은 계약이 여러 달 목록에 겹치면 하나만
+            out[:] = [r for r in out if not ((r["title"], r["winner"], r["amount"]) in seen_ or seen_.add((r["title"], r["winner"], r["amount"])))]
             rep["it_posts"] = len(out)
             rep["status"] = "성공"
         except Exception as e:
@@ -554,6 +613,29 @@ async def main_async(a):
 EBIZ4U_LIST = "https://www.ebiz4u.co.kr/home.do?cmd=private&subcmd=searchBiddingList&srchServiceType=ebiz4u&srchPrType={t}&srchText="
 
 
+def _ebiz_budget(b):
+    for k, v in b.items():
+        if re.search(r"(amt|price|budget|money)", k, re.I) and str(v).replace(",", "").replace(".", "").isdigit():
+            v = str(int(float(str(v).replace(",", ""))))
+            if int(v) >= 100000:
+                return v
+    return ""
+
+
+def _ebiz_deadline(b):
+    for k, v in b.items():
+        if re.search(r"(end|clos|dead|fin)", k, re.I) and v:
+            try:
+                if str(v).isdigit() and len(str(v)) >= 12:
+                    return datetime.fromtimestamp(int(v) / 1000).strftime("%Y-%m-%d")
+                d = _date(str(v))
+                if d:
+                    return d
+            except Exception:
+                pass
+    return ""
+
+
 def collect_ebiz4u(it_reason):
     """이비즈포유(대학 전자입찰 플랫폼: 성균관대·연세대·이화여대·국민대·숭실대·홍익대 등)의 현재 공고 전체.
     공고는 마감 전까지만 보이므로 매일 받아 쌓음"""
@@ -569,6 +651,8 @@ def collect_ebiz4u(it_reason):
         except Exception as e:
             print(f"[WARN] 이비즈포유 {t}: {type(e).__name__}")
             continue
+        if lst and t == "ALL":
+            print("이비즈포유 항목 칸:", ", ".join(sorted(lst[0].keys()))[:600])
         for b in lst:
             k = b.get("rfq_no")
             if not k or k in seen:
@@ -585,6 +669,7 @@ def collect_ebiz4u(it_reason):
             out.append({"school": org, "campus": "", "type": (m or {}).get("학제", ""), "region": (m or {}).get("지역", ""),
                         "found": (m or {}).get("설립구분", ""), "home": "https://www.ebiz4u.co.kr", "title": title, "date": reg,
                         "kind": "결과" if RESULT_WORDS.search(title) else "공고", "winner": "", "amount": "",
+                        "budget": _ebiz_budget(b), "deadline": _ebiz_deadline(b),
                         "url": f"https://www.ebiz4u.co.kr/bid/bidding.do?cmd=viewPublic&subcmd=login&aspId={b.get('asp_id', 'u.ebiz4u')}&rfqNo={k}",
                         "it_reason": reason, "board": "이비즈포유"})
     print(f"[OK] 이비즈포유: 현재 공고 {len(seen)}건 중 IT 관련 {len(out)}건")
