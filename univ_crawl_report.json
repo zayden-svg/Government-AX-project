@@ -1,0 +1,3882 @@
+[
+ {
+  "school": "국립강릉원주대학교",
+  "home": "https://www.gwnu.ac.kr",
+  "board": "",
+  "result_board": "https://cheongryum.gwnu.ac.kr/cheongryum/5936/subview.do",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "국립공주대학교",
+  "home": "https://www.kongju.ac.kr",
+  "board": "https://www.kongju.ac.kr/bbs/KNU/2133/artclList.do",
+  "result_board": "https://www.kongju.ac.kr/KNU/16949/subview.do",
+  "posts": 121,
+  "it_posts": 12,
+  "contracts": 12,
+  "status": "성공"
+ },
+ {
+  "school": "국립목포해양대학교",
+  "home": "https://www.mmu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "국립순천대학교",
+  "home": "https://www.scnu.ac.kr/SCNU/main.do",
+  "board": "https://www.scnu.ac.kr/SCNU/na/ntt/selectNttList.do?mi=1124&bbsId=1034",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "제주대학교",
+  "home": "https://www.jejunu.ac.kr",
+  "board": "",
+  "result_board": "https://cms.jejunu.ac.kr/schoolinfo/help/univerinfo/contract.htm",
+  "posts": 80,
+  "it_posts": 47,
+  "contracts": 46,
+  "status": "성공"
+ },
+ {
+  "school": "한국교원대학교",
+  "home": "https://www.knue.ac.kr",
+  "board": "https://www.knue.ac.kr/www/selectBbsNttList.do?bbsNo=29&key=810",
+  "result_board": "",
+  "posts": 9,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울과학기술대학교",
+  "home": "https://www.seoultech.ac.kr",
+  "board": "https://www.seoultech.ac.kr/service/info/bid/",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "가톨릭대학교",
+  "home": "https://www.catholic.ac.kr",
+  "board": "https://www.catholic.ac.kr/ko/service/Bidding.do",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "건국대학교(글로컬)",
+  "home": "https://www.kku.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "경동대학교",
+  "home": "https://www.kduniv.ac.kr",
+  "board": "https://www.kduniv.ac.kr/kor/CMS/Board/Board.do?mCode=MN224",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경일대학교",
+  "home": "https://www.kiu.ac.kr",
+  "board": "https://www.kiu.ac.kr/pages/sub.htm?nav_code=kiu1556848293",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 17,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "고려대학교",
+  "home": "https://www.korea.ac.kr",
+  "board": "http://ten.korea.ac.kr/index.jsp",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "광신대학교",
+  "home": "https://www.kwangshin.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(주소 없음(DNS))"
+ },
+ {
+  "school": "국민대학교",
+  "home": "https://www.kookmin.ac.kr",
+  "board": "https://www.kookmin.ac.kr/user/kmuNews/notice/index.do",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "단국대학교",
+  "home": "https://www.dankook.ac.kr",
+  "board": "https://www.dankook.ac.kr/bid",
+  "result_board": "",
+  "posts": 15,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "세한대학교",
+  "home": "https://www.sehan.ac.kr",
+  "board": "https://www.sehan.ac.kr/bbs/sehan/28/artclList.do",
+  "result_board": "",
+  "posts": 64,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대진대학교",
+  "home": "https://www.daejin.ac.kr",
+  "board": "https://www.daejin.ac.kr/bbs/daejin/195/artclList.do",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "동국대학교(WISE)",
+  "home": "https://wise.dongguk.ac.kr",
+  "board": "https://wise.dongguk.ac.kr/article/bidnotice/list",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 7,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동아대학교",
+  "home": "https://www.donga.ac.kr",
+  "board": "https://dx.donga.ac.kr/nxui/index.html?ui=simple#5170",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "명지대학교",
+  "home": "https://www.mju.ac.kr",
+  "board": "https://www.mju.ac.kr/mjukr/261/subview.do",
+  "result_board": "",
+  "posts": 64,
+  "it_posts": 12,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "부산외국어대학교",
+  "home": "https://www.bufs.ac.kr",
+  "board": "https://www.bufs.ac.kr/bbs/board.php?bo_table=notice_bid",
+  "result_board": "",
+  "posts": 118,
+  "it_posts": 36,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서강대학교",
+  "home": "https://www.sogang.ac.kr",
+  "board": "https://purchase.sogang.ac.kr/front/cmsboardlist.do?siteId=purchase&bbsConfigFK=782",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울장신대학교",
+  "home": "https://www.sjs.ac.kr",
+  "board": "https://www.sjs.ac.kr/ht_ml/w_03ed/3040.php",
+  "result_board": "https://www.sjs.ac.kr/ht_ml/w_03ed/3040.php?bbsid=main3110&amp;bbs_idx=50104&amp;pagekind=c&amp;gopage=/ht_ml/w_03ed/3040.php",
+  "posts": 31,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "성공회대학교",
+  "home": "https://www.skhu.ac.kr",
+  "board": "https://enter.skhu.ac.kr/skhu/961/subview.do",
+  "result_board": "",
+  "posts": 38,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "세종대학교",
+  "home": "https://www.sejong.ac.kr",
+  "board": "https://www.sejong.ac.kr/kor/intro/notice10.do",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "순천향대학교",
+  "home": "https://www.sch.ac.kr/",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "아주대학교",
+  "home": "https://www.ajou.ac.kr",
+  "board": "https://www.ajou.ac.kr/kr/guide/bidding.do",
+  "result_board": "",
+  "posts": 67,
+  "it_posts": 9,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "영남대학교",
+  "home": "https://www.yu.ac.kr",
+  "board": "https://www.yu.ac.kr/main/intro/notice-related-to-coronavirus-20.do",
+  "result_board": "",
+  "posts": 31,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "용인대학교",
+  "home": "https://www.yongin.ac.kr",
+  "board": "https://yongin.ac.kr/cmn/board/SYSTEM_DEFAULT000001/noticeList.do",
+  "result_board": "",
+  "posts": 53,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "위덕대학교",
+  "home": "https://www.uu.ac.kr",
+  "board": "https://www.uu.ac.kr/home/uu_notice_01/",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "인천가톨릭대학교",
+  "home": "https://www.iccu.ac.kr",
+  "board": "https://www.iccu.ac.kr/default.php#;",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "조선대학교",
+  "home": "https://www.chosun.ac.kr",
+  "board": "https://www.chosun.ac.kr/user/indexSub.do?codyMenuSeq=453877&siteId=purchase",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "백석대학교",
+  "home": "https://www.bu.ac.kr",
+  "board": "https://www.bu.ac.kr/web/4588/subview.do",
+  "result_board": "",
+  "posts": 59,
+  "it_posts": 5,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국침례신학대학교",
+  "home": "https://www.kbtus.ac.kr",
+  "board": "https://www.kbtus.ac.kr/kor/CMS/Board/Board.do?mCode=MN058",
+  "result_board": "",
+  "posts": 3,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "포항공과대학교",
+  "home": "https://www.postech.ac.kr",
+  "board": "https://posbid.postech.ac.kr/",
+  "result_board": "",
+  "posts": 32,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국항공대학교",
+  "home": "https://www.kau.ac.kr",
+  "board": "https://kau.ac.kr/kaulife/bid.php",
+  "result_board": "",
+  "posts": 125,
+  "it_posts": 23,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한림대학교",
+  "home": "https://www.hallym.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한신대학교",
+  "home": "https://www.hs.ac.kr",
+  "board": "https://www.hs.ac.kr/kor/4953/subview.do",
+  "result_board": "",
+  "posts": 20,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "협성대학교",
+  "home": "https://www.uhs.ac.kr",
+  "board": "https://www.uhs.ac.kr/uhs/156/subview.do",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "홍익대학교",
+  "home": "https://www.hongik.ac.kr/",
+  "board": "https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=list&srCategoryId=36",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "목포가톨릭대학교",
+  "home": "https://www.mcu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "광주대학교",
+  "home": "https://www.gwangju.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "중원대학교",
+  "home": "https://www.jwu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "경운대학교",
+  "home": "https://www.ikw.ac.kr",
+  "board": "https://www.ikw.ac.kr/board/list.tc?mn=3292&mngNo=190&pageSeq=2184",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "제주국제대학교",
+  "home": "https://www.jeju.ac.kr",
+  "board": "https://www.jeju.ac.kr/square/bid.htm",
+  "result_board": "",
+  "posts": 1,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "광주교육대학교",
+  "home": "https://www.gnue.ac.kr",
+  "board": "",
+  "result_board": "https://www.gnue.ac.kr/index.9is?contentUid=4a9f18ab98368ef7019936770a897e63",
+  "posts": 2,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경인교육대학교",
+  "home": "https://www.ginue.ac.kr",
+  "board": "https://www.ginue.ac.kr/kor/CMS/Board/Board.do?mCode=MN129",
+  "result_board": "",
+  "posts": 1,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "춘천교육대학교",
+  "home": "https://www.cnue.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "광주과학기술원",
+  "home": "https://www.gist.ac.kr",
+  "board": "",
+  "result_board": "https://www.gist.ac.kr/kr/html/sub08/0807.html",
+  "posts": 4,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "가야대학교(김해)",
+  "home": "https://WWW.KAYA.AC.KR",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "영산대학교(해운대)",
+  "home": "https://www.ysu.ac.kr",
+  "board": "https://www.ysu.ac.kr/kor/CMS/Board/Board.do?mCode=MN016&searchCategory=c010",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 5,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "충북도립대학교",
+  "home": "https://www.cpu.ac.kr",
+  "board": "",
+  "result_board": "https://www.cpu.ac.kr/home/sub.do?menukey=1416",
+  "posts": 34,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경민대학교",
+  "home": "https://www.kyungmin.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "계원예술대학교",
+  "home": "https://www.kaywon.ac.kr",
+  "board": "https://www.kaywon.ac.kr/CmsHome/news_02.aspx?c=%ec%9e%85%ec%b0%b0&T=C&c1=1&sn=21866&page=1",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "군장대학교",
+  "home": "https://www.kunjang.ac.kr",
+  "board": "https://www.kunjang.ac.kr/home/main/board/bbsNormalList.do?encMenuId=5877413075484e78317555344f626e6e6f596f3065773d3d",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 6,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경북보건대학교",
+  "home": "https://www.gch.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "대구공업대학교",
+  "home": "https://www.ttc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "대림대학교",
+  "home": "https://www.daelim.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "우송정보대학",
+  "home": "https://www.wsi.ac.kr",
+  "board": "https://www.wsi.ac.kr/page/index.jsp?code=square0601a",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "경북과학대학교",
+  "home": "https://www.kbsc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "동아보건대학교",
+  "home": "https://www.duh.ac.kr",
+  "board": "https://www.duh.ac.kr/main/bbs.htm?code=_1",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "부산보건대학교",
+  "home": "https://www.bhu.ac.kr/",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "목포과학대학교",
+  "home": "https://www.msu.ac.kr",
+  "board": "https://www.msu.ac.kr/base/board/list?boardManagementNo=1316&menuLevel=3&menuNo=253",
+  "result_board": "",
+  "posts": 25,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "부산경상대학교",
+  "home": "https://www.bsks.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "삼육보건대학교",
+  "home": "https://www.shu.ac.kr",
+  "board": "https://www.shu.ac.kr/cms/FrCon/index.do?MENU_ID=790",
+  "result_board": "",
+  "posts": 6,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "수원과학대학교",
+  "home": "https://www.ssc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "신성대학교",
+  "home": "https://www.shinsung.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "여주대학교",
+  "home": "https://www.yit.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "세경대학교",
+  "home": "https://www.saekyung.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국영상대학교",
+  "home": "https://www.pro.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "장안대학교",
+  "home": "https://www.jangan.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "제주관광대학교",
+  "home": "https://www.jtu.ac.kr",
+  "board": "https://www.jtu.ac.kr/pages/sub.htm?nav_code=jtu1728882083",
+  "result_board": "",
+  "posts": 55,
+  "it_posts": 11,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "창원문성대학교",
+  "home": "https://www.cmu.ac.kr",
+  "board": "https://www.cmu.ac.kr/homepage/default/page/subLocation.do?menu_no=1001060108",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대덕대학교",
+  "home": "https://www.ddu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한림성심대학교",
+  "home": "https://www.hsc.ac.kr",
+  "board": "http://his.hsc.ac.kr:9000/web/purchase/index.jsp",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "경기과학기술대학교",
+  "home": "https://www.gtec.ac.kr",
+  "board": "https://www.gtec.ac.kr/cms/CmnCommonCon/MainLink.do?GBN=BA&TEMP_CODE=KOR_A&BASE_SITE_NO=2&CONFIG_CD=C1432&CONFIG_SEQ=1&SUB_SEQ=14&SITE_NO=2&BOARD_SEQ=4&BBS_SEQ=241884",
+  "result_board": "",
+  "posts": 1,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국관광대학교",
+  "home": "https://www.ktc.ac.kr",
+  "board": "https://www.ktc.ac.kr/board/board011",
+  "result_board": "",
+  "posts": 28,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "김해대학교",
+  "home": "https://www.gimhae.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "경남정보대학교",
+  "home": "https://www.kit.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "성운대학교",
+  "home": "https://www.sw.ac.kr",
+  "board": "https://sw.ac.kr/sw/promotion/bid.do",
+  "result_board": "",
+  "posts": 2,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "연암공과대학교",
+  "home": "https://www.yc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "청암대학교",
+  "home": "https://ca.ac.kr",
+  "board": "https://ca.ac.kr/boardList.do?boardId=CA_10&pageId=www46",
+  "result_board": "",
+  "posts": 3,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "기독간호대학교",
+  "home": "https://ccn.ac.kr",
+  "board": "https://ccn.ac.kr/board.jsp?sID=0502",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국방송통신대학교",
+  "home": "https://www.knou.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "대구사이버대학교",
+  "home": "https://www.dcu.ac.kr",
+  "board": "http://sub.dcu.ac.kr/bid/",
+  "result_board": "",
+  "posts": 90,
+  "it_posts": 29,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "세종사이버대학교",
+  "home": "https://sjcu.ac.kr/",
+  "board": "https://home.sjcu.ac.kr/ko/academic/purchasebid-notice.do",
+  "result_board": "",
+  "posts": 49,
+  "it_posts": 24,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "숭실사이버대학교",
+  "home": "https://www.kcu.ac",
+  "board": "https://www.kcu.ac/bbs?menuSeDe=20241002&menuSeq=1",
+  "result_board": "",
+  "posts": 21,
+  "it_posts": 15,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "화신사이버대학교",
+  "home": "https://www.hscu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "영진사이버대학교",
+  "home": "https://www.ycc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 I 대학 서울강서캠퍼스",
+  "home": "https://kangseo.kopo.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 III 대학 춘천캠퍼스",
+  "home": "https://www.kopo.ac.kr/chuncheon/index.do",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 IV 대학 아산캠퍼스",
+  "home": "https://kopo.ac.kr/asan",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 V 대학 전남캠퍼스",
+  "home": "https://www.kopo.ac.kr/jeonnam",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VII 대학 창원캠퍼스",
+  "home": "https://changwon.kopo.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VI 대학 영남융합기술캠퍼스",
+  "home": "https://kopo.ac.kr/yct",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 III 대학 원주캠퍼스",
+  "home": "https://kopo.ac.kr/wonju",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 II 대학 화성캠퍼스",
+  "home": "https://www.kopo.ac.kr/hwaseong",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "강원대학교",
+  "home": "https://www.kangwon.ac.kr/",
+  "board": "https://www.kangwon.ac.kr/www/selectBbsNttList.do?bbsNo=6&key=73",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "국립군산대학교",
+  "home": "https://www.kunsan.ac.kr",
+  "board": "http://g2b.go.kr/index.jsp",
+  "result_board": "https://www.kunsan.ac.kr/board/list.kunsan?boardId=BBS_0000022&menuCd=DOM_000000106001001000&contentsSid=234&cpath=",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "국립부경대학교",
+  "home": "https://www.pknu.ac.kr",
+  "board": "",
+  "result_board": "https://www.pknu.ac.kr/main/529",
+  "posts": 78,
+  "it_posts": 5,
+  "contracts": 5,
+  "status": "성공"
+ },
+ {
+  "school": "국립안동대학교",
+  "home": "https://www.andong.ac.kr/main/index.do",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "국립창원대학교",
+  "home": "https://www.changwon.ac.kr",
+  "board": "",
+  "result_board": "https://www.changwon.ac.kr/clean/na/ntt/selectNttList.do?mi=9343&bbsId=2755",
+  "posts": 8,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국체육대학교",
+  "home": "https://www.knsu.ac.kr/",
+  "board": "https://www.knsu.ac.kr/knsu/unilife/notice.do",
+  "result_board": "",
+  "posts": 83,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한경국립대학교",
+  "home": "https://www.hknu.ac.kr",
+  "board": "https://handi.hknu.ac.kr/kor/568/subview.do",
+  "result_board": "",
+  "posts": 11,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "감리교신학대학교",
+  "home": "https://www.mtu.ac.kr",
+  "board": "https://www.mtu.ac.kr/mtu/board/list.do?mId=163",
+  "result_board": "",
+  "posts": 14,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "건양대학교",
+  "home": "https://www.konyang.ac.kr",
+  "board": "https://www.konyang.ac.kr/cop/bbs/BBSMSTR_000000000598/selectBoardList.do",
+  "result_board": "",
+  "posts": 50,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대구한의대학교",
+  "home": "https://www.dhu.ac.kr",
+  "board": "https://www.dhu.ac.kr/pages/sub.htm?nav_code=dhu1576479449",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 15,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "신경주대학교",
+  "home": "https://www.gju.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "고려대학교(세종)",
+  "home": "https://sejong.korea.ac.kr",
+  "board": "https://sejong.korea.ac.kr/koreaSejong/7909/subview.do",
+  "result_board": "",
+  "posts": 21,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "광운대학교",
+  "home": "https://www.kw.ac.kr",
+  "board": "https://www.kw.ac.kr/ko/life/notice.jsp",
+  "result_board": "",
+  "posts": 107,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "강서대학교",
+  "home": "https://gangseo.ac.kr",
+  "board": "https://gangseo.ac.kr/kcua/boardList?menuCode=BC0704",
+  "result_board": "",
+  "posts": 52,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대구대학교",
+  "home": "https://www.daegu.ac.kr",
+  "board": "https://tigersext.daegu.ac.kr/nxrun/quickview.html?screenid=DGU_win_desktop&formname=ELEC_BIDD::BIDD0600.xfdl",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "대신대학교",
+  "home": "https://www.daeshin.ac.kr",
+  "board": "https://www.daeshin.ac.kr/html/05_community/01_5.php",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "서울기독대학교",
+  "home": "https://www.scu.ac.kr",
+  "board": "https://www.scu.ac.kr/community/bid-buy-notice",
+  "result_board": "",
+  "posts": 3,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동덕여자대학교",
+  "home": "https://www.dongduk.ac.kr",
+  "board": "https://www.dongduk.ac.kr/www/contents/kor-bidding-info.do",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 10,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동양대학교",
+  "home": "https://www.dyu.ac.kr",
+  "board": "https://www.dyu.ac.kr/plaza/news/news-inform/",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "목원대학교",
+  "home": "https://www.mokwon.ac.kr",
+  "board": "https://www.mokwon.ac.kr/kr/html/sub06/0606.html",
+  "result_board": "",
+  "posts": 20,
+  "it_posts": 5,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "삼육대학교",
+  "home": "https://www.syu.ac.kr",
+  "board": "https://www.syu.ac.kr/etc/bid-notice/",
+  "result_board": "",
+  "posts": 21,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서경대학교",
+  "home": "https://www.skuniv.ac.kr",
+  "board": "https://www.skuniv.ac.kr/notice",
+  "result_board": "",
+  "posts": 66,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서원대학교",
+  "home": "https://www.seowon.ac.kr",
+  "board": "https://www.seowon.ac.kr/bbs/seowon/397/artclList.do",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "성균관대학교",
+  "home": "https://www.skku.edu",
+  "board": "https://student.skku.edu/student/notice2.do",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "수원가톨릭대학교",
+  "home": "https://www.suwoncatholic.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "숭실대학교",
+  "home": "https://www.ssu.ac.kr",
+  "board": "http://www.ebiz4u.co.kr/home.do",
+  "result_board": "",
+  "posts": 301,
+  "it_posts": 38,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "안양대학교",
+  "home": "https://www.anyang.ac.kr/main/index.do",
+  "board": "https://www.anyang.ac.kr/main/communication/notice.do?mode=list",
+  "result_board": "",
+  "posts": 101,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "영남신학대학교",
+  "home": "https://www.ytus.ac.kr",
+  "board": "https://www.ytus.ac.kr/content/210",
+  "result_board": "",
+  "posts": 36,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "우석대학교",
+  "home": "https://www.woosuk.ac.kr",
+  "board": "https://www.woosuk.ac.kr/main/?menu=174",
+  "result_board": "",
+  "posts": 90,
+  "it_posts": 19,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "을지대학교",
+  "home": "https://www.eulji.ac.kr",
+  "board": "https://eulji.ac.kr/renewal/index.html?menuno=3161",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "인하대학교",
+  "home": "https://www.inha.ac.kr",
+  "board": "https://www.inha.ac.kr/kr/951/subview.do",
+  "result_board": "",
+  "posts": 14,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "중부대학교",
+  "home": "https://www.joongbu.ac.kr",
+  "board": "https://www.joongbu.ac.kr/menu.es?mid=a10504030000",
+  "result_board": "",
+  "posts": 6,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "청주대학교",
+  "home": "https://www.cju.ac.kr",
+  "board": "https://www.cju.ac.kr/www/selectBbsNttList.do?bbsNo=881&key=4577&searchCtgry=%EC%9E%85%EC%B0%B0",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "칼빈대학교",
+  "home": "https://www.calvin.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(연결 거부)"
+ },
+ {
+  "school": "한국기술교육대학교",
+  "home": "https://www.koreatech.ac.kr",
+  "board": "https://www.koreatech.ac.kr/menu.es?mid=a10807020000",
+  "result_board": "",
+  "posts": 118,
+  "it_posts": 31,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한남대학교",
+  "home": "https://www.hannam.ac.kr",
+  "board": "https://www.hannam.ac.kr/kor/community/community_04_1.html",
+  "result_board": "",
+  "posts": 125,
+  "it_posts": 7,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한서대학교",
+  "home": "https://www.hanseo.ac.kr",
+  "board": "https://www.hanseo.ac.kr/boardCnts/list.do?boardID=306&m=040109&s=hs",
+  "result_board": "",
+  "posts": 120,
+  "it_posts": 8,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한양대학교",
+  "home": "https://www.hanyang.ac.kr",
+  "board": "https://portal.hanyang.ac.kr/huas/Hy2bAct/hy2b.do",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "호남대학교",
+  "home": "https://www.honam.ac.kr",
+  "board": "https://www.honam.ac.kr/GeneralNotice",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "가톨릭꽃동네대학교",
+  "home": "https://www.kkot.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "부산장신대학교",
+  "home": "https://www.bpu.ac.kr",
+  "board": "https://www.bpu.ac.kr/Board/BoardList.aspx?BoardMstNo=9&CategoryNo=1",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 18,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "화성의과학대학교",
+  "home": "https://www.hsmu.ac.kr/",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "우송대학교",
+  "home": "https://www.wsu.ac.kr",
+  "board": "https://www.wsu.ac.kr/page/index.jsp?code=setc0301",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "남서울대학교",
+  "home": "https://www.nsu.ac.kr/",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "창신대학교",
+  "home": "https://www.cs.ac.kr",
+  "board": "https://www.cs.ac.kr/board/board_community9",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대구교육대학교",
+  "home": "https://www.dnue.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "전주교육대학교",
+  "home": "https://www.jnue.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "호원대학교",
+  "home": "https://www.howon.ac.kr",
+  "board": "https://www.howon.ac.kr/web/_community/?code=H012",
+  "result_board": "",
+  "posts": 20,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대구경북과학기술원",
+  "home": "https://www.dgist.ac.kr",
+  "board": "https://www.dgist.ac.kr/prog/bidPbanc/kor/sub06_01_04/list.do",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "상명대학교",
+  "home": "https://www.smuc.ac.kr",
+  "board": "https://www.smuc.ac.kr/kor/intro/Information4.do",
+  "result_board": "",
+  "posts": 57,
+  "it_posts": 11,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경남도립거창대학",
+  "home": "https://www.gc.ac.kr",
+  "board": "https://www.gc.ac.kr/CW0401/101004.asp?mi=101004",
+  "result_board": "",
+  "posts": 28,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "가톨릭상지대학교",
+  "home": "https://www.csj.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "영남외국어대학",
+  "home": "https://www.yflc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(Error)"
+ },
+ {
+  "school": "광양보건대학교",
+  "home": "https://www.gy.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "강동대학교",
+  "home": "https://www.gangdong.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "김포대학교",
+  "home": "https://ukp.ac.kr",
+  "board": "https://ukp.ac.kr/%ed%99%8d%eb%b3%b4%ec%84%bc%ed%84%b0/%eb%8c%80%ed%95%99%ec%86%8c%ec%8b%9d/%ec%9e%85%ec%b0%b0%ea%b3%b5%ec%a7%80?uid=173665&mod=document&pageid=1 , https://ukp.ac.kr/%ed%99%8d%eb%b3%b4%ec%84%bc%ed%84%b0/%eb%8c%80%ed%95%99%ec%86%8c%ec%8b%9d/%ec%9e%85%ec%b0%b0%ea%b3%b5%ec%a7%80?uid=95913&mod=document&pageid=1",
+  "result_board": "",
+  "posts": 2,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대구보건대학교",
+  "home": "https://www.dhc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "대원대학교",
+  "home": "https://www.daewon.ac.kr",
+  "board": "https://www.daewon.ac.kr/mbs/daewon/jsp/board/list.jsp?boardId=24&id=daewon_050105000000",
+  "result_board": "",
+  "posts": 13,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대전과학기술대학교",
+  "home": "https://www.dst.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "동남보건대학교",
+  "home": "https://www.dongnam.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "동양미래대학교",
+  "home": "https://www.dongyang.ac.kr/",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "두원공과대학교",
+  "home": "https://www.doowon.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "문경대학교",
+  "home": "https://www.mkc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "부산여자대학교",
+  "home": "https://www.bwc.ac.kr",
+  "board": "https://www.bwc.ac.kr/sch/sub04/sub0404_list.asp#",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 6,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울예술대학교",
+  "home": "https://www.seoularts.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "순천제일대학교",
+  "home": "https://www.suncheon.ac.kr",
+  "board": "https://www.suncheon.ac.kr/kor/0001/0009/0003/",
+  "result_board": "",
+  "posts": 2,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "신안산대학교",
+  "home": "https://www.sau.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "연암대학교",
+  "home": "https://www.yonam.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "영진전문대학교",
+  "home": "https://www.yju.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "원광보건대학교",
+  "home": "https://www.wu.ac.kr",
+  "board": "https://www.wu.ac.kr/wu/1355/subview.do",
+  "result_board": "",
+  "posts": 105,
+  "it_posts": 6,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "전남과학대학교",
+  "home": "https://www.cntu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "조선이공대학교",
+  "home": "https://www.cst.ac.kr",
+  "board": "https://www.cst.ac.kr/board/?board=bid&mn=1160&site=basic",
+  "result_board": "",
+  "posts": 80,
+  "it_posts": 15,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "백석문화대학교",
+  "home": "https://www.bscu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "충청대학교",
+  "home": "https://www.ok.ac.kr",
+  "board": "https://www.ok.ac.kr/www/selectBbsNttList.do?bbsNo=63&key=38",
+  "result_board": "https://www.ok.ac.kr/www/selectBbsNttList.do?bbsNo=64&key=39",
+  "posts": 10,
+  "it_posts": 5,
+  "contracts": 2,
+  "status": "성공"
+ },
+ {
+  "school": "한양여자대학교",
+  "home": "https://www.hywoman.ac.kr",
+  "board": "https://www.hywoman.ac.kr/ko/cms/FrCon/index.do?MENU_ID=1370",
+  "result_board": "",
+  "posts": 15,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "부산예술대학교",
+  "home": "https://www.busanarts.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "서정대학교",
+  "home": "https://www.seojeong.ac.kr",
+  "board": "https://www.seojeong.ac.kr/main/sju/university-announcements.do#cate",
+  "result_board": "",
+  "posts": 67,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국승강기대학교",
+  "home": "https://www.klc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "경복대학교",
+  "home": "https://www.kbu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "수성대학교",
+  "home": "https://www.sc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "오산대학교",
+  "home": "https://www.osan.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "충남도립대학교",
+  "home": "https://www.cnsu.ac.kr",
+  "board": "https://www.cnsu.ac.kr/univ/unilife/notice.do?catNo=6",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "서울여자간호대학교",
+  "home": "https://www.snjc.ac.kr",
+  "board": "https://www.snjc.ac.kr/public_2017/sub/square/bid_board_list.jsp",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "순복음총회신학교",
+  "home": "https://www.kcc.ac.kr",
+  "board": "https://kcc.ac.kr/main/sub.html?pageCode=58",
+  "result_board": "",
+  "posts": 44,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "부산디지털대학교",
+  "home": "https://www.bdu.ac.kr",
+  "board": "https://www.bdu.ac.kr/bduhome/sub01_08_02.do?mode=view&articleNo=66765 , https://www.bdu.ac.kr/bduhome/sub01_08_02.do?mode=view&articleNo=66667",
+  "result_board": "",
+  "posts": 4,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국열린사이버대학교",
+  "home": "https://www.ocu.ac.kr",
+  "board": "https://www.ocu.ac.kr/InfoBoard.do?cmd=viewBoardList&menuInfoId=home_00056",
+  "result_board": "",
+  "posts": 36,
+  "it_posts": 31,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "디지털서울문화예술대학교",
+  "home": "https://www.scau.ac.kr",
+  "board": "https://www.scau.ac.kr/Application/09_BBS/BF_Main.aspx?MRID=75&URID=55",
+  "result_board": "",
+  "posts": 14,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "글로벌사이버대학교",
+  "home": "https://www.global.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국복지사이버대학교",
+  "home": "https://www.corea.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 I 대학 성남캠퍼스",
+  "home": "https://seongnam.kopo.ac.kr/",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 III 대학 강릉캠퍼스",
+  "home": "https://kopo.ac.kr/gangneung",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 IV 대학 충남캠퍼스",
+  "home": "https://www.kopo.ac.kr/chungnam",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 V 대학 익산캠퍼스",
+  "home": "https://www.kopo.ac.kr/iksan",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VII 대학 부산캠퍼스",
+  "home": "https://www.kopo.ac.kr/busan",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 특성화대학 반도체융합캠퍼스",
+  "home": "https://www.kopo.ac.kr/semi",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 I 대학 제주캠퍼스",
+  "home": "https://jeju.kopo.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VII 대학 진주캠퍼스",
+  "home": "https://jinju.kopo.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "경북대학교",
+  "home": "https://www.knu.ac.kr",
+  "board": "https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde=1&menu_idx=67",
+  "result_board": "https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde=19&menu_idx=103",
+  "posts": 73,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "국립금오공과대학교",
+  "home": "https://www.kumoh.ac.kr",
+  "board": "https://www.kumoh.ac.kr/ko/sub06_01_03.do",
+  "result_board": "",
+  "posts": 8,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "부산대학교",
+  "home": "https://www.pusan.ac.kr",
+  "board": "",
+  "result_board": "https://www.pusan.ac.kr/clean/CMS/Board/Board.do?mCode=MN008",
+  "posts": 19,
+  "it_posts": 10,
+  "contracts": 10,
+  "status": "성공"
+ },
+ {
+  "school": "전남대학교",
+  "home": "https://www.chonnam.ac.kr",
+  "board": "https://www.jnu.ac.kr/WebApp/web/HOM/COM/Board/board.aspx?boardID=5&cate=13",
+  "result_board": "",
+  "posts": 99,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "충남대학교",
+  "home": "https://www.cnu.ac.kr",
+  "board": "https://plus.cnu.ac.kr/_prog/_board/?code=sub06_060401&site_dvs_cd=kr&menu_dvs_cd=060401",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "국립한국해양대학교",
+  "home": "https://www.kmou.ac.kr",
+  "board": "",
+  "result_board": "https://www.kmou.ac.kr/kmou/na/ntt/selectNttList.do?mi=3609&bbsId=11605",
+  "posts": 9,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "국립한밭대학교",
+  "home": "https://www.hanbat.ac.kr",
+  "board": "https://www.hanbat.ac.kr/bbs/BBSMSTR_000000001141.do",
+  "result_board": "https://fund.hanbat.ac.kr/bbs/BBSMSTR_000000001138.do",
+  "posts": 65,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "강남대학교",
+  "home": "https://www.kangnam.ac.kr",
+  "board": "https://gumae.kangnam.ac.kr/",
+  "result_board": "",
+  "posts": 1,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경기대학교",
+  "home": "https://www.kyonggi.ac.kr",
+  "board": "https://www.kyonggi.ac.kr/www/selectBbsNttList.do?key=5140&bbsNo=681",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경성대학교",
+  "home": "https://ks.ac.kr",
+  "board": "https://kscms.ks.ac.kr/kor/CMS/Board/Board.do?mCode=MN107",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "경희대학교",
+  "home": "https://www.khu.ac.kr",
+  "board": "https://www.khu.ac.kr/kor/user/bbs/BMSR00040/list.do?menuNo=200282",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 9,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "고신대학교",
+  "home": "https://www.kosin.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "광주가톨릭대학교",
+  "home": "https://www.gjcatholic.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(주소 없음(DNS))"
+ },
+ {
+  "school": "극동대학교",
+  "home": "https://www.kdu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "대구예술대학교",
+  "home": "https://www.dgau.ac.kr",
+  "board": "https://www.dgau.ac.kr/notice_bid",
+  "result_board": "",
+  "posts": 9,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대전가톨릭대학교",
+  "home": "https://www.dcatholic.ac.kr",
+  "board": "https://www.dcatholic.ac.kr/bbs/board.php?bo_table=notice&wr_id=25597",
+  "result_board": "",
+  "posts": 6,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "덕성여자대학교",
+  "home": "https://www.duksung.ac.kr",
+  "board": "https://www.duksung.ac.kr/bbs/board.do?bsIdx=39&menuId=1060",
+  "result_board": "",
+  "posts": 90,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동서대학교",
+  "home": "https://www.dongseo.ac.kr",
+  "board": "https://www.dongseo.ac.kr/kr/#WMD2_6",
+  "result_board": "",
+  "posts": 40,
+  "it_posts": 5,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동의대학교",
+  "home": "https://www.deu.ac.kr",
+  "board": "https://www.deu.ac.kr/www/deu-bids.do",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 25,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "배재대학교",
+  "home": "https://www.pcu.ac.kr",
+  "board": "https://portal.pcu.ac.kr/checkMenu.jsp?p0=yWiuJE2N58Av67KR",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "상명대학교",
+  "home": "https://www.smu.ac.kr",
+  "board": "https://www.smu.ac.kr/kor/intro/Information4.do",
+  "result_board": "",
+  "posts": 57,
+  "it_posts": 11,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울신학대학교",
+  "home": "https://www.stu.ac.kr",
+  "board": "https://www.stu.ac.kr/CmsHome/stu06_03_04.eznic",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "선문대학교",
+  "home": "https://www.sunmoon.ac.kr",
+  "board": "https://bid.sunmoon.ac.kr/index.asp",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "성신여자대학교",
+  "home": "https://www.sungshin.ac.kr",
+  "board": "https://www.sungshin.ac.kr/main_kor/11118/subview.do",
+  "result_board": "",
+  "posts": 62,
+  "it_posts": 11,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "수원대학교",
+  "home": "https://www.suwon.ac.kr",
+  "board": "https://www.suwon.ac.kr/index.html?menuno=678",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "신라대학교",
+  "home": "https://www.silla.ac.kr",
+  "board": "https://www.silla.ac.kr/ko/index.php?pCode=bid",
+  "result_board": "",
+  "posts": 15,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "연세대학교",
+  "home": "https://www.yonsei.ac.kr",
+  "board": "https://www.yonsei.ac.kr/sc/213/subview.do",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "유원대학교",
+  "home": "https://www.U1.ac.kr",
+  "board": "https://www.u1.ac.kr/u1/community/bidding.do",
+  "result_board": "",
+  "posts": 83,
+  "it_posts": 8,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "울산대학교",
+  "home": "https://www.ulsan.ac.kr",
+  "board": "https://www.ulsan.ac.kr/kor/CMS/HaksaProgramMgr/list.do?mCode=MN115",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "이화여자대학교",
+  "home": "https://www.ewha.ac.kr",
+  "board": "https://www.ewha.ac.kr/ewha/news/notice.do",
+  "result_board": "",
+  "posts": 70,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "장로회신학대학교",
+  "home": "https://www.puts.ac.kr",
+  "board": "https://www.puts.ac.kr/www/board/list.general.asp?design=lounge&m1=6&m2=9&m3=1&bd_name=jangshin_zEtc02",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "중앙대학교",
+  "home": "https://www.cau.ac.kr",
+  "board": "https://www.cau.ac.kr/cms/FR_CON/index.do?MENU_ID=1660",
+  "result_board": "",
+  "posts": 75,
+  "it_posts": 16,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "총신대학교",
+  "home": "https://www.chongshin.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "평택대학교",
+  "home": "https://www.ptu.ac.kr",
+  "board": "https://www.ptu.ac.kr/www/419/subview.do",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "한국성서대학교",
+  "home": "https://www.bible.ac.kr",
+  "board": "https://www.bible.ac.kr/ko/campus/recruit",
+  "result_board": "",
+  "posts": 2,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한동대학교",
+  "home": "https://www.handong.edu",
+  "board": "https://www.handong.edu/kor/square/notice/bid/",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한성대학교",
+  "home": "https://www.hansung.ac.kr",
+  "board": "https://www.hansung.ac.kr/hansung/6174/subview.do",
+  "result_board": "",
+  "posts": 5,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울한영대학교",
+  "home": "https://shyu.ac.kr",
+  "board": "https://shyu.ac.kr/fro_end/html/dep_05/5140.php?bbs_idx=7591&pageno=1&pagekind=c&bbsid=bidding&cafeid=&ref_code=&c_pagesize=8&gopage=/fro_end/html/dep_05/5140.php",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "호남신학대학교",
+  "home": "https://www.htus.ac.kr",
+  "board": "https://www.htus.ac.kr/board/board.php?b_id=028",
+  "result_board": "",
+  "posts": 174,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "남부대학교",
+  "home": "https://www.nambu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "금강대학교",
+  "home": "https://www.ggu.ac.kr",
+  "board": "https://ggu.ac.kr/sub01080106",
+  "result_board": "",
+  "posts": 25,
+  "it_posts": 12,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동명대학교",
+  "home": "https://www.tu.ac.kr",
+  "board": "https://www.tu.ac.kr/tuhome/sub07_01_08.do",
+  "result_board": "",
+  "posts": 2,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "김천대학교",
+  "home": "https://www.gimcheon.ac.kr",
+  "board": "https://www.gimcheon.ac.kr/_prog/bbs/?code=0604&site_dvs_cd=gimcheon&menu_dvs_cd=0604",
+  "result_board": "",
+  "posts": 75,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "초당대학교",
+  "home": "https://www.cdu.ac.kr",
+  "board": "https://www.cdu.ac.kr/mod/board/list.do?MID=KR_06010400",
+  "result_board": "",
+  "posts": 22,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "울산과학기술원",
+  "home": "https://www.unist.ac.kr",
+  "board": "https://www.unist.ac.kr/unist/etc/notification/bid.do",
+  "result_board": "https://www.unist.ac.kr/unist/introduction/veterinary.do",
+  "posts": 14,
+  "it_posts": 142,
+  "contracts": 143,
+  "status": "성공"
+ },
+ {
+  "school": "부산교육대학교",
+  "home": "https://www.bnue.ac.kr",
+  "board": "https://www.bnue.ac.kr/board/community01_05",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "진주교육대학교",
+  "home": "https://www.cue.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "청운대학교",
+  "home": "https://www.chungwoon.ac.kr",
+  "board": "https://home.chungwoon.ac.kr/home/selectBbsNttList.do?bbsNo=50&key=814",
+  "result_board": "",
+  "posts": 31,
+  "it_posts": 10,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "인천대학교",
+  "home": "https://www.inu.ac.kr/",
+  "board": "https://www.inu.ac.kr/inu/1528/subview.do",
+  "result_board": "https://www.inu.ac.kr/inu/1526/subview.do",
+  "posts": 5,
+  "it_posts": 1,
+  "contracts": 1,
+  "status": "성공"
+ },
+ {
+  "school": "한국전통문화대학교",
+  "home": "https://www.knuh.ac.kr",
+  "board": "",
+  "result_board": "https://www.knuh.ac.kr/kr/brd/list.do?tplBaseId=&mnuBaseId=MNU0001335&topBaseId=MNU0000004&tplSer=212",
+  "posts": 21,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경남도립남해대학",
+  "home": "https://univ.namhae.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "거제대학교",
+  "home": "https://www.koje.ac.kr",
+  "board": "https://www.koje.ac.kr/www/board/16",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경인여자대학교",
+  "home": "https://www.kiwu.ac.kr",
+  "board": "https://www.kiwu.ac.kr/ko/cms/FR_CON/index.do?MENU_ID=2230",
+  "result_board": "",
+  "posts": 3,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "광주보건대학교",
+  "home": "https://www.ghu.ac.kr",
+  "board": "https://www.ghu.ac.kr/BiddingAnnouncement",
+  "result_board": "https://www.ghu.ac.kr/Contract",
+  "posts": 78,
+  "it_posts": 9,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "나주대학교",
+  "home": "https://www.naju.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "농협대학교",
+  "home": "https://www.nonghyup.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "대구과학대학교",
+  "home": "https://www.tsu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "동서울대학교",
+  "home": "https://www.du.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "아주자동차대학교",
+  "home": "https://www.motor.ac.kr",
+  "board": "https://www.motor.ac.kr/CmsHome/commu_04.aspx",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동강대학교",
+  "home": "https://www.dkc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "동원대학교",
+  "home": "https://www.tw.ac.kr",
+  "board": "https://www.tw.ac.kr/bbs/board.do?bsIdx=11&menuId=936",
+  "result_board": "",
+  "posts": 85,
+  "it_posts": 8,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "마산대학교",
+  "home": "https://www.masan.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "배화여자대학교",
+  "home": "https://www.baewha.ac.kr",
+  "board": "https://www.baewha.ac.kr/bbs/board.do?bsIdx=720&menuId=2926",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 10,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "부산과학기술대학교",
+  "home": "https://bist.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "서일대학교",
+  "home": "https://www.seoil.ac.kr",
+  "board": "https://www.seoil.ac.kr/global/762/subview.do",
+  "result_board": "",
+  "posts": 59,
+  "it_posts": 16,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "숭의여자대학교",
+  "home": "https://www.sewu.ac.kr",
+  "board": "https://www.sewu.ac.kr/sewu/news/notice.do",
+  "result_board": "",
+  "posts": 67,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "안산대학교",
+  "home": "https://www.ansan.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "영남이공대학교",
+  "home": "https://www.ync.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "용인예술과학대학교",
+  "home": "https://www.ysc.ac.kr",
+  "board": "http://www.ysc.ac.kr/kor/CMS/Board/Board.do?mCode=MN137",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "유한대학교",
+  "home": "https://www.yuhan.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "전주비전대학교",
+  "home": "https://www.jvision.ac.kr",
+  "board": "https://www.jvision.ac.kr/vision/main/?menu=193",
+  "result_board": "",
+  "posts": 120,
+  "it_posts": 14,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "충북보건과학대학교",
+  "home": "https://www.chsu.ac.kr",
+  "board": "https://www.chsu.ac.kr/page.jsp?menuId=4000000086",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "청강문화산업대학교",
+  "home": "https://www.ck.ac.kr",
+  "board": "https://www.ck.ac.kr/archives/category/ck-notice/bidding",
+  "result_board": "",
+  "posts": 36,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "국제대학교",
+  "home": "https://www.kookje.ac.kr",
+  "board": "https://www.kookje.ac.kr/kor/index.php?pCode=bidding",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한영대학교",
+  "home": "https://www.hanyeong.ac.kr",
+  "board": "https://www.hanyeong.ac.kr/main/Page/Sub.aspx?mc=67",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "전남도립대학교",
+  "home": "https://www.dorip.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(주소 없음(DNS))"
+ },
+ {
+  "school": "송곡대학교",
+  "home": "https://www.songgok.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국골프과학기술대학교",
+  "home": "https://www.kg.ac.kr",
+  "board": "https://www.kg.ac.kr/fro_end/html/dep_05/5220.php",
+  "result_board": "",
+  "posts": 7,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경북전문대학교",
+  "home": "https://www.kbc.ac.kr",
+  "board": "https://www.kbc.ac.kr/kor/CMS/Board/Board.do?mCode=MN114",
+  "result_board": "",
+  "posts": 3,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "안동과학대학교",
+  "home": "https://www.asc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "인하공업전문대학",
+  "home": "https://www.inhatc.ac.kr",
+  "board": "https://www.inhatc.ac.kr/kr/541/subview.do , https://www.inhatc.ac.kr/kr/542/subview.do",
+  "result_board": "",
+  "posts": 25,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "포항대학교",
+  "home": "https://www.pohang.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "조선간호대학교",
+  "home": "https://www.cnc.ac.kr",
+  "board": "https://www.cnc.ac.kr/board/download/?board=notice&amp;site=cnc&amp;mn=48&amp;type=download&amp;post_idx=257065&amp;page=1&amp;per_page=5&amp;num_links=15&amp;real_type=&amp;file_idx=19984",
+  "result_board": "",
+  "posts": 8,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경희사이버대학교",
+  "home": "https://www.khcu.ac.kr",
+  "board": "https://www.khcu.ac.kr/notice/list.do?condition=all&subCategory=PURCHASE&keyword=&category=GENERAL",
+  "result_board": "",
+  "posts": 16,
+  "it_posts": 15,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울디지털대학교",
+  "home": "https://www.sdu.ac.kr",
+  "board": "https://www.sdu.ac.kr/ko/cms/FR_CON/index.do?MENU_ID=540",
+  "result_board": "",
+  "posts": 15,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "원광디지털대학교",
+  "home": "https://www.wdu.ac.kr",
+  "board": "https://www.wdu.ac.kr/newscenter/biddingList.do",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "한양사이버대학교",
+  "home": "https://www.hycu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "건양사이버대학교",
+  "home": "https://www.kycu.ac.kr",
+  "board": "http://www.kycu.ac.kr/cop/bbs/BBSMSTR_000000000081/selectBoardList.do",
+  "result_board": "",
+  "posts": 51,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "ICT폴리텍대학",
+  "home": "https://www.ict.ac.kr",
+  "board": "https://www.ict.ac.kr/board/detail/notice/1433",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "한국폴리텍 II 대학 인천캠퍼스",
+  "home": "https://www.kopo.ac.kr/incheon",
+  "board": "https://www.kopo.ac.kr/incheon/board.do?menu=6900&ctgryCode=BSCTGY000000005#",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국폴리텍 IV 대학 대전캠퍼스",
+  "home": "https://www.kopo.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 V 대학 광주캠퍼스",
+  "home": "https://www.kopo.ac.kr/gwangju",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VI 대학 대구캠퍼스",
+  "home": "https://daegu.kopo.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VII 대학 울산캠퍼스",
+  "home": "https://kopo.ac.kr/ulsan",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 특성화대학 항공캠퍼스",
+  "home": "https://www.kopo.ac.kr/kapc",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 V 대학 순천캠퍼스",
+  "home": "https://kopo.ac.kr/suncheon",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VII 대학 동부산캠퍼스",
+  "home": "https://www.kopo.ac.kr/dongbusan",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "경상국립대학교",
+  "home": "https://www.gnu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "국립목포대학교",
+  "home": "https://www.mokpo.ac.kr",
+  "board": "",
+  "result_board": "https://www.mokpo.ac.kr/www/1571/subview.do",
+  "posts": 10,
+  "it_posts": 6,
+  "contracts": 6,
+  "status": "성공"
+ },
+ {
+  "school": "서울대학교",
+  "home": "https://www.snu.ac.kr",
+  "board": "https://www.snu.ac.kr/snunow/notice/bidding",
+  "result_board": "https://clean.snu.ac.kr/%EC%88%98%EC%9D%98%EA%B3%84%EC%95%BD%ED%98%84%ED%99%A9/",
+  "posts": 13,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "전북대학교",
+  "home": "https://www.jbnu.ac.kr",
+  "board": "",
+  "result_board": "https://clean.jbnu.ac.kr/clean/2531/subview.do",
+  "posts": 37,
+  "it_posts": 150,
+  "contracts": 154,
+  "status": "성공"
+ },
+ {
+  "school": "충북대학교",
+  "home": "https://www.chungbuk.ac.kr",
+  "board": "https://www.cbnu.ac.kr/www/index.do",
+  "result_board": "",
+  "posts": 15,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "국립한국교통대학교",
+  "home": "https://www.ut.ac.kr",
+  "board": "",
+  "result_board": "https://www.ut.ac.kr/cop/bbs/BBSMSTR_000000001261/selectBoardList.do",
+  "posts": 36,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울시립대학교",
+  "home": "https://www.uos.ac.kr",
+  "board": "https://www.uos.ac.kr/korFree/list.do?list_id=FA22",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "건국대학교",
+  "home": "https://www.konkuk.ac.kr",
+  "board": "https://www.konkuk.ac.kr/konkuk/2243/subview.do",
+  "result_board": "",
+  "posts": 34,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경남대학교",
+  "home": "https://www.kyungnam.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "가천대학교",
+  "home": "https://www.gachon.ac.kr",
+  "board": "https://www.gachon.ac.kr/buying/2604/subview.do , https://www.gachon.ac.kr/bbs/buying/357/artclList.do",
+  "result_board": "",
+  "posts": 56,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "계명대학교",
+  "home": "https://www.kmu.ac.kr",
+  "board": "https://www.kmu.ac.kr/uni/main/page.jsp?mnu_uid=148&cmd=2&parm_bod_uid=271259",
+  "result_board": "",
+  "posts": 4,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "가톨릭관동대학교",
+  "home": "https://www.cku.ac.kr",
+  "board": "https://www.cku.ac.kr/cku_kr/5787/subview.do",
+  "result_board": "",
+  "posts": 67,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "광주여자대학교",
+  "home": "https://www.kwu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(주소 없음(DNS))"
+ },
+ {
+  "school": "나사렛대학교",
+  "home": "https://www.kornu.ac.kr",
+  "board": "https://www.kornu.ac.kr/mbs/kornukr/jsp/board/list.jsp?boardId=26&id=kornukr_080100000000",
+  "result_board": "",
+  "posts": 91,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대구가톨릭대학교",
+  "home": "https://www.cu.ac.kr",
+  "board": "https://www.cu.ac.kr/support/tender",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "대전대학교",
+  "home": "https://www.dju.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "동국대학교",
+  "home": "https://www.dongguk.edu",
+  "board": "https://gm.dongguk.edu/article/bid/list",
+  "result_board": "",
+  "posts": 62,
+  "it_posts": 16,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동신대학교",
+  "home": "https://www.dsu.ac.kr",
+  "board": "https://www.dsu.ac.kr/kr/index.php?pCode=bid",
+  "result_board": "",
+  "posts": 17,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "루터대학교",
+  "home": "https://www.ltu.ac.kr",
+  "board": "http://ltu.ac.kr/board/bbs/board.php?bo_table=I2331",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "부산가톨릭대학교",
+  "home": "https://www.cup.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "상지대학교",
+  "home": "https://www.sangji.ac.kr",
+  "board": "https://www.sangji.ac.kr/prog/bbsArticle/BBSMSTR_000000000688/list.do",
+  "result_board": "https://www.sangji.ac.kr/prog/bbsArticle/BBSMSTR_000000006692/list.do",
+  "posts": 71,
+  "it_posts": 10,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "서울여자대학교",
+  "home": "https://www.swu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "성결대학교",
+  "home": "https://www.sungkyul.ac.kr",
+  "board": "https://www.sungkyul.ac.kr/skukr/350/subview.do",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "세명대학교",
+  "home": "https://www.semyung.ac.kr",
+  "board": "https://www.semyung.ac.kr/prog/vwBoard/bbs02/kor/sub08_02_05/list.do",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "숙명여자대학교",
+  "home": "https://www.sookmyung.ac.kr/",
+  "board": "https://www.sookmyung.ac.kr/kr/news/bidding.do",
+  "result_board": "",
+  "posts": 13,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "아신대학교",
+  "home": "https://www.acts.ac.kr",
+  "board": "https://www.acts.ac.kr/modules/board/bd_list.asp?id=bidding&left=unilife4_1",
+  "result_board": "",
+  "posts": 13,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "연세대학교(미래)",
+  "home": "https://www.yonsei.ac.kr/wj",
+  "board": "https://mirae.yonsei.ac.kr/sc/213/subview.do",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "영산선학대학교",
+  "home": "https://www.youngsan.ac.kr",
+  "board": "https://youngsan.ac.kr/bbs/board.php?bo_table=info10",
+  "result_board": "",
+  "posts": 4,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "원광대학교",
+  "home": "https://www.wku.ac.kr",
+  "board": "https://intra.wku.ac.kr/services/contract/",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "인제대학교",
+  "home": "https://www.inje.ac.kr",
+  "board": "https://www.inje.ac.kr/kor/setRoute/B_Page.asp?pCode=PR040050000&varCat=12",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "전주대학교",
+  "home": "https://www.jj.ac.kr",
+  "board": "https://www.jj.ac.kr/jj/community/notice06.do",
+  "result_board": "",
+  "posts": 64,
+  "it_posts": 9,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "중앙승가대학교",
+  "home": "https://admission.sangha.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "추계예술대학교",
+  "home": "https://www.chugye.ac.kr",
+  "board": "https://www.chugye.ac.kr/mbs/university/jsp/board/list.jsp?boardId=6784&id=university_050100000000",
+  "result_board": "",
+  "posts": 61,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "차의과학대학교",
+  "home": "https://www.cha.ac.kr",
+  "board": "https://www.cha.ac.kr/?page_id=3592",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국외국어대학교",
+  "home": "https://www.hufs.ac.kr",
+  "board": "https://www.hufs.ac.kr/hufs/11281/subview.do",
+  "result_board": "",
+  "posts": 59,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한라대학교",
+  "home": "https://www.halla.ac.kr",
+  "board": "https://www.halla.ac.kr/kr/250/subview.do",
+  "result_board": "",
+  "posts": 11,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한세대학교",
+  "home": "https://www.hansei.ac.kr",
+  "board": "https://hansei.ac.kr/view.do?no=12073",
+  "result_board": "",
+  "posts": 6,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한일장신대학교",
+  "home": "https://www.hanil.ac.kr",
+  "board": "https://www.hanil.ac.kr/portal/default/bbs/list.do?menuId=M0004000100050000",
+  "result_board": "",
+  "posts": 1,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "호서대학교",
+  "home": "https://www.hoseo.ac.kr",
+  "board": "https://www.hoseo.ac.kr/Home/BBSList.mbz?action=MAPP_1708230123",
+  "result_board": "",
+  "posts": 120,
+  "it_posts": 18,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "예원예술대학교",
+  "home": "https://www.yewon.ac.kr",
+  "board": "https://www.yewon.ac.kr/main/?menu=193",
+  "result_board": "",
+  "posts": 11,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "예수대학교",
+  "home": "https://www.jesus.ac.kr",
+  "board": "https://www.jesus.ac.kr/main/?menu=59",
+  "result_board": "",
+  "posts": 30,
+  "it_posts": 2,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대전신학대학교",
+  "home": "https://www.daejeon.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "송원대학교",
+  "home": "https://www.songwon.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "한국공학대학교",
+  "home": "https://www.tukorea.ac.kr",
+  "board": "https://www.tukorea.ac.kr/tukorea/1104/subview.do",
+  "result_board": "",
+  "posts": 8,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "공주교육대학교",
+  "home": "https://www.gjue.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "서울교육대학교",
+  "home": "https://www.snue.ac.kr",
+  "board": "https://www.snue.ac.kr/snue/na/ntt/selectNttList.do?mi=1312&bbsId=1085",
+  "result_board": "",
+  "posts": 4,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "청주교육대학교",
+  "home": "https://www.cje.ac.kr",
+  "board": "https://www.cje.ac.kr/web/board/brdList.do?menu_cd=000206",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국과학기술원",
+  "home": "https://www.kaist.ac.kr",
+  "board": "https://www.kaist.ac.kr/kr/html/footer/0815.html",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "신한대학교",
+  "home": "https://www.shinhan.ac.kr/",
+  "board": "https://www.shinhan.ac.kr/kr/69/subview.do",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 11,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국에너지공과대학교",
+  "home": "https://www.kentech.ac.kr/",
+  "board": "https://kentech.ac.kr/submenu.do?menuurl=EOS99%2baJKXZEsaOKij%2bfJw%3d%3d",
+  "result_board": "https://www.kentech.ac.kr/submenu.do?menuurl=ENtSF31itjStr1wSY8GCMA%3D%3D",
+  "posts": 4,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "경북도립대학교",
+  "home": "https://www.gpc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "호산대학교",
+  "home": "https://www.hosan.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "계명문화대학교",
+  "home": "https://www.kmcu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "구미대학교",
+  "home": "https://www.gumi.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "전주기전대학",
+  "home": "https://www.kijeon.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "접속 불가(응답 없음)"
+ },
+ {
+  "school": "대경대학교",
+  "home": "https://www.tk.ac.kr",
+  "board": "https://www.tk.ac.kr/bbs/board.php?bo_table=tender",
+  "result_board": "",
+  "posts": 48,
+  "it_posts": 4,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "대동대학교",
+  "home": "https://www.daedong.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "대전보건대학교",
+  "home": "https://www.hit.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "재능대학교",
+  "home": "https://www.jeiu.ac.kr",
+  "board": "https://jeiu.ac.kr/board/list.asp?BoardID=00003",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 14,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동아방송예술대학교",
+  "home": "https://www.dima.ac.kr",
+  "board": "https://www.dima.ac.kr/?p=207",
+  "result_board": "",
+  "posts": 72,
+  "it_posts": 23,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "동의과학대학교",
+  "home": "https://www.dit.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "명지전문대학",
+  "home": "https://www.mjc.ac.kr",
+  "board": "https://www.mjc.ac.kr/bbs/data/list.do?menu_idx=2095",
+  "result_board": "",
+  "posts": 60,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "백제예술대학교",
+  "home": "https://www.paekche.ac.kr",
+  "board": "https://www.paekche.ac.kr/ict/pms/board.php?bo_table=main_cms_003",
+  "result_board": "",
+  "posts": 4,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "부천대학교",
+  "home": "https://www.bc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "수원여자대학교",
+  "home": "https://www.swc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "신구대학교",
+  "home": "https://www.shingu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "동원과학기술대학교",
+  "home": "https://www.dist.ac.kr",
+  "board": "https://www.dist.ac.kr/kor/CMS/Board/Board.do?mCode=MN110&mode=view&mgr_seq=153&board_seq=66553 , https://www.dist.ac.kr/kor/CMS/Board/Board.do?mCode=MN110&mode=view&mgr_seq=153&board_seq=60883",
+  "result_board": "",
+  "posts": 1,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "강릉영동대학교",
+  "home": "https://www.gyu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "울산과학대학교",
+  "home": "https://www.uc.ac.kr",
+  "board": "https://www.uc.ac.kr/kr/CMS/Board/Board.do?mCode=MN245",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 3,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "인덕대학교",
+  "home": "https://www.induk.ac.kr",
+  "board": "https://www.induk.ac.kr/KR/cms/frCmnCon/index.do?MENU_ID=460",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "전북과학대학교",
+  "home": "https://www.jbsc.ac.kr",
+  "board": "https://www.jbsc.ac.kr/portal/representation/bbs/list.do?menuId=M0006000700000000",
+  "result_board": "",
+  "posts": 16,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "진주보건대학교",
+  "home": "https://www.jhc.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "춘해보건대학교",
+  "home": "https://www.ch.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "선린대학교",
+  "home": "https://www.sunlin.ac.kr",
+  "board": "https://www.sunlin.ac.kr/community/bid",
+  "result_board": "",
+  "posts": 80,
+  "it_posts": 1,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "혜전대학교",
+  "home": "https://www.hj.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "송호대학교",
+  "home": "https://www.songho.ac.kr",
+  "board": "https://www.songho.ac.kr/songho/bbs/view.do?menu_idx=76&master_idx=8&bbs_idx=44634",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "웅지세무대학교",
+  "home": "https://www.wat.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "강원도립대학교",
+  "home": "https://www.gw.ac.kr",
+  "board": "https://www.gw.ac.kr/gsu/community/notice",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 글 못 읽음"
+ },
+ {
+  "school": "서영대학교",
+  "home": "https://www.seoyeong.ac.kr",
+  "board": "https://www.seoyeong.ac.kr/syu/na/ntt/selectNttList.do?mi=2305&bbsId=54",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "연성대학교",
+  "home": "https://www.yeonsung.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "제주한라대학교",
+  "home": "https://www.chu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "군산간호대학교",
+  "home": "https://www.kcn.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국농수산대학교",
+  "home": "https://www.af.ac.kr",
+  "board": "https://www.af.ac.kr/index.do?menuUid=ff80808193de90040193e16eec8f008e",
+  "result_board": "",
+  "posts": 57,
+  "it_posts": 8,
+  "contracts": 12,
+  "status": "성공"
+ },
+ {
+  "school": "국제사이버대학교",
+  "home": "https://www.gjcu.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "서울사이버대학교",
+  "home": "https://www.iscu.ac.kr",
+  "board": "https://www.iscu.ac.kr/01_aboutcollege/16_bidding_list.asp",
+  "result_board": "",
+  "posts": 43,
+  "it_posts": 13,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "고려사이버대학교",
+  "home": "https://www.cuk.edu",
+  "board": "https://www.cuk.edu/cms/FrCon/index.do?MENU_ID=290",
+  "result_board": "",
+  "posts": 19,
+  "it_posts": 14,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "사이버한국외국어대학교",
+  "home": "https://www.cufs.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국예술종합학교",
+  "home": "https://Karts.ac.kr/",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 I 대학 서울정수캠퍼스",
+  "home": "https://www.kopo.ac.kr/jungsu/index.do",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 II 대학 남인천캠퍼스",
+  "home": "https://www.kopo.ac.kr/namincheon/index.do",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 IV 대학 청주캠퍼스",
+  "home": "https://kopo.ac.kr/cheongju",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 V 대학 전북캠퍼스",
+  "home": "https://www.kopo.ac.kr/jb/index.do",
+  "board": "https://www.kopo.ac.kr/jb/board.do?menu=4477#",
+  "result_board": "",
+  "posts": 10,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "성공"
+ },
+ {
+  "school": "한국폴리텍 VI 대학 구미캠퍼스",
+  "home": "https://kopo.ac.kr/gumi",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 특성화대학 바이오캠퍼스",
+  "home": "https://kopo.ac.kr/bio",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 VI 대학 영주캠퍼스",
+  "home": "https://www.kopo.ac.kr/yeongju",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "한국폴리텍 특성화대학 로봇캠퍼스",
+  "home": "https://www.kopo.ac.kr/robot/index.do",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ },
+ {
+  "school": "태재대학교",
+  "home": "https://www.taejae.ac.kr",
+  "board": "",
+  "result_board": "",
+  "posts": 0,
+  "it_posts": 0,
+  "contracts": 0,
+  "status": "게시판 못 찾음"
+ }
+]

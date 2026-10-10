@@ -1,0 +1,99 @@
+대상 학교 97곳
+[성공] 전남대학교 · 글 99 · IT 0 · 계약공개 0 · https://www.jnu.ac.kr/WebApp/web/HOM/COM/Board/board.aspx?boardID=5&ca | 
+[성공] 충남대학교 · 글 10 · IT 1 · 계약공개 0 · https://plus.cnu.ac.kr/_prog/_board/?code=sub06_060401&site_dvs_cd=kr& | 
+[성공] 국립금오공과대학교 · 글 8 · IT 0 · 계약공개 0 · https://www.kumoh.ac.kr/ko/sub06_01_03.do | 
+[성공] 경북대학교 · 글 73 · IT 0 · 계약공개 0 · https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde=1&menu_id | https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde
+[성공] 국립한국해양대학교 · 글 9 · IT 0 · 계약공개 0 ·  | https://www.kmou.ac.kr/kmou/na/ntt/selectNttList.do?mi=3609&
+[성공] 국립한밭대학교 · 글 65 · IT 0 · 계약공개 0 · https://www.hanbat.ac.kr/bbs/BBSMSTR_000000001141.do | https://fund.hanbat.ac.kr/bbs/BBSMSTR_000000001138.do
+[성공] 강남대학교 · 글 1 · IT 0 · 계약공개 0 · https://gumae.kangnam.ac.kr/ | 
+[접속 불가(주소 없음(DNS))] 광주가톨릭대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 글 못 읽음] 경성대학교 · 글 0 · IT 0 · 계약공개 0 · https://kscms.ks.ac.kr/kor/CMS/Board/Board.do?mCode=MN107 | 
+[게시판 못 찾음] 극동대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 부산대학교 · 글 19 · IT 10 · 계약공개 10 ·  | https://www.pusan.ac.kr/clean/CMS/Board/Board.do?mCode=MN008
+[성공] 경기대학교 · 글 60 · IT 2 · 계약공개 0 · https://www.kyonggi.ac.kr/www/selectBbsNttList.do?key=5140&bbsNo=681 | 
+[성공] 대전가톨릭대학교 · 글 6 · IT 0 · 계약공개 0 · https://www.dcatholic.ac.kr/bbs/board.php?bo_table=notice&wr_id=25597 | 
+[성공] 대구예술대학교 · 글 9 · IT 0 · 계약공개 0 · https://www.dgau.ac.kr/notice_bid | 
+[게시판 못 찾음] 고신대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 경희대학교 · 글 60 · IT 9 · 계약공개 0 · https://www.khu.ac.kr/kor/user/bbs/BMSR00040/list.do?menuNo=200282 | 
+[성공] 덕성여자대학교 · 글 90 · IT 0 · 계약공개 0 · https://www.duksung.ac.kr/bbs/board.do?bsIdx=39&menuId=1060 | 
+[게시판 글 못 읽음] 배재대학교 · 글 0 · IT 0 · 계약공개 0 · https://portal.pcu.ac.kr/checkMenu.jsp?p0=yWiuJE2N58Av67KR | 
+[성공] 상명대학교 · 글 57 · IT 11 · 계약공개 0 · https://www.smu.ac.kr/kor/intro/Information4.do | 
+[성공] 선문대학교 · 글 0 · IT 0 · 계약공개 0 · https://bid.sunmoon.ac.kr/index.asp | 
+[성공] 서울신학대학교 · 글 10 · IT 2 · 계약공개 0 · https://www.stu.ac.kr/CmsHome/stu06_03_04.eznic | 
+[성공] 동서대학교 · 글 40 · IT 5 · 계약공개 0 · https://www.dongseo.ac.kr/kr/#WMD2_6 | 
+[게시판 글 못 읽음] 수원대학교 · 글 0 · IT 0 · 계약공개 0 · https://www.suwon.ac.kr/index.html?menuno=678 | 
+[성공] 연세대학교 · 글 60 · IT 0 · 계약공개 0 · https://www.yonsei.ac.kr/sc/213/subview.do | 
+[성공] 동의대학교 · 글 60 · IT 25 · 계약공개 0 · https://www.deu.ac.kr/www/deu-bids.do | 
+[성공] 유원대학교 · 글 83 · IT 8 · 계약공개 0 · https://www.u1.ac.kr/u1/community/bidding.do | 
+[성공] 장로회신학대학교 · 글 10 · IT 0 · 계약공개 0 · https://www.puts.ac.kr/www/board/list.general.asp?design=lounge&m1=6&m | 
+[성공] 성신여자대학교 · 글 62 · IT 11 · 계약공개 0 · https://www.sungshin.ac.kr/main_kor/11118/subview.do | 
+[게시판 못 찾음] 총신대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 신라대학교 · 글 15 · IT 0 · 계약공개 0 · https://www.silla.ac.kr/ko/index.php?pCode=bid | 
+[성공] 이화여자대학교 · 글 70 · IT 1 · 계약공개 0 · https://www.ewha.ac.kr/ewha/news/notice.do | 
+[게시판 글 못 읽음] 울산대학교 · 글 0 · IT 0 · 계약공개 0 · https://www.ulsan.ac.kr/kor/CMS/HaksaProgramMgr/list.do?mCode=MN115 | 
+[게시판 글 못 읽음] 평택대학교 · 글 0 · IT 0 · 계약공개 0 · https://www.ptu.ac.kr/www/419/subview.do | 
+[성공] 한동대학교 · 글 60 · IT 0 · 계약공개 0 · https://www.handong.edu/kor/square/notice/bid/ | 
+[성공] 한성대학교 · 글 5 · IT 0 · 계약공개 0 · https://www.hansung.ac.kr/hansung/6174/subview.do | 
+[게시판 못 찾음] 남부대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 한국성서대학교 · 글 2 · IT 0 · 계약공개 0 · https://www.bible.ac.kr/ko/campus/recruit | 
+[게시판 글 못 읽음] 서울한영대학교 · 글 0 · IT 0 · 계약공개 0 · https://shyu.ac.kr/fro_end/html/dep_05/5140.php?bbs_idx=7591&pageno=1& | 
+[성공] 호남신학대학교 · 글 174 · IT 2 · 계약공개 0 · https://www.htus.ac.kr/board/board.php?b_id=028 | 
+[성공] 금강대학교 · 글 25 · IT 12 · 계약공개 0 · https://ggu.ac.kr/sub01080106 | 
+[성공] 초당대학교 · 글 22 · IT 1 · 계약공개 0 · https://www.cdu.ac.kr/mod/board/list.do?MID=KR_06010400 | 
+[성공] 중앙대학교 · 글 75 · IT 16 · 계약공개 0 · https://www.cau.ac.kr/cms/FR_CON/index.do?MENU_ID=1660 | 
+[성공] 김천대학교 · 글 75 · IT 4 · 계약공개 0 · https://www.gimcheon.ac.kr/_prog/bbs/?code=0604&site_dvs_cd=gimcheon&m | 
+[성공] 인천대학교 · 글 5 · IT 1 · 계약공개 1 · https://www.inu.ac.kr/inu/1528/subview.do | https://www.inu.ac.kr/inu/1526/subview.do
+[성공] 울산과학기술원 · 글 14 · IT 142 · 계약공개 143 · https://www.unist.ac.kr/unist/etc/notification/bid.do | https://www.unist.ac.kr/unist/introduction/veterinary.do
+[게시판 글 못 읽음] 부산교육대학교 · 글 0 · IT 0 · 계약공개 0 · https://www.bnue.ac.kr/board/community01_05 | 
+[게시판 못 찾음] 경남도립남해대학 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 진주교육대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 동명대학교 · 글 2 · IT 0 · 계약공개 0 · https://www.tu.ac.kr/tuhome/sub07_01_08.do | 
+[성공] 경인여자대학교 · 글 3 · IT 0 · 계약공개 0 · https://www.kiwu.ac.kr/ko/cms/FR_CON/index.do?MENU_ID=2230 | 
+[게시판 못 찾음] 농협대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 청운대학교 · 글 31 · IT 10 · 계약공개 0 · https://home.chungwoon.ac.kr/home/selectBbsNttList.do?bbsNo=50&key=814 | 
+[게시판 못 찾음] 대구과학대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 동서울대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 나주대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 거제대학교 · 글 60 · IT 4 · 계약공개 0 · https://www.koje.ac.kr/www/board/16 | 
+[접속 불가(응답 없음)] 동강대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 한국전통문화대학교 · 글 21 · IT 0 · 계약공개 0 ·  | https://www.knuh.ac.kr/kr/brd/list.do?tplBaseId=&mnuBaseId=M
+[게시판 못 찾음] 마산대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 광주보건대학교 · 글 78 · IT 9 · 계약공개 0 · https://www.ghu.ac.kr/BiddingAnnouncement | https://www.ghu.ac.kr/Contract
+[게시판 못 찾음] 부산과학기술대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 동원대학교 · 글 85 · IT 8 · 계약공개 0 · https://www.tw.ac.kr/bbs/board.do?bsIdx=11&menuId=936 | 
+[게시판 못 찾음] 안산대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 아주자동차대학교 · 글 60 · IT 4 · 계약공개 0 · https://www.motor.ac.kr/CmsHome/commu_04.aspx | 
+[게시판 못 찾음] 영남이공대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 서일대학교 · 글 59 · IT 16 · 계약공개 0 · https://www.seoil.ac.kr/global/762/subview.do | 
+[성공] 배화여자대학교 · 글 60 · IT 10 · 계약공개 0 · https://www.baewha.ac.kr/bbs/board.do?bsIdx=720&menuId=2926 | 
+[성공] 숭의여자대학교 · 글 67 · IT 3 · 계약공개 0 · https://www.sewu.ac.kr/sewu/news/notice.do | 
+[게시판 못 찾음] 유한대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 글 못 읽음] 용인예술과학대학교 · 글 0 · IT 0 · 계약공개 0 · http://www.ysc.ac.kr/kor/CMS/Board/Board.do?mCode=MN137 | 
+[접속 불가(주소 없음(DNS))] 전남도립대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 송곡대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 한영대학교 · 글 10 · IT 4 · 계약공개 0 · https://www.hanyeong.ac.kr/main/Page/Sub.aspx?mc=67 | 
+[성공] 청강문화산업대학교 · 글 36 · IT 2 · 계약공개 0 · https://www.ck.ac.kr/archives/category/ck-notice/bidding | 
+[성공] 국제대학교 · 글 10 · IT 0 · 계약공개 0 · https://www.kookje.ac.kr/kor/index.php?pCode=bidding | 
+[성공] 한국골프과학기술대학교 · 글 7 · IT 0 · 계약공개 0 · https://www.kg.ac.kr/fro_end/html/dep_05/5220.php | 
+[성공] 충북보건과학대학교 · 글 60 · IT 3 · 계약공개 0 · https://www.chsu.ac.kr/page.jsp?menuId=4000000086 | 
+[게시판 못 찾음] 안동과학대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 인하공업전문대학 · 글 25 · IT 0 · 계약공개 0 · https://www.inhatc.ac.kr/kr/541/subview.do , https://www.inhatc.ac.kr/ | 
+[성공] 전주비전대학교 · 글 120 · IT 14 · 계약공개 0 · https://www.jvision.ac.kr/vision/main/?menu=193 | 
+[성공] 경북전문대학교 · 글 3 · IT 0 · 계약공개 0 · https://www.kbc.ac.kr/kor/CMS/Board/Board.do?mCode=MN114 | 
+[게시판 못 찾음] 포항대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 글 못 읽음] 원광디지털대학교 · 글 0 · IT 0 · 계약공개 0 · https://www.wdu.ac.kr/newscenter/biddingList.do | 
+[성공] 서울디지털대학교 · 글 15 · IT 3 · 계약공개 0 · https://www.sdu.ac.kr/ko/cms/FR_CON/index.do?MENU_ID=540 | 
+[게시판 못 찾음] 한양사이버대학교 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 경희사이버대학교 · 글 16 · IT 15 · 계약공개 0 · https://www.khcu.ac.kr/notice/list.do?condition=all&subCategory=PURCHA | 
+[게시판 못 찾음] 한국폴리텍 IV 대학 대전캠퍼스 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 조선간호대학교 · 글 8 · IT 0 · 계약공개 0 · https://www.cnc.ac.kr/board/download/?board=notice&amp;site=cnc&amp;mn | 
+[성공] 건양사이버대학교 · 글 51 · IT 4 · 계약공개 0 · http://www.kycu.ac.kr/cop/bbs/BBSMSTR_000000000081/selectBoardList.do | 
+[게시판 글 못 읽음] ICT폴리텍대학 · 글 0 · IT 0 · 계약공개 0 · https://www.ict.ac.kr/board/detail/notice/1433 | 
+[게시판 못 찾음] 한국폴리텍 V 대학 광주캠퍼스 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 한국폴리텍 VII 대학 울산캠퍼스 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[성공] 한국폴리텍 II 대학 인천캠퍼스 · 글 10 · IT 0 · 계약공개 0 · https://www.kopo.ac.kr/incheon/board.do?menu=6900&ctgryCode=BSCTGY0000 | 
+[게시판 못 찾음] 한국폴리텍 VI 대학 대구캠퍼스 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 한국폴리텍 특성화대학 항공캠퍼스 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 한국폴리텍 V 대학 순천캠퍼스 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[게시판 못 찾음] 한국폴리텍 VII 대학 동부산캠퍼스 · 글 0 · IT 0 · 계약공개 0 ·  | 
+[OK] shard_2.json: 학교 97 · 성공 58 · IT 372
