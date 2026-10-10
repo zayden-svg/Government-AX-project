@@ -242,6 +242,7 @@ def load_univ_bids(comp):
         return pd.DataFrame(columns=COMMON_COLS)
     if u.empty:
         return pd.DataFrame(columns=COMMON_COLS)
+    u = u[~u["title"].astype(str).str.contains(r"취소\s*공고|공고\s*취소|입찰\s*취소", regex=True)].copy()   # 취소된 공고 제외
     ev = pd.to_datetime(u["date"], errors="coerce")
     for c in ("budget", "deadline", "period_end"):          # 예전 수집분에는 없는 칸
         if c not in u.columns:

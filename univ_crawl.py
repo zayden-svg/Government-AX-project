@@ -520,6 +520,8 @@ async def _crawl_school(browser, sch, overrides, it_reason, out, rep):
                         cr["href"] = cr["href"] or durl
                     contract_rows += crows
                     continue
+                if re.search(r"(취소\s*공고|공고\s*취소|입찰\s*취소)", p["title"]):
+                    continue
                 if (notice_board or p.get("_result")) and not BID_TITLE_RE.search(p["title"]):
                     continue                        # 공지사항·정보공개 게시판이면 입찰·계약 글만
                 reason = it_reason({"cntrctNm": p["title"]})
