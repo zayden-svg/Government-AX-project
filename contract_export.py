@@ -392,16 +392,12 @@ NAME_STRIP = ["주식회사", "(주)", "㈜", "( 주 )", "(주 )", "( 주)", "�
 # 한글·영문 표기가 다른 같은 회사 (한 줄 = 한 회사). 필요하면 여기에 추가
 ALIAS_GROUPS = [
     ["에스티씨랩", "stclab", "stc랩", "에스티씨lab"],
-    ["다이나패스", "다이내패스", "dynapath"],
-    ["에버세이프", "eversafe"],
+    ["스크립터스", "scripters"],
     ["에버스핀", "everspin"],
-    ["엑스큐", "xqueue"],
-    ["큐잇", "queueit", "queue-it"],
     ["소프트베이스", "softbase"],
     ["데브와이", "devy"],
-    ["메가펜스", "megafence"],
+    ["가온아이", "gaonai"],
 ]
-
 
 def norm_name(name):
     t = str(name or "").lower().strip()

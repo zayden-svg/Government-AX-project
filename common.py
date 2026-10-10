@@ -88,12 +88,30 @@ SOLUTION_NEWS_KEYWORDS = ["넷퍼넬", "봇매니저", "MBUSTER", "부하테스�
 # ------------------------------------------------------------
 # 경쟁사
 # ------------------------------------------------------------
-COMPETITOR_DEFAULT = ["DynaPath", "다이나패스", "다이내패스", "EverSafe", "에버세이프",
-                      "엑스큐", "xQueue", "소프트베이스", "큐잇", "Queue-it", "데브와이", "메가펜스","에버스핀"]
+# 경쟁사 = '업체'(회사) 이름. 제품명(DynaPath·에버세이프·xQueue)은 아래 COMPETITOR_PRODUCTS 로 따로 관리
+#   (예: DynaPath는 스크립터스의 제품, 에버세이프는 에버스핀의 제품, xQueue는 소프트베이스의 제품)
+COMPETITOR_DEFAULT = ["데브와이", "스크립터스", "에버스핀", "소프트베이스", "가온아이"]
 COMPETITOR_ALIASES = {
-    "dynapath": ["dynapath", "다이나패스", "다이내패스"],
-    "eversafe": ["eversafe", "에버세이프"],
+    "스크립터스": ["스크립터스", "scripters"],
+    "에버스핀": ["에버스핀", "everspin"],
+    "소프트베이스": ["소프트베이스", "softbase"],
+    "데브와이": ["데브와이", "devy"],
+    "가온아이": ["가온아이", "gaonai"],
 }
+COMPETITOR_PRODUCTS = {   # 제품명 → 만든 회사
+    "dynapath": "스크립터스", "다이나패스": "스크립터스", "다이내패스": "스크립터스",
+    "에버세이프": "에버스핀", "eversafe": "에버스핀",
+    "xqueue": "소프트베이스", "엑스큐": "소프트베이스",
+}
+
+
+def competitor_product_maker(text):
+    """사업명·제품에 경쟁사 제품명이 있으면 그 제조사 이름"""
+    low = str(text or "").lower()
+    for k, v in COMPETITOR_PRODUCTS.items():
+        if k in low:
+            return v
+    return ""
 
 
 def competitor_variants(name_list):
