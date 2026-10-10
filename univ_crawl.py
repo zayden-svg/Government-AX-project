@@ -37,13 +37,13 @@ BID_TITLE_RE = re.compile(r"(입찰|견적|구매|용역|낙찰|선정|계약|�
 SHEET_EXT_RE = re.compile(r"\.(xlsx|xls|csv)\b", re.I)
 MAX_LIST_POSTS = 24      # 학교마다 '수의계약 현황' 같은 월별 목록 글을 열어 볼 최대 개수
 KEEP_YEARS = 3
-MAX_PAGES = 3
+MAX_PAGES = 6
 CONCURRENCY = 6
 MAX_VISIT = 22            # 게시판 찾기: 학교마다 최대 몇 쪽까지 둘러볼지
 MAX_DETAIL = 45           # 학교마다 상세 글을 열어 볼 최대 개수 (IT 글만)
 
 MONEY_RE = re.compile(r"([\d,]+(?:\.\d+)?)\s*(억\s*원|억|천\s*만\s*원|백\s*만\s*원|만\s*원|천\s*원|원)")
-BUDGET_LBL = re.compile(r"(추정\s*가격|기초\s*금액|사업\s*예산|소요\s*예산|배정\s*예산|예정\s*가격|사업\s*비|사업\s*금액|총\s*사업비|예산\s*액|예\s*산|구매\s*예정\s*금액|계약\s*예정\s*금액)")
+BUDGET_LBL = re.compile(r"(추정\s*가격|추정\s*금액|사업\s*규모|구매\s*예산|예정\s*금액|기초\s*가격|총\s*예산|기초\s*금액|사업\s*예산|소요\s*예산|배정\s*예산|예정\s*가격|사업\s*비|사업\s*금액|총\s*사업비|예산\s*액|예\s*산|구매\s*예정\s*금액|계약\s*예정\s*금액)")
 AWARD_LBL = re.compile(r"(낙찰\s*금액|계약\s*금액|낙찰\s*가|투찰\s*금액|계약\s*액)")
 PERIOD_LBL = re.compile(r"(계약\s*기간|사업\s*기간|용역\s*기간|수행\s*기간|과업\s*기간|납품\s*기한|납품\s*기간|구축\s*기간|이행\s*기간)")
 DEADLINE_LBL = re.compile(r"(입찰\s*마감|제출\s*마감|접수\s*마감|마감\s*일시|제출\s*기한|투찰\s*마감|접수\s*기간|제출\s*기간|입찰서\s*제출|전자\s*입찰\s*기간)")
@@ -465,6 +465,7 @@ async def _crawl_school(browser, sch, overrides, it_reason, out, rep):
                 ov = ov.get("url")
             if isinstance(ov, str):
                 ov = [ov]
+            ov = [x for x in (ov or []) if x]        # 결과 주소만 적은 학교는 입찰 게시판은 자동으로 찾기
             if isinstance(res_boards, str):
                 res_boards = [res_boards]
             if ov:
@@ -624,7 +625,7 @@ def _ebiz_budget(b):
 
 def _ebiz_deadline(b):
     for k, v in b.items():
-        if re.search(r"(end|clos|dead|fin)", k, re.I) and v:
+        if re.search(r"(bid_expire|end|clos|dead|fin)", k, re.I) and v:
             try:
                 if str(v).isdigit() and len(str(v)) >= 12:
                     return datetime.fromtimestamp(int(v) / 1000).strftime("%Y-%m-%d")

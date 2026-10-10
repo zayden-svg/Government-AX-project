@@ -111,5 +111,327 @@
  "위덕대학교": {
   "url": "https://www.uu.ac.kr/home/uu_notice_01/",
   "notice": true
+ },
+ "대구한의대학교": {
+  "url": "https://www.dhu.ac.kr/pages/sub.htm?nav_code=dhu1576479449"
+ },
+ "경성대학교": {
+  "url": "https://kscms.ks.ac.kr/kor/CMS/Board/Board.do?mCode=MN107"
+ },
+ "가천대학교": {
+  "url": [
+   "https://www.gachon.ac.kr/buying/2604/subview.do",
+   "https://www.gachon.ac.kr/bbs/buying/357/artclList.do"
+  ]
+ },
+ "경일대학교": {
+  "url": "https://www.kiu.ac.kr/pages/sub.htm?nav_code=kiu1556848293"
+ },
+ "국민대학교": {
+  "url": [
+   "https://www.kookmin.ac.kr/user/kmuNews/notice/index.do",
+   "https://cms.kookmin.ac.kr/sustainability/etc-board/board01.do"
+  ],
+  "notice": true
+ },
+ "대구가톨릭대학교": {
+  "url": "https://www.cu.ac.kr/support/tender"
+ },
+ "세한대학교": {
+  "url": "https://www.sehan.ac.kr/bbs/sehan/28/artclList.do"
+ },
+ "대신대학교": {
+  "url": [
+   "https://www.daeshin.ac.kr/html/05_community/01_5.php",
+   "https://www.daeshin.ac.kr/html/05_community/01.php"
+  ],
+  "notice": true
+ },
+ "대진대학교": {
+  "url": "https://www.daejin.ac.kr/bbs/daejin/195/artclList.do",
+  "notice": true
+ },
+ "동국대학교(WISE)": {
+  "url": "https://wise.dongguk.ac.kr/article/bidnotice/list"
+ },
+ "동의대학교": {
+  "url": "https://www.deu.ac.kr/www/deu-bids.do"
+ },
+ "루터대학교": {
+  "url": "http://ltu.ac.kr/board/bbs/board.php?bo_table=I2331"
+ },
+ "부산외국어대학교": {
+  "url": "https://www.bufs.ac.kr/bbs/board.php?bo_table=notice_bid"
+ },
+ "서원대학교": {
+  "url": [
+   "https://www.seowon.ac.kr/seowon/437/subview.do",
+   "https://www.seowon.ac.kr/bbs/seowon/397/artclList.do"
+  ]
+ },
+ "수원대학교": {
+  "url": "https://www.suwon.ac.kr/index.html?menuno=678"
+ },
+ "나사렛대학교": {
+  "url": "https://www.kornu.ac.kr/mbs/kornukr/jsp/board/list.jsp?boardId=26&id=kornukr_080100000000",
+  "notice": true
+ },
+ "성균관대학교": {
+  "url": "https://student.skku.edu/student/notice2.do",
+  "notice": true
+ },
+ "아신대학교": {
+  "url": "https://www.acts.ac.kr/modules/board/bd_list.asp?id=bidding&left=unilife4_1"
+ },
+ "영남대학교": {
+  "url": "https://www.yu.ac.kr/main/intro/notice-related-to-coronavirus-20.do",
+  "notice": true
+ },
+ "영남신학대학교": {
+  "url": "https://www.ytus.ac.kr/content/210"
+ },
+ "유원대학교": {
+  "url": "https://www.u1.ac.kr/u1/community/bidding.do"
+ },
+ "용인대학교": {
+  "url": "https://yongin.ac.kr/cmn/board/SYSTEM_DEFAULT000001/noticeList.do",
+  "notice": true
+ },
+ "울산대학교": {
+  "url": [
+   "https://www.ulsan.ac.kr/kor/CMS/HaksaProgramMgr/list.do?mCode=MN115",
+   "https://www.ulsan.ac.kr/kor/CMS/HaksaProgramMgr/boardList01.do?mCode=MN115"
+  ]
+ },
+ "백석대학교": {
+  "url": "https://www.bu.ac.kr/web/4588/subview.do",
+  "notice": true
+ },
+ "청주대학교": {
+  "url": "https://www.cju.ac.kr/www/selectBbsNttList.do?bbsNo=881&key=4577&searchCtgry=%EC%9E%85%EC%B0%B0",
+  "notice": true
+ },
+ "추계예술대학교": {
+  "url": "https://www.chugye.ac.kr/mbs/university/jsp/board/list.jsp?boardId=6784&id=university_050100000000",
+  "notice": true
+ },
+ "한국침례신학대학교": {
+  "url": "https://www.kbtus.ac.kr/kor/CMS/Board/Board.do?mCode=MN058"
+ },
+ "평택대학교": {
+  "url": "https://www.ptu.ac.kr/www/419/subview.do"
+ },
+ "한국기술교육대학교": {
+  "url": "https://www.koreatech.ac.kr/menu.es?mid=a10807020000"
+ },
+ "한국성서대학교": {
+  "url": "https://www.bible.ac.kr/ko/campus/recruit",
+  "notice": true
+ },
+ "한동대학교": {
+  "url": "https://www.handong.edu/kor/square/notice/bid/"
+ },
+ "한서대학교": {
+  "url": "https://www.hanseo.ac.kr/boardCnts/list.do?boardID=306&m=040109&s=hs"
+ },
+ "한성대학교": {
+  "url": "https://www.hansung.ac.kr/hansung/6174/subview.do"
+ },
+ "한신대학교": {
+  "url": "https://www.hs.ac.kr/kor/4953/subview.do",
+  "notice": true
+ },
+ "한양대학교": {
+  "url": "https://portal.hanyang.ac.kr/huas/Hy2bAct/hy2b.do"
+ },
+ "한양대학교(ERICA)": {
+  "url": "https://portal.hanyang.ac.kr/huas/Hy2bAct/hy2b.do"
+ },
+ "협성대학교": {
+  "url": "https://www.uhs.ac.kr/uhs/156/subview.do"
+ },
+ "호남신학대학교": {
+  "url": "https://www.htus.ac.kr/board/board.php?b_id=028",
+  "notice": true
+ },
+ "홍익대학교": {
+  "url": "https://www.hongik.ac.kr/kr/newscenter/notice.do?mode=list&srCategoryId=36",
+  "notice": true
+ },
+ "금강대학교": {
+  "url": "https://ggu.ac.kr/sub01080106"
+ },
+ "예원예술대학교": {
+  "url": "https://www.yewon.ac.kr/main/?menu=193"
+ },
+ "우송대학교": {
+  "url": "https://www.wsu.ac.kr/page/index.jsp?code=setc0301"
+ },
+ "경운대학교": {
+  "url": "https://www.ikw.ac.kr/board/list.tc?mn=3292&mngNo=190&pageSeq=2184"
+ },
+ "초당대학교": {
+  "url": "https://www.cdu.ac.kr/mod/board/list.do?MID=KR_06010400"
+ },
+ "한국공학대학교": {
+  "url": "https://www.tukorea.ac.kr/tukorea/1104/subview.do"
+ },
+ "울산과학기술원": {
+  "url": "https://www.unist.ac.kr/unist/etc/notification/bid.do"
+ },
+ "한국과학기술원": {
+  "url": "https://www.kaist.ac.kr/kr/html/footer/0815.html",
+  "result": [
+   "https://www.kaist.ac.kr/kr/html/footer/080612.html"
+  ]
+ },
+ "대구경북과학기술원": {
+  "url": "https://www.dgist.ac.kr/prog/bidPbanc/kor/sub06_01_04/list.do"
+ },
+ "인천대학교": {
+  "url": "https://www.inu.ac.kr/inu/1528/subview.do",
+  "result": [
+   "https://www.inu.ac.kr/inu/1525/subview.do",
+   "https://www.inu.ac.kr/inu/1526/subview.do"
+  ]
+ },
+ "신한대학교": {
+  "url": "https://www.shinhan.ac.kr/kr/69/subview.do"
+ },
+ "한국에너지공과대학교": {
+  "url": "https://kentech.ac.kr/submenu.do?menuurl=EOS99%2baJKXZEsaOKij%2bfJw%3d%3d",
+  "result": [
+   "https://www.kentech.ac.kr/submenu.do?menuurl=ENtSF31itjStr1wSY8GCMA%3D%3D"
+  ]
+ },
+ "영산대학교(양산)": {
+  "url": "https://www.ysu.ac.kr/kor/CMS/Board/Board.do?mCode=MN016&searchCategory=c010",
+  "notice": true
+ },
+ "한국전통문화대학교": {
+  "url": "",
+  "result": [
+   "https://www.knuh.ac.kr/kr/brd/list.do?tplBaseId=&mnuBaseId=MNU0001335&topBaseId=MNU0000004&tplSer=212"
+  ]
+ },
+ "국립강릉원주대학교": {
+  "url": "",
+  "result": [
+   "https://cheongryum.gwnu.ac.kr/cheongryum/5936/subview.do"
+  ]
+ },
+ "경북대학교": {
+  "url": "https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde=1&menu_idx=67",
+  "result": [
+   "https://www.knu.ac.kr/wbbs/wbbs/bbs/btin/list.action?bbs_cde=19&menu_idx=103"
+  ],
+  "notice": true
+ },
+ "경상국립대학교": {
+  "url": "",
+  "result": [
+   "https://cheongryum.gnu.ac.kr/cheongryum/na/ntt/selectNttList.do?mi=8962&bbsId=2689"
+  ]
+ },
+ "국립공주대학교": {
+  "url": "https://www.kongju.ac.kr/bbs/KNU/2133/artclList.do",
+  "notice": true
+ },
+ "국립금오공과대학교": {
+  "url": "https://www.kumoh.ac.kr/ko/sub06_01_03.do"
+ },
+ "국립부경대학교": {
+  "url": "https://www.pknu.ac.kr/main/530",
+  "result": [
+   "https://www.pknu.ac.kr/main/189",
+   "https://www.pknu.ac.kr/main/529"
+  ]
+ },
+ "부산대학교": {
+  "url": "",
+  "result": [
+   "https://www.pusan.ac.kr/clean/CMS/Board/Board.do?mCode=MN008"
+  ]
+ },
+ "국립순천대학교": {
+  "url": "https://www.scnu.ac.kr/SCNU/na/ntt/selectNttList.do?mi=1124&bbsId=1034"
+ },
+ "전남대학교": {
+  "url": "https://www.jnu.ac.kr/WebApp/web/HOM/COM/Board/board.aspx?boardID=5&cate=13",
+  "notice": true
+ },
+ "전북대학교": {
+  "url": "",
+  "result": [
+   "https://clean.jbnu.ac.kr/clean/2531/subview.do"
+  ]
+ },
+ "제주대학교": {
+  "url": "",
+  "result": [
+   "https://cms.jejunu.ac.kr/schoolinfo/help/univerinfo/contract.htm"
+  ]
+ },
+ "국립창원대학교": {
+  "url": "",
+  "result": [
+   "https://www.changwon.ac.kr/clean/na/ntt/selectNttList.do?mi=9343&bbsId=2755"
+  ]
+ },
+ "충북대학교": {
+  "url": "",
+  "result": [
+   "https://cbnuwww.chungbuk.ac.kr/site/www/boardList.do?boardSeq=633&key=1056"
+  ]
+ },
+ "한국교원대학교": {
+  "url": "https://www.knue.ac.kr/www/selectBbsNttList.do?bbsNo=29&key=810",
+  "notice": true
+ },
+ "한국체육대학교": {
+  "url": "https://www.knsu.ac.kr/knsu/unilife/notice.do",
+  "notice": true
+ },
+ "국립한국해양대학교": {
+  "url": "",
+  "result": [
+   "https://www.kmou.ac.kr/kmou/na/ntt/selectNttList.do?mi=3609&bbsId=11605"
+  ]
+ },
+ "국립한국교통대학교": {
+  "url": "",
+  "result": [
+   "https://www.ut.ac.kr/cop/bbs/BBSMSTR_000000001261/selectBoardList.do"
+  ]
+ },
+ "서울과학기술대학교": {
+  "url": "https://www.seoultech.ac.kr/service/info/bid/"
+ },
+ "한경국립대학교": {
+  "url": "https://handi.hknu.ac.kr/kor/568/subview.do"
+ },
+ "국립한밭대학교": {
+  "url": "",
+  "result": [
+   "https://fund.hanbat.ac.kr/bbs/BBSMSTR_000000001138.do"
+  ]
+ },
+ "광주교육대학교": {
+  "url": "https://www.gnue.ac.kr/index.9is?contentUid=4a9f18ab5c48fe8c015c8626aabd0237",
+  "result": [
+   "https://www.gnue.ac.kr/index.9is?contentUid=4a9f18ab98368ef7019936770a897e63"
+  ]
+ },
+ "부산교육대학교": {
+  "url": "https://www.bnue.ac.kr/board/community01_05"
+ },
+ "서울교육대학교": {
+  "url": "https://www.snue.ac.kr/snue/na/ntt/selectNttList.do?mi=1312&bbsId=1085"
+ },
+ "경인교육대학교": {
+  "url": "https://www.ginue.ac.kr/kor/CMS/Board/Board.do?mCode=MN129"
+ },
+ "청주교육대학교": {
+  "url": "https://www.cje.ac.kr/web/board/brdList.do?menu_cd=000206"
  }
 }
