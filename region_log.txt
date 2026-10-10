@@ -1,0 +1,1 @@
+[FAIL] HTTPError: 403 Client Error: Forbidden for url: http://apis.data.go.kr/1230000/ao/UsrInfoService02/getDminsttInfo02?serviceKey=***&pageNo=1&numOfRows=999&type=json&inqryDiv=1&inqryBgnDt=200001010000&inqryEndDt=2
