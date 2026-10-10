@@ -9,6 +9,7 @@ on:
       limit: { description: '컴퓨터 1대당 학교 수 제한(시험용, 0=전체)', required: false, default: '0' }
       only: { description: '특정 학교만 (이름 일부, 직접지정=주소 적은 학교만)', required: false, default: '' }
       probe: { description: '조사용 주소(,,로 구분)', required: false, default: '' }
+      debug: { description: '표 머리줄 점검 출력(1=켜기)', required: false, default: '' }
 
 permissions:
   contents: write
@@ -17,6 +18,7 @@ env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   PYTHONIOENCODING: utf-8
   PYTHONUNBUFFERED: '1'
+  UNIV_DEBUG: ${{ github.event.inputs.debug }}
 
 jobs:
   ebiz4u:

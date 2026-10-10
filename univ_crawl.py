@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import csv
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta
@@ -166,6 +167,8 @@ def parse_contract_tables(tables):
                     break
         if "title" not in idx or ("vendor" not in idx and "amount" not in idx):
             continue
+        if os.environ.get("UNIV_DEBUG"):
+            print("[표 머리줄]", head[:12], "→", idx, "| 첫 줄", (tb.get("rows") or [{}])[0].get("cells", [])[:12], flush=True)
         for r in tb.get("rows") or []:
             cells = r.get("cells") or []
             if len(cells) <= idx["title"]:
@@ -591,8 +594,9 @@ async def main_async(a):
         overrides = {}
     if a.only == "직접지정":                    # data/univ_boards.json 에 주소를 적은 학교만 다시
         schools = [s for s in schools if s["school"] in overrides]
-    elif a.only:
-        schools = [s for s in schools if a.only in s["school"]]
+    elif a.only:                               # 쉼표로 여러 학교
+        names = [x.strip() for x in a.only.split(",") if x.strip()]
+        schools = [s for s in schools if any(n in s["school"] for n in names)]
     if a.shard:                                # "0/4" → 4대 중 0번 컴퓨터 몫
         i, n = map(int, a.shard.split("/"))
         schools = [s for k, s in enumerate(schools) if k % n == i]
