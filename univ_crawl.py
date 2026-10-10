@@ -150,15 +150,25 @@ JS_TABLES = """() => Array.from(document.querySelectorAll('table')).map(tb => {
   });
   return {head, rows};
 })"""
-COL_RULES = {"title": r"(계약명|건명|사업명|용역명|공사명|품명|제목|입찰명|과제명)", "vendor": r"(업체|상대자|계약자|낙찰자|상호|업체명)",
-             "amount": r"(금액|계약액|낙찰가|낙찰액)", "date": r"(계약일|체결일|일자|등록일|낙찰일|개찰일)", "period": r"(기간|완료|준공|납품기한|만료)"}
+COL_RULES = {"title": r"(계약명|건명|사업명|용역명|공사명|품명|제목|입찰명|과제명)",
+             "vendor": r"(업체|상대자|상대방|계약자|낙찰자|상호|거래처|대상자)",
+             "amount": r"(금액|계약액|낙찰가|낙찰액)", "date": r"(계약일|체결일|일자|등록일|낙찰일|개찰일|시작일|착수일)",
+             "period": r"(기간|완료|준공|납품기한|만료|종료)"}
 
 
 def parse_contract_tables(tables):
     """정보공개 '계약현황·수의계약현황·입찰결과' 표 → 계약 행 (사업명·업체·금액·일자·기간)"""
     out = []
     for tb in tables:
-        head = tb.get("head") or []
+        head = list(tb.get("head") or [])
+        rows_ = list(tb.get("rows") or [])
+        if rows_:                                   # 머리줄이 두 줄(계약상대자 → 업체명·대표자…)이면 아랫줄로 보완
+            sub = rows_[0].get("cells") or []
+            hits = sum(1 for c in sub if any(re.search(rx, c) for rx in COL_RULES.values()) and not re.search(r"\d{3,}", c))
+            if hits >= 2:
+                head = [(sub[i] if i < len(sub) and sub[i] else (head[i] if i < len(head) else "")) for i in range(max(len(head), len(sub)))]
+                rows_ = rows_[1:]
+        tb = {"head": head, "rows": rows_}
         idx = {}
         for k, rx in COL_RULES.items():
             for i, h in enumerate(head):
@@ -331,6 +341,16 @@ async def read_board(page, url):
         return posts
     for pno in range(1, MAX_PAGES + 1):
         rows = await eval_all(page, JS_ROWS)
+        if pno == 1 and not any(_date(r["text"]) for r in rows):     # 늦게 뜨는 게시판: 더 기다렸다 다시
+            for _ in range(2):
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=10000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(3000)
+                rows = await eval_all(page, JS_ROWS)
+                if any(_date(r["text"]) for r in rows):
+                    break
         for r in rows:
             d = _date(r["text"])
             if not d:
