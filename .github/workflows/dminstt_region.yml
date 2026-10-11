@@ -9,7 +9,7 @@ jobs:
   region:
     runs-on: ubuntu-latest
     environment: gov-tracker
-    timeout-minutes: 60
+    timeout-minutes: 150
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       G2B_SERVICE_KEY: ${{ secrets.G2B_SERVICE_KEY }}
