@@ -353,6 +353,13 @@ def build(all_df):
             x.alignment = Alignment(wrap_text=True, vertical="top")
         return x
 
+    def _axes(ch_):
+        """축 이름(업체명·월·분야)이 보이게 — openpyxl 기본값은 엑셀에서 축이 숨겨짐"""
+        ch_.x_axis.delete = False
+        ch_.y_axis.delete = False
+        ch_.x_axis.tickLblPos = "low"
+        return ch_
+
     def _labels():
         lb = DataLabelList()
         lb.showVal, lb.showCatName, lb.showSerName, lb.showLegendKey, lb.showPercent = True, False, False, False, False
@@ -465,14 +472,20 @@ def build(all_df):
     dash.append([c(dash, "① 자사 솔루션 연관 사업을 많이 수주한 업체 TOP 20 (에스티씨랩 제외)", bold)])
     dash.append([c(dash, "업체", hf, navy), c(dash, "건수", hf, navy), c(dash, "진행중", hf, navy)])
     t1_first = r0 + 2
-    drill_comp_rows = sol.copy()
     gk_to_name = top_comp["업체명"].to_dict()
-    drill_comp_rows["_drill"] = drill_comp_rows["_gk"].map(gk_to_name)
-    a1 = grouped_table("상세_연관업체", drill_comp_rows[drill_comp_rows["_drill"].notna()], "_drill", list(top_comp["업체명"]),
-                       "대시보드 ① 업체별 사업 목록 (자사 솔루션·API·경쟁사·예약/대기열 관련)")
+    sol_top = sol.assign(_grp=sol["_gk"].map(gk_to_name))
+    sol_rest = sol_top[sol_top["_grp"].isna()].assign(_grp="그 밖의 솔루션·API 연관 사업")
+    sol_top = sol_top[sol_top["_grp"].notna()].assign(_grp=lambda x: "연관 업체 · " + x["_grp"])
+    cs = pd.concat([comp_rows.assign(_grp="경쟁사 · " + comp_rows["경쟁사명"]), sol_top, sol_rest], ignore_index=True)
+    cs_keys = (["경쟁사 · " + k for k in ccount.index] + ["연관 업체 · " + n for n in top_comp["업체명"]]
+               + ["그 밖의 솔루션·API 연관 사업"])
+    acs = grouped_table("경쟁사·솔루션", cs, "_grp", cs_keys,
+                        "경쟁사(데브와이·스크립터스·에버스핀·소프트베이스·가온아이) 수주·제품 납품 → 자사 솔루션 연관 업체 TOP 20 → 그 밖의 솔루션·API 연관 사업")
+    a1 = {n: acs.get("연관 업체 · " + n, 1) for n in top_comp["업체명"]}
+    a4 = {k: acs.get("경쟁사 · " + k, 1) for k in ccount.index}
     for _, r in top_comp.iterrows():
         nm = r["업체명"]
-        dash.append([nm, c(dash, f'=HYPERLINK("#\'상세_연관업체\'!A{a1.get(nm, 1)}",{int(r["건수"])})', font=link_font), int(r["진행"])])
+        dash.append([nm, c(dash, f'=HYPERLINK("#\'경쟁사·솔루션\'!A{a1.get(nm, 1)}",{int(r["건수"])})', font=link_font), int(r["진행"])])
     t1_last = t1_first + len(top_comp) - 1
     ch = BarChart()
     ch.type, ch.style, ch.title = "bar", 10, "자사 솔루션 연관 수주 TOP 20 (건)"
@@ -483,8 +496,8 @@ def build(all_df):
     ch.dataLabels = _labels()
     ch.legend = None
     ch.series[0].graphicalProperties.solidFill = BAR
-    ch.height, ch.width = 11, 18
-    dash.add_chart(ch, f"E{r0}")
+    ch.height, ch.width = 13, 20
+    dash.add_chart(_axes(ch), f"E{r0}")
 
     # 표2: 월별 신규 사업
     while True:
@@ -498,9 +511,14 @@ def build(all_df):
     dash.append([c(dash, "② 월별 신규 사업 (최근 24개월, 계약·낙찰·공고일 기준)", bold)])
     dash.append([c(dash, "월", hf, navy), c(dash, "전체", hf, navy), c(dash, "솔루션 연관", hf, navy)])
     t2_first = r2 + 2
-    a2 = grouped_table("상세_월별", d[d["_month"].isin(months)], "_month", list(reversed(months)), "대시보드 ② 월별 신규 사업 (최근 월부터)")
+    dm = d[d["_month"].isin(months)]
+    gd = pd.concat([dm.assign(_grp="월 · " + dm["_month"]), recent.assign(_grp="분야(최근 6개월) · " + recent["분야"])], ignore_index=True)
+    agd = grouped_table("그래프 상세", gd, "_grp", ["월 · " + m for m in reversed(months)] + ["분야(최근 6개월) · " + f for f in fcount.index],
+                        "대시보드 ② 월별 신규 사업(최근 월부터) · ③ 최근 6개월 분야별 사업 — 대시보드 숫자를 누르면 이곳으로 이동")
+    a2 = {m: agd.get("월 · " + m, 1) for m in months}
+    a3 = {f: agd.get("분야(최근 6개월) · " + f, 1) for f in fcount.index}
     for m in months:
-        dash.append([m, c(dash, f'=HYPERLINK("#\'상세_월별\'!A{a2.get(m, 1)}",{int(mcount[m])})', font=link_font), int(msol[m])])
+        dash.append([m, c(dash, f'=HYPERLINK("#\'그래프 상세\'!A{a2.get(m, 1)}",{int(mcount[m])})', font=link_font), int(msol[m])])
     t2_last = t2_first + len(months) - 1
     ch2 = BarChart()
     ch2.type, ch2.style, ch2.title = "col", 10, "월별 신규 IT 사업 (건)"
@@ -511,7 +529,7 @@ def build(all_df):
     ch2.y_axis.majorGridlines = None
     ch2.series[0].graphicalProperties.solidFill = BAR
     ch2.height, ch2.width = 10, 26
-    dash.add_chart(ch2, f"E{r2 + 1}")
+    dash.add_chart(_axes(ch2), f"E{r2 + 1}")
     ch2b = BarChart()
     ch2b.type, ch2b.style, ch2b.title = "col", 10, "월별 솔루션 연관 신규 사업 (건)"
     ch2b.add_data(Reference(dash, min_col=3, min_row=t2_first - 1, max_row=t2_last), titles_from_data=True)
@@ -521,7 +539,7 @@ def build(all_df):
     ch2b.y_axis.majorGridlines = None
     ch2b.series[0].graphicalProperties.solidFill = "1B8A6B"
     ch2b.height, ch2b.width = 10, 26
-    dash.add_chart(ch2b, f"E{r2 + 22}")
+    dash.add_chart(_axes(ch2b), f"E{r2 + 22}")
     for _ in range(max(0, 42 - len(months))):
         dash.append([])
 
@@ -531,9 +549,8 @@ def build(all_df):
     dash.append([c(dash, f"③ 최근 6개월 신규 사업 분야 ({months[-6] if len(months) >= 6 else ''} ~ {months[-1] if months else ''})", bold)])
     dash.append([c(dash, "분야", hf, navy), c(dash, "건수", hf, navy)])
     t3_first = r3 + 2
-    a3 = grouped_table("상세_분야", recent, "분야", list(fcount.index), "대시보드 ③ 최근 6개월 분야별 신규 사업")
     for f_, n_ in fcount.items():
-        dash.append([f_, c(dash, f'=HYPERLINK("#\'상세_분야\'!A{a3.get(f_, 1)}",{int(n_)})', font=link_font)])
+        dash.append([f_, c(dash, f'=HYPERLINK("#\'그래프 상세\'!A{a3.get(f_, 1)}",{int(n_)})', font=link_font)])
     t3_last = t3_first + len(fcount) - 1
     ch3 = BarChart()
     ch3.type, ch3.style, ch3.title = "bar", 10, "최근 6개월 분야별 신규 사업 (건)"
@@ -545,7 +562,7 @@ def build(all_df):
     ch3.y_axis.majorGridlines = None
     ch3.series[0].graphicalProperties.solidFill = BAR
     ch3.height, ch3.width = 9, 18
-    dash.add_chart(ch3, f"E{r3 + 1}")
+    dash.add_chart(_axes(ch3), f"E{r3 + 1}")
     for _ in range(max(0, 20 - len(fcount))):
         dash.append([])
 
@@ -555,10 +572,8 @@ def build(all_df):
     dash.append([c(dash, "④ 경쟁사별 수주·납품 (전체 기간)", bold)])
     dash.append([c(dash, "경쟁사", hf, navy), c(dash, "건수", hf, navy)])
     t4_first = r4 + 2
-    a4 = grouped_table("경쟁사 수주", comp_rows, "경쟁사명", list(ccount.index),
-                       "경쟁사(데브와이·스크립터스·에버스핀·소프트베이스·가온아이)가 수주했거나 그 제품(DynaPath·에버세이프·xQueue)이 들어간 사업")
     for k_, n_ in ccount.items():
-        dash.append([k_, c(dash, f'=HYPERLINK("#\'경쟁사 수주\'!A{a4.get(k_, 1)}",{int(n_)})', font=link_font)])
+        dash.append([k_, c(dash, f'=HYPERLINK("#\'경쟁사·솔루션\'!A{a4.get(k_, 1)}",{int(n_)})', font=link_font)])
     if len(ccount):
         t4_last = t4_first + len(ccount) - 1
         ch4 = BarChart()
@@ -571,7 +586,53 @@ def build(all_df):
         ch4.y_axis.majorGridlines = None
         ch4.series[0].graphicalProperties.solidFill = "C0392B"
         ch4.height, ch4.width = 7, 18
-        dash.add_chart(ch4, f"E{r4 + 1}")
+        dash.add_chart(_axes(ch4), f"E{r4 + 1}")
+    for _ in range(max(0, 16 - len(ccount))):
+        dash.append([])
+
+    # ⑤ 대학 확보 현황 (대학알리미 전체 대학 × 우리가 찾은 IT 사업 건수)
+    try:
+        master = pd.read_csv("data/univ_master.csv", dtype=str).fillna("")
+    except Exception:
+        master = pd.DataFrame()
+    n = d["출처"].value_counts()
+    if not master.empty:
+        org = d["수요기관"].astype(str)
+        stat, zero4 = {}, []
+        for nm in dict.fromkeys(master["학교명"]):
+            m = master[master["학교명"] == nm].iloc[0]
+            base = re.sub(r"\(.*?\)", "", nm).strip()
+            hit = org.str.contains(base, regex=False)
+            if base.startswith("국립"):                  # 나라장터에는 '국립' 없이 적힌 경우가 많음
+                hit |= org.str.contains(base[2:], regex=False)
+            kind = "4년제" if m["학제"] in ("대학교", "교육대학", "산업대학") else "전문대" if m["학제"] == "전문대학" else "기타(사이버·기능 등)"
+            fd = "국·공립" if ("국립" in m["설립구분"] or "공립" in m["설립구분"]) else "사립"
+            k = (kind, fd)
+            stat.setdefault(k, [0, 0])
+            stat[k][0] += 1
+            if hit.any():
+                stat[k][1] += 1
+            elif kind == "4년제":
+                zero4.append(nm)
+        dash.append([])
+        dash.append([c(dash, "⑤ 대학별 IT 사업 확보 현황 (대학알리미 전체 대학 기준)", bold)])
+        dash.append([c(dash, "구분", hf, navy), c(dash, "학교 수", hf, navy), c(dash, "확보", hf, navy), c(dash, "0건", hf, navy)])
+        for k in [("4년제", "국·공립"), ("4년제", "사립"), ("전문대", "국·공립"), ("전문대", "사립"),
+                  ("기타(사이버·기능 등)", "국·공립"), ("기타(사이버·기능 등)", "사립")]:
+            if k in stat:
+                dash.append([f"{k[0]} {k[1]}", stat[k][0], c(dash, stat[k][1], bold), stat[k][0] - stat[k][1]])
+        if zero4:
+            dash.append([c(dash, f"4년제 0건 {len(zero4)}곳: " + ", ".join(zero4), wrap=False)])
+    dash.append([])
+    dash.append([c(dash, "읽는 법", bold)])
+    for a_, b_ in [
+        ("출처", f"나라장터 계약 {int(n.get('계약', 0)):,} · 낙찰 {int(n.get('낙찰', 0)):,} · 쇼핑몰 납품 {int(n.get('쇼핑몰 납품', 0)):,} · 대학 홈페이지·정보공개·이비즈포유 {int(n.get('대학 홈페이지', 0)):,}"),
+        ("종료", f"진행중 / 종료 임박(종료일까지 {ce.SOON_DAYS}일 이내, 빨간 칸) / 종료 / 미상"),
+        ("금액", "천만원 이상 '억'(10.0억, 0.5억), 미만은 원(9,500,000). 미공개는 빈 칸"),
+        ("사업종료일", "계약은 계약 종료일, 대학은 공고문·계약공개의 계약기간. 그 밖(낙찰·쇼핑몰 납품)은 일자 + 1년 추정"),
+        ("경쟁사", "데브와이·스크립터스(DynaPath)·에버스핀(에버세이프)·소프트베이스(xQueue)·가온아이(에버세이프 판매)"),
+    ]:
+        dash.append([c(dash, a_, bold), b_])
 
     # 업체검색
     ws = wb.create_sheet("업체검색")
@@ -628,70 +689,13 @@ def build(all_df):
         ws.append([money(ws, r[k]) if k == "금액 합계" else r[k] for k in cols])
     ws.auto_filter.ref = f"A1:{get_column_letter(len(cols))}{len(summ) + 1}"
 
-    table("솔루션·API 관련", sol, note="자사 솔루션(대기열·예약·매크로·API 트래픽 등)·API·경쟁사 관련 사업")
     univ = d[d["기관특성"] == "대학"]
     table("대학 사업", univ, note=f"대학 사업 {len(univ):,}건 (국·공립 {int((univ['대학구분'] == '국·공립').sum()):,} · 사립 {int((univ['대학구분'] == '사립').sum()):,})")
     table("통합 내역", d, helper=True)
 
-    # 안내 + 대학 수집 결과
-    ws = wb.create_sheet("안내")
-    ws.column_dimensions["A"].width, ws.column_dimensions["B"].width = 22, 110
-    n = d["출처"].value_counts()
-    for a, b in [
-        ("공공·대학 IT 수주 통합 현황", ""), ("기준일", today.strftime("%Y-%m-%d")),
-        ("출처", f"나라장터 계약 {int(n.get('계약', 0)):,} · 낙찰 {int(n.get('낙찰', 0)):,} · 쇼핑몰 납품 {int(n.get('쇼핑몰 납품', 0)):,} · 대학 홈페이지·전자입찰 {int(n.get('대학 홈페이지', 0)):,}"),
-        ("열 구성", "모든 표 공통: 기관특성 · 대학구분 · 업체명 · 수요기관 · 지역(고정) | 사업명 · 제품 · 금액 · 사업종료일 · 종료 · 종료 D-day"),
-        ("종료", f"진행중 / 종료 임박(종료일까지 {ce.SOON_DAYS}일 이내, 빨간 칸) / 종료 / 미상"),
-        ("금액", "천만원 이상 '억'(예: 10.0억, 0.5억), 미만은 원 단위(예: 9,500,000)"),
-        ("사업종료일", "계약은 계약 종료일. 대학은 공고문·첨부의 계약(사업)기간, 계약공개 표의 계약종료일. 그 밖(낙찰·쇼핑몰 납품 등)은 일자 + 1년 추정"),
-        ("대학 수집", "나라장터(계약·낙찰) + 대학 홈페이지 입찰게시판·입찰결과·수의계약 현황(정보공개) + 이비즈포유. 학교별 확보 건수는 '대학 수집 결과' 시트"),
-        ("경쟁사", "업체: 데브와이·스크립터스·에버스핀·소프트베이스·가온아이 / 제품: DynaPath(스크립터스)·에버세이프(에버스핀)·xQueue(소프트베이스)"),
-        ("지역", "수요기관 소재 시·도. 확인 못 한 기관은 '미확인'"),
-    ]:
-        ws.append([c(ws, a, bold), b])
-    # 대학별 확보 현황: 모든 대학(대학알리미 목록) × 출처별 건수 → 0건 학교가 한눈에
-    rep, _ = store.load_cache("univ_crawl_report")
-    rep = {r.get("school"): r for r in (rep or [])}
-    try:
-        master = pd.read_csv("data/univ_master.csv", dtype=str).fillna("")
-    except Exception:
-        master = pd.DataFrame()
-    if not master.empty:
-        ws = wb.create_sheet("대학 수집 결과")
-        widths = [24, 9, 9, 7, 11, 9, 12, 8, 22, 55]
-        for i, w in enumerate(widths, 1):
-            ws.column_dimensions[get_column_letter(i)].width = w
-        ws.append([c(ws, "대학별 IT 사업 확보 현황 — 합계 0건(빨간 칸)은 어느 출처에서도 아직 못 찾은 학교", bold)])
-        ws.append([c(ws, k, hf, navy) for k in ("학교", "구분", "설립", "지역", "나라장터(계약·낙찰)", "쇼핑몰 납품",
-                                                 "홈페이지·전자입찰", "합계", "홈페이지 수집 결과", "입찰 게시판 주소")])
-        org = d["수요기관"].astype(str)
-        src = d["출처"].astype(str)
-        rows_ = []
-        seen_ = set()
-        for _, m in master.iterrows():
-            nm = m["학교명"]
-            if nm in seen_:
-                continue
-            seen_.add(nm)
-            base = re.sub(r"\(.*?\)", "", nm).strip()
-            hit = org.str.contains(base, regex=False)
-            if base.startswith("국립"):                  # 나라장터에는 '국립' 없이 적힌 경우가 많음 (강릉원주대학교 등)
-                hit |= org.str.contains(base[2:], regex=False)
-            g2b = int((hit & src.isin(["계약", "낙찰"])).sum())
-            mall = int((hit & (src == "쇼핑몰 납품")).sum())
-            hp = int((hit & (src == "대학 홈페이지")).sum())
-            kind = "4년제" if m["학제"] in ("대학교", "교육대학", "산업대학") else "전문대" if m["학제"] == "전문대학" else m["학제"]
-            fd = "국·공립" if ("국립" in m["설립구분"] or "공립" in m["설립구분"]) else "사립"
-            r_ = rep.get(nm) or {}
-            rows_.append((0 if kind == "4년제" else 1 if kind == "전문대" else 2, g2b + mall + hp, nm, kind, fd, m["지역"], g2b, mall, hp,
-                          r_.get("status", "-"), r_.get("board", "")))
-        red_fill = PatternFill("solid", fgColor="FDE2E1")
-        for row in sorted(rows_, key=lambda x: (x[0], x[1] > 0, x[2])):
-            cells = [clean(row[2]), row[3], row[4], row[5], row[6], row[7], row[8], row[1], clean(row[9]), clean(row[10])]
-            if row[1] == 0:
-                cells = [c(ws, v, None, red_fill) for v in cells]
-            ws.append(cells)
-        ws.freeze_panes = "B3"
+    # 시트 순서: 꼭 보는 것 먼저 (업체검색은 두 번째)
+    want = ["대시보드", "업체검색", "경쟁사·솔루션", "대학 사업", "업체별 요약", "통합 내역", "그래프 상세"]
+    wb._sheets.sort(key=lambda w: want.index(w.title) if w.title in want else 99)
 
     buf = io.BytesIO()
     wb.save(buf)
