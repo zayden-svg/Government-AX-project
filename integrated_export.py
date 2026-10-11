@@ -229,7 +229,8 @@ def load_dlvr(comp, cache_path):
     out = _common(out, comp)
     # 경쟁사·비교군 '제품' 납품은 판매업체가 리셀러여도 경쟁사 수주로 표시
     kind = d["_구분"].tolist()
-    out["경쟁사명"] = [n_ or (competitor_product_maker(sp) if k == "경쟁사" else "") for n_, k, sp in zip(out["경쟁사명"], kind, d["prdctIdntNoNm"])]
+    out["경쟁사명"] = [n_ or (competitor_product_maker(sp) if k == "경쟁사" and is_competing_product("", f"{t_} {sp}") else "")
+                    for n_, k, sp, t_ in zip(out["경쟁사명"], kind, d["prdctIdntNoNm"], out["사업명"])]
     out["경쟁사"] = (out["경쟁사명"] != "").map({True: "Y", False: ""})
     out["API관련"] = ["Y" if (a == "Y" or "API" in str(f)) else "" for a, f in zip(out["API관련"], d["_제품군"])]
     out.loc[[k == "자사" for k in kind], "자사관련"] = "Y"
