@@ -362,6 +362,8 @@ def build(all_df):
         if v is None or v == "" or (isinstance(v, float) and pd.isna(v)):
             return c(ws, None)
         v = float(v)
+        if v <= 0:                                   # 금액 미공개(0원) → 빈 칸
+            return c(ws, None)
         return c(ws, round(v / 1e8, 2), fmt=EOK) if abs(v) >= 1e7 else c(ws, int(v), fmt=WON)
 
     def link_cell(ws, url, title):
@@ -673,6 +675,8 @@ def build(all_df):
             seen_.add(nm)
             base = re.sub(r"\(.*?\)", "", nm).strip()
             hit = org.str.contains(base, regex=False)
+            if base.startswith("국립"):                  # 나라장터에는 '국립' 없이 적힌 경우가 많음 (강릉원주대학교 등)
+                hit |= org.str.contains(base[2:], regex=False)
             g2b = int((hit & src.isin(["계약", "낙찰"])).sum())
             mall = int((hit & (src == "쇼핑몰 납품")).sum())
             hp = int((hit & (src == "대학 홈페이지")).sum())
