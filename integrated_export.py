@@ -242,7 +242,14 @@ def load_univ_bids(comp):
         return pd.DataFrame(columns=COMMON_COLS)
     if u.empty:
         return pd.DataFrame(columns=COMMON_COLS)
-    u = u[~u["title"].astype(str).str.contains(r"취소\s*공고|공고\s*취소|입찰\s*취소", regex=True)].copy()   # 취소된 공고 제외
+    import univ_crawl as uc
+    u["title"] = u["title"].map(uc.clean_title)
+    bad = u["title"].astype(str).str.contains(r"취소\s*공고|공고\s*취소|입찰\s*취소", regex=True)       # 취소된 공고
+    bad |= u["title"].map(lambda t: bool(uc.NOT_BID_RE.search(str(t))))                                   # 채용·첨부파일명 등
+    bad |= (u["kind"] == "결과") & ~u["title"].map(lambda t: bool(uc.BID_TITLE_RE.search(str(t))))        # 입찰과 무관한 안내 글
+    bad |= (u["kind"] != "계약공개") & u["title"].map(lambda t: bool(uc.LIST_POST_RE.search(str(t))) and not re.search(r"(입찰|용역|구매)", str(t)))
+    u = u[~bad].copy()
+    u = u.sort_values("updated_at").drop_duplicates(["school", "date", "title"], keep="last")              # 같은 글 중복
     ev = pd.to_datetime(u["date"], errors="coerce")
     for c in ("budget", "deadline", "period_end"):          # 예전 수집분에는 없는 칸
         if c not in u.columns:

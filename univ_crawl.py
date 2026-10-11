@@ -35,6 +35,25 @@ AMOUNT_RE = re.compile(r"(낙찰\s*금액|계약\s*금액|낙찰가|투찰\s*금
 CONTRACT_WORDS = re.compile(r"(낙찰|입찰\s*결과|개찰|계약\s*정보|계약\s*현황|수의\s*계약|계약\s*공개|계약\s*내역|계약\s*체결\s*현황)")
 LIST_POST_RE = re.compile(r"(계약\s*(현황|내역|정보|체결\s*현황)|수의\s*계약|계약\s*공개|입찰\s*결과\s*공개|낙찰\s*현황|입찰\s*현황|계약\s*대장)")
 BID_TITLE_RE = re.compile(r"(입찰|견적|구매|용역|낙찰|선정|계약|개찰|공모|제안)")
+NOT_BID_RE = re.compile(r"(채용|계약\s*직원|직원\s*모집|교원\s*모집|폐강|합반|\.(hwpx?|pdf|xlsx?|zip|docx?)\s*$)", re.I)
+
+
+def clean_title(t):
+    """게시판 제목 칸에 섞여 들어온 작성부서·날짜·조회수·'새글' 등 제거"""
+    t = re.sub(r"\s+", " ", str(t or "")).strip()
+    t = re.sub(r"(새글|NEW|new)\s*$", "", t).strip()
+    t = re.sub(r"\s*(조회수|조회|※\s*첨부).*$", "", t)
+    m = re.search(r"\s(20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2})", t)
+    if m and m.start() > 12:                     # 제목 뒤에 붙은 '총무팀 2026-09-22 312' 같은 꼬리
+        t = t[:m.start()]
+        t = re.sub(r"\s(총무팀|인사총무팀|관리자|[가-힣]{2,10}(팀|과|처|단|센터))\s*$", "", t)
+    if len(t) > 20:
+        t = re.sub(r"\s(총무팀|인사총무팀|관리자|[가-힣]{2,10}(팀|과|처|단|센터))\s*$", "", t)
+    t = re.sub(r"^\d{2,5}\s+(?=\S)", "", t)        # 앞쪽 글 번호
+    t = re.sub(r"\s*(첨부파일|새글)\s*$", "", t)
+    return t.strip(" .…")
+
+
 SHEET_EXT_RE = re.compile(r"\.(xlsx|xls|csv)\b", re.I)
 MAX_LIST_POSTS = 24      # 학교마다 '수의계약 현황' 같은 월별 목록 글을 열어 볼 최대 개수
 KEEP_YEARS = 3
@@ -357,7 +376,7 @@ async def read_board(page, url):
             d = _date(r["text"])
             if not d:
                 continue
-            posts.append({"title": r["title"], "date": d, "href": r["href"] if r["href"].startswith("http") and "javascript" not in r["href"] else "",
+            posts.append({"title": clean_title(r["title"]), "date": d, "href": r["href"] if r["href"].startswith("http") and "javascript" not in r["href"] else "",
                           "onclick": r["onclick"], "list_url": page.url})
         if pno == MAX_PAGES:
             break
@@ -554,7 +573,7 @@ async def _crawl_school(browser, sch, overrides, it_reason, out, rep):
                         cr["href"] = cr["href"] or durl
                     contract_rows += crows
                     continue
-                if re.search(r"(취소\s*공고|공고\s*취소|입찰\s*취소)", p["title"]):
+                if re.search(r"(취소\s*공고|공고\s*취소|입찰\s*취소)", p["title"]) or NOT_BID_RE.search(p["title"]):
                     continue
                 if (notice_board or p.get("_result")) and not BID_TITLE_RE.search(p["title"]):
                     continue                        # 공지사항·정보공개 게시판이면 입찰·계약 글만
