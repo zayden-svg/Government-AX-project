@@ -105,6 +105,22 @@ COMPETITOR_PRODUCTS = {   # 제품명 → 만든 회사
 }
 
 
+# 경쟁 '제품' 영역 — 경쟁사가 수주했더라도 이 영역(대기열·접속관리·트래픽·매크로/봇·위변조 등)이 아니면 경쟁 건으로 보지 않음
+#   (예: 가온아이의 그룹웨어·전자결재 사업은 제외, 에버세이프 납품·매크로 방지 사업만 포함)
+COMPETING_DOMAIN_RE = re.compile(
+    r"(대기열|대기\s*순번|순번\s*대기|접속\s*(관리|제어|대기|지연|폭주|자\s*폭주|량)|트래픽|동시\s*접속|매크로|"
+    r"봇\s*(차단|탐지|관리|방어|방지)|bot|부정\s*(접속|예매|예약|사용|이용)|위\s*변조|난독화|앱\s*보안|모바일\s*앱\s*보안|"
+    r"부하\s*(분산|테스트|시험)|티켓팅|수강\s*신청|선착순|dynapath|다이나패스|다이내패스|에버세이프|eversafe|xqueue|엑스큐)", re.I)
+
+
+def is_competing_product(company_comp_name, text):
+    """경쟁 제품 계약인지: ① 경쟁 제품명(DynaPath·에버세이프·xQueue)이 들어 있거나
+    ② 경쟁사가 수주했고 사업 내용이 자사 솔루션 영역(대기열·접속관리·매크로/봇 등)일 때만"""
+    if competitor_product_maker(text):
+        return True
+    return bool(company_comp_name) and bool(COMPETING_DOMAIN_RE.search(str(text or "")) or solution_hits(text))
+
+
 def competitor_product_maker(text):
     """사업명·제품에 경쟁사 제품명이 있으면 그 제조사 이름"""
     low = str(text or "").lower()

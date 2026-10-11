@@ -14,7 +14,7 @@ import pandas as pd
 from sqlalchemy import text
 
 import common  # noqa: F401  (한국시간 고정)
-from common import solution_hits, is_competitor_match, detect_regions, competitor_product_maker
+from common import solution_hits, is_competitor_match, detect_regions, competitor_product_maker, is_competing_product
 import contract_export as ce
 import store
 from db2 import get_engine
@@ -157,6 +157,9 @@ def _common(df, comp):
                 return nm
         return competitor_product_maker(text_)
     df["경쟁사명"] = [_comp_name(c_, t_) for c_, t_ in zip(df["업체명"], df["사업명·제품"])]
+    # 경쟁사 = 경쟁 '제품' 계약만 (경쟁사가 따낸 무관한 사업은 제외)
+    keep = [is_competing_product(n_, t_) for n_, t_ in zip(df["경쟁사명"], df["사업명·제품"])]
+    df["경쟁사명"] = [(competitor_product_maker(t_) or n_) if k_ else "" for n_, t_, k_ in zip(df["경쟁사명"], df["사업명·제품"], keep)]
     df["경쟁사"] = (df["경쟁사명"] != "").map({True: "Y", False: ""})
     df["API관련"] = df["사업명·제품"].map(lambda t: "Y" if API_RE.search(str(t)) else "")
     return df
@@ -358,6 +361,8 @@ def build(all_df):
         ch_.x_axis.delete = False
         ch_.y_axis.delete = False
         ch_.x_axis.tickLblPos = "low"
+        ch_.x_axis.tickLblSkip = 1                  # 월·분야·업체 이름을 하나도 건너뛰지 않고 모두 표시
+        ch_.x_axis.tickMarkSkip = 1
         return ch_
 
     def _labels():
