@@ -264,19 +264,26 @@ def run(dry_run=False):
     dashboard_url = read_secret("DASHBOARD_URL") or DASHBOARD_URL_DEFAULT
     headline, atts = _brief_extras()
 
+    from store import load_cache, save_cache
+    sent_log = (load_cache("mail_sent_log") or (None, None))[0] or {}     # 지난번에 보낸 공고·재발주 목록 (수신자별)
+    rkey = lambda r: f"{r.get('title')}|{r.get('agency')}|{r.get('end_date')}"
     sent = 0
     for sub in subs:
+        prev = sent_log.get(sub["email"]) or {}
         rows = _pick_rows(df, sub, new_only=True)
+        rows = [r for r in rows if str(r.get("url") or r.get("title")) not in set(prev.get("postings") or [])]
         welcome = False
-        if not rows and _is_new_subscriber(sub):
+        if not rows and _is_new_subscriber(sub) and not prev:
             rows, welcome = _pick_rows(df, sub, new_only=False, limit=10), True
         soon = _soon_rows(df, sub)
-        if not rows and not reorder_rows and not soon:
-            print(f"[메일] {sub['email']}: 보낼 내용 없음 → 생략")
+        new_reorder = [r for r in reorder_rows if rkey(r) not in set(prev.get("reorder") or [])]
+        # 같은 내용 반복 방지: 오늘 새 고연관 공고나 새 재발주 예상 건이 없으면 보내지 않음
+        if not rows and not new_reorder:
+            print(f"[메일] {sub['email']}: 새 내용 없음(어제와 같은 재발주·마감 목록뿐) → 생략")
             continue
         subject = (f"[Gov-Tracker] {today:%m/%d} {'진행 중' if welcome else '신규'} 고연관 공고 {len(rows)}건"
-                   + (f" · 재발주 예상 {len(reorder_rows)}건" if reorder_rows else ""))
-        html = build_mail_html(sub, rows, reorder_rows, dashboard_url, welcome=welcome, headline=headline,
+                   + (f" · 새 재발주 예상 {len(new_reorder)}건" if new_reorder else ""))
+        html = build_mail_html(sub, rows, (reorder_rows if welcome else new_reorder), dashboard_url, welcome=welcome, headline=headline,
                                soon_rows=soon, pdf_names=[a[0] for a in atts])
         if dry_run:
             print(f"[메일·테스트] {sub['email']}: {subject}")
@@ -286,8 +293,16 @@ def run(dry_run=False):
             send_mail(sub["email"], subject, html, attachments=atts)
             sent += 1
             print(f"[메일] {sub['email']}: 발송 완료 ({subject})")
+            keep = set(prev.get("postings") or []) | {str(r.get("url") or r.get("title")) for r in rows}
+            sent_log[sub["email"]] = {"date": str(today), "postings": sorted(keep)[-500:],
+                                      "reorder": sorted({rkey(r) for r in reorder_rows} | set(prev.get("reorder") or []))[-300:]}
         except Exception as e:
             print(f"[메일] {sub['email']}: 발송 실패 — {type(e).__name__}: {e}")
+    if not dry_run and sent:
+        try:
+            save_cache("mail_sent_log", sent_log)
+        except Exception as e:
+            print(f"[메일] 발송 기록 저장 실패: {type(e).__name__}")
     print(f"[메일] 총 {sent}명 발송")
     return sent
 
