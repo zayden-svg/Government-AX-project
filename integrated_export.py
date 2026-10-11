@@ -151,15 +151,15 @@ def _common(df, comp):
     hits = df["사업명·제품"].map(solution_hits)
     df["자사관련단어"] = hits.map(lambda h: ", ".join(dict.fromkeys(h)) if h else "")
     df["자사관련"] = (df["자사관련단어"] != "").map({True: "Y", False: ""})
-    def _comp_name(company, text_):
+    def _vendor_comp(company):                 # 수주 업체 자체가 경쟁사인지 (제품명과 따로 판단)
         for nm in comp:
             if is_competitor_match(company, [nm]):
                 return nm
-        return competitor_product_maker(text_)
-    df["경쟁사명"] = [_comp_name(c_, t_) for c_, t_ in zip(df["업체명"], df["사업명·제품"])]
-    # 경쟁사 = 경쟁 '제품' 계약만 (경쟁사가 따낸 무관한 사업은 제외)
-    keep = [is_competing_product(n_, t_) for n_, t_ in zip(df["경쟁사명"], df["사업명·제품"])]
-    df["경쟁사명"] = [(n_ or competitor_product_maker(t_)) if k_ else "" for n_, t_, k_ in zip(df["경쟁사명"], df["사업명·제품"], keep)]
+        return ""
+    vend = [_vendor_comp(c_) for c_ in df["업체명"]]
+    # 경쟁사 = 경쟁 '제품' 계약만 (경쟁사가 따낸 무관한 사업, 이름만 같은 다른 업종 제품은 제외)
+    keep = [is_competing_product(v_, t_) for v_, t_ in zip(vend, df["사업명·제품"])]
+    df["경쟁사명"] = [(v_ or competitor_product_maker(t_)) if k_ else "" for v_, t_, k_ in zip(vend, df["사업명·제품"], keep)]
     df["경쟁사"] = (df["경쟁사명"] != "").map({True: "Y", False: ""})
     df["API관련"] = df["사업명·제품"].map(lambda t: "Y" if API_RE.search(str(t)) else "")
     return df
