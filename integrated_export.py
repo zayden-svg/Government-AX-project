@@ -159,7 +159,7 @@ def _common(df, comp):
     df["경쟁사명"] = [_comp_name(c_, t_) for c_, t_ in zip(df["업체명"], df["사업명·제품"])]
     # 경쟁사 = 경쟁 '제품' 계약만 (경쟁사가 따낸 무관한 사업은 제외)
     keep = [is_competing_product(n_, t_) for n_, t_ in zip(df["경쟁사명"], df["사업명·제품"])]
-    df["경쟁사명"] = [(competitor_product_maker(t_) or n_) if k_ else "" for n_, t_, k_ in zip(df["경쟁사명"], df["사업명·제품"], keep)]
+    df["경쟁사명"] = [(n_ or competitor_product_maker(t_)) if k_ else "" for n_, t_, k_ in zip(df["경쟁사명"], df["사업명·제품"], keep)]
     df["경쟁사"] = (df["경쟁사명"] != "").map({True: "Y", False: ""})
     df["API관련"] = df["사업명·제품"].map(lambda t: "Y" if API_RE.search(str(t)) else "")
     return df
@@ -463,6 +463,7 @@ def build(all_df):
     fcount = recent.groupby("분야").size().sort_values(ascending=False)
     comp_rows = d[d["경쟁사"] == "Y"].copy()
     comp_rows["경쟁사명"] = comp_rows["경쟁사명"].replace("", "기타")
+    comp_rows = comp_rows.drop_duplicates(["사업명", "수요기관", "대표업체"])      # 같은 사업의 낙찰·계약·변경계약 중복은 1건으로
     ccount = comp_rows.groupby("경쟁사명").size().sort_values(ascending=False)
 
     # ---- 시트 ----

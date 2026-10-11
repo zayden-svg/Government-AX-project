@@ -110,14 +110,15 @@ COMPETITOR_PRODUCTS = {   # 제품명 → 만든 회사
 COMPETING_DOMAIN_RE = re.compile(
     r"(대기열|대기\s*순번|순번\s*대기|접속\s*(관리|제어|대기|지연|폭주|자\s*폭주|량)|트래픽|동시\s*접속|매크로|"
     r"봇\s*(차단|탐지|관리|방어|방지)|bot|부정\s*(접속|예매|예약|사용|이용)|위\s*변조|난독화|앱\s*보안|모바일\s*앱\s*보안|"
-    r"부하\s*(분산|테스트|시험)|티켓팅|수강\s*신청|선착순|dynapath|다이나패스|다이내패스|에버세이프|eversafe|xqueue|엑스큐)", re.I)
+    r"부하\s*(분산|테스트|시험)|유량\s*제어|스크래핑|대량\s*접속|티켓팅|수강\s*신청|선착순|dynapath|다이나패스|다이내패스|에버세이프|eversafe|xqueue|엑스큐)", re.I)
 
 
 def is_competing_product(company_comp_name, text):
     """경쟁 제품 계약인지: ① 경쟁 제품명(DynaPath·에버세이프·xQueue)이 들어 있거나
     ② 경쟁사가 수주했고 사업 내용이 자사 솔루션 영역(대기열·접속관리·매크로/봇 등)일 때만"""
-    if competitor_product_maker(text):
-        return True
+    if competitor_product_maker(text):        # 제품명이 같아도 다른 업종(예: 건축자재 '에버세이프' 패널)은 제외
+        return bool(company_comp_name) or bool(re.search(
+            r"(보안|SW|S/W|소프트웨어|솔루션|라이선스|라이센스|앱|웹|매크로|스크래핑|대기열|접속|상용)", str(text or ""), re.I))
     return bool(company_comp_name) and bool(COMPETING_DOMAIN_RE.search(str(text or "")) or solution_hits(text))
 
 
