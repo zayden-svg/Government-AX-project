@@ -40,7 +40,7 @@ jobs:
         if: always()
         run: |
           [ -d feed ] || exit 0
-          mkdir -p /tmp/feed && cp feed/*.csv /tmp/feed/ && cd /tmp/feed && date '+%F %H:%M' > updated.txt
+          mkdir -p /tmp/feed && cp feed/* /tmp/feed/ && cd /tmp/feed && date '+%F %H:%M' > updated.txt
           git init -q -b sheets-feed && git add -A
           git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "시트 자료 $(date +%F)"
           git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" sheets-feed

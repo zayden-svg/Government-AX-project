@@ -298,6 +298,7 @@ def field_of(title):
 
 
 LAST_VIEW = None
+LAST_DASH = {}
 FEED_COLS = ["기관특성", "대학구분", "업체명", "수요기관", "지역", "사업명", "제품", "금액(원)", "사업종료일", "종료", "종료 D-day", "원문", "일자"]
 
 
@@ -316,12 +317,44 @@ def write_feed(d, out_dir="feed"):
     save("active.csv", live)
     recent = pd.to_datetime(v["일자"], errors="coerce") >= pd.Timestamp(datetime.now().date()) - pd.Timedelta(days=7)
     save("new7.csv", v[recent])
+    # 통합 내역 전체 (2만 건씩 나눠 gzip)
+    import gzip
+    allc = FEED_COLS + ["출처", "검색용업체명"]
+    for f in os.listdir(out_dir):
+        if f.startswith("all_"):
+            os.remove(os.path.join(out_dir, f))
+    step = 20000
+    parts = 0
+    for i in range(0, len(v), step):
+        parts += 1
+        with gzip.open(os.path.join(out_dir, f"all_{parts}.csv.gz"), "wt", encoding="utf-8", newline="") as fh:
+            v.iloc[i:i + step][allc].to_csv(fh, index=False)
+    open(os.path.join(out_dir, "all_parts.txt"), "w").write(str(parts))
+    print(f"[feed] 통합 내역 {len(v):,}건 → {parts}개 묶음")
+    for k in ("top", "monthly", "field", "comp", "univ"):
+        if k in LAST_DASH:
+            LAST_DASH[k].to_csv(os.path.join(out_dir, f"dash_{k}.csv"), index=False, encoding="utf-8")
+    if "summary" in LAST_DASH:
+        sm = LAST_DASH["summary"].copy()
+        sm.to_csv(os.path.join(out_dir, "summary.csv"), index=False, encoding="utf-8")
+    open(os.path.join(out_dir, "dash_meta.txt"), "w", encoding="utf-8").write(
+        f"{len(v)}\n" + ", ".join(LAST_DASH.get("univ_zero4", [])))
     try:
         with get_engine().begin() as conn:
-            reg = pd.read_sql(text("SELECT name, region FROM dminstt_region WHERE region <> ''"), conn)
+            reg = pd.read_sql(text("SELECT name, region, raw FROM dminstt_region"), conn)
+        def _raw(x):
+            try:
+                return json.loads(x or "{}")
+            except Exception:
+                return {}
+        rw = reg["raw"].map(_raw)
+        reg["homepage"] = rw.map(lambda r: str(r.get("hmpgAdrs") or "").strip())
+        reg["type"] = rw.map(lambda r: " ".join(x for x in (r.get("insttTyCdLrgclsfcNm"), r.get("insttTyCdMidclsfcNm")) if x))
         reg["name"] = reg["name"].astype(str).str.replace(r"\s+", "", regex=True)
-        reg.drop_duplicates("name").to_csv(os.path.join(out_dir, "region.csv"), index=False, encoding="utf-8")
-        print(f"[feed] region.csv: {len(reg):,}곳")
+        reg = reg.drop_duplicates("name")
+        reg[reg["region"].astype(str) != ""][["name", "region"]].to_csv(os.path.join(out_dir, "region.csv"), index=False, encoding="utf-8")
+        reg[["name", "region", "homepage", "type"]].to_csv(os.path.join(out_dir, "agency.csv"), index=False, encoding="utf-8")
+        print(f"[feed] region.csv·agency.csv: {len(reg):,}곳")
     except Exception as e:
         print(f"[feed] 지역표 실패: {type(e).__name__}")
 
@@ -532,6 +565,10 @@ def build(all_df):
     comp_rows["경쟁사명"] = comp_rows["경쟁사명"].replace("", "기타")
     comp_rows = comp_rows.drop_duplicates(["사업명", "수요기관", "대표업체"])      # 같은 사업의 낙찰·계약·변경계약 중복은 1건으로
     ccount = comp_rows.groupby("경쟁사명").size().sort_values(ascending=False)
+    LAST_DASH.update(top=top_comp[["업체명", "건수", "진행"]].rename(columns={"진행": "진행중"}),
+                     monthly=pd.DataFrame({"월": months, "전체": [int(mcount[m]) for m in months], "솔루션 연관": [int(msol[m]) for m in months]}),
+                     field=fcount.rename_axis("분야").reset_index(name="건수"),
+                     comp=ccount.rename_axis("경쟁사").reset_index(name="건수"))
 
     # ---- 시트 ----
     dash = wb.create_sheet("대시보드")
@@ -687,6 +724,8 @@ def build(all_df):
                 stat[k][1] += 1
             elif kind == "4년제":
                 zero4.append(nm)
+        LAST_DASH["univ"] = pd.DataFrame([{"구분": f"{k[0]} {k[1]}", "학교 수": v[0], "확보": v[1], "0건": v[0] - v[1]} for k, v in stat.items()])
+        LAST_DASH["univ_zero4"] = zero4
         dash.append([])
         dash.append([c(dash, "⑤ 대학별 IT 사업 확보 현황 (대학알리미 전체 대학 기준)", bold)])
         dash.append([c(dash, "구분", hf, navy), c(dash, "학교 수", hf, navy), c(dash, "확보", hf, navy), c(dash, "0건", hf, navy)])
@@ -752,6 +791,7 @@ def build(all_df):
         "가장 가까운 종료": g.apply(lambda x: x.loc[x["_days"] >= 0, "사업종료일"].min() if (x["_days"] >= 0).any() else ""),
         "주요 수요기관": g["수요기관"].agg(lambda x: ", ".join(x.value_counts().index[:3])),
     }).sort_values(["진행중", "종료 임박"], ascending=False)
+    LAST_DASH["summary"] = summ
     ws = wb.create_sheet("업체별 요약")
     cols = list(summ.columns)
     for i, k in enumerate(cols, 1):
