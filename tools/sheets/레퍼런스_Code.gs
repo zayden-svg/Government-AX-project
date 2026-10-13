@@ -47,7 +47,7 @@ const MAX_WEB = 40;   // 하루에 홈페이지를 열어 볼 최대 기관 수 
 function syncAll() {
   const ss = SpreadsheetApp.getActive();
   const log = [];
-  if (!ss.getSheetByName('STCLab_레퍼런스')) log.push(initImport_(ss));
+  if (PropertiesService.getScriptProperties().getProperty('refInit') !== 'done') log.push(initImport_(ss));
   const ag = agencies_();
   log.push(addNewReferences_(ss, ag));
   log.push(fillKinds_(ss, ag));
@@ -60,7 +60,9 @@ function initImport_(ss) {
   const data = JSON.parse(REF);
   Object.keys(data).forEach((name, idx) => {
     const d = data[name];
-    const sh = ss.getSheetByName(name) || ss.insertSheet(name, idx);
+    const old = ss.getSheetByName(name);
+    if (old) ss.deleteSheet(old);          // 이전에 만들다 멈춘 시트는 지우고 새로
+    const sh = ss.insertSheet(name, idx);
     const nr = d.v.length, nc = Math.max.apply(null, d.v.map(r => r.length));
     const vals = d.v.map(r => { const x = r.slice(); while (x.length < nc) x.push(''); return x; });
     if (sh.getMaxRows() < nr + 10) sh.insertRowsAfter(sh.getMaxRows(), nr + 10 - sh.getMaxRows());
@@ -76,10 +78,11 @@ function initImport_(ss) {
     sh.getRange(1, 1).setFontSize(13).setFontWeight('bold');
     if (name !== '종합대시보드') {
       sh.getRange(3, 1, 1, nc).setFontWeight('bold').setFontColor('#FFFFFF').setBackground('#2F5597');
-      sh.setFrozenRows(3); sh.setFrozenColumns(2);
+      sh.setFrozenRows(3);
       sh.getRange(3, 1, nr - 2, nc).createFilter();
     }
   });
+  PropertiesService.getScriptProperties().setProperty('refInit', 'done');
   return '레퍼런스 시트 생성';
 }
 
@@ -224,4 +227,4 @@ function addNewReferences_(ss, ag) {
   return '신규 레퍼런스 ' + add.length + '건';
 }
 
-// REF(레퍼런스 원자료)는 고객사 정보라 저장소에 올리지 않음 — 사용자에게 받은 레퍼런스_Code.gs에만 포함
+// REF(레퍼런스 원자료)는 고객사 정보라 저장소에 올리지 않음
