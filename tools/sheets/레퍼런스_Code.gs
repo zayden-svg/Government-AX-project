@@ -61,6 +61,7 @@ function initImport_(ss) {
   Object.keys(data).forEach((name, idx) => {
     const d = data[name];
     const old = ss.getSheetByName(name);
+    if (old && name === '종합대시보드' && old.getCharts().length) return;  // 직접 만든 대시보드(차트)는 보존
     if (old) ss.deleteSheet(old);          // 이전에 만들다 멈춘 시트는 지우고 새로
     const sh = ss.insertSheet(name, idx);
     const nr = d.v.length, nc = Math.max.apply(null, d.v.map(r => r.length));
