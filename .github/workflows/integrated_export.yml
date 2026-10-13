@@ -36,3 +36,11 @@ jobs:
           cd /tmp/exp && git init -q -b exports-integrated && git add -A
           git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "통합 엑셀 $(date +%F)"
           git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exports-integrated
+      - name: 구글 시트용 자료(공개 조달 자료)를 sheets-feed 브랜치에 게시
+        if: always()
+        run: |
+          [ -d feed ] || exit 0
+          mkdir -p /tmp/feed && cp feed/*.csv /tmp/feed/ && cd /tmp/feed && date '+%F %H:%M' > updated.txt
+          git init -q -b sheets-feed && git add -A
+          git -c user.name=gov-tracker-bot -c user.email=bot@users.noreply.github.com commit -qm "시트 자료 $(date +%F)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" sheets-feed

@@ -297,6 +297,70 @@ def field_of(title):
     return "기타"
 
 
+LAST_VIEW = None
+FEED_COLS = ["기관특성", "대학구분", "업체명", "수요기관", "지역", "사업명", "제품", "금액(원)", "사업종료일", "종료", "종료 D-day", "원문", "일자"]
+
+
+def write_feed(d, out_dir="feed"):
+    """구글 시트용 CSV (조달·나라장터 공개 자료만) — 시트의 Apps Script가 매일 읽어 감"""
+    import os
+    os.makedirs(out_dir, exist_ok=True)
+    v = d.assign(**{"금액(원)": pd.to_numeric(d["금액"], errors="coerce").round(0)})
+    def save(name, part):
+        part[FEED_COLS].to_csv(os.path.join(out_dir, name), index=False, encoding="utf-8")
+        print(f"[feed] {name}: {len(part):,}건")
+    live = v[v["종료"].isin(["진행중", "종료 임박"])]
+    save("competitor.csv", v[v["경쟁사"] == "Y"].assign(제품=lambda x: x["경쟁사명"] + " · " + x["제품"].astype(str)))
+    save("solution.csv", v[v["솔루션연관"] == "Y"])
+    save("univ.csv", v[v["기관특성"] == "대학"])
+    save("active.csv", live)
+    recent = pd.to_datetime(v["일자"], errors="coerce") >= pd.Timestamp(datetime.now().date()) - pd.Timedelta(days=7)
+    save("new7.csv", v[recent])
+    try:
+        with get_engine().begin() as conn:
+            reg = pd.read_sql(text("SELECT name, region FROM dminstt_region WHERE region <> ''"), conn)
+        reg["name"] = reg["name"].astype(str).str.replace(r"\s+", "", regex=True)
+        reg.drop_duplicates("name").to_csv(os.path.join(out_dir, "region.csv"), index=False, encoding="utf-8")
+        print(f"[feed] region.csv: {len(reg):,}곳")
+    except Exception as e:
+        print(f"[feed] 지역표 실패: {type(e).__name__}")
+
+
+SIDO = {"충청북": "충북", "충청남": "충남", "전라북": "전북", "전북특": "전북", "전라남": "전남", "경상북": "경북", "경상남": "경남", "강원": "강원", "제주": "제주",
+        "서울": "서울", "부산": "부산", "대구": "대구", "인천": "인천", "광주": "광주", "대전": "대전", "울산": "울산", "세종": "세종", "경기": "경기"}
+
+
+def _sido(t):
+    t = str(t or "")
+    for k, v in SIDO.items():
+        if t.startswith(k):
+            return v
+    return ""
+
+
+def write_own_dlvr(cache_path, out_dir="feed"):
+    """자사(에스티씨랩) 조달 납품 → 신규 레퍼런스 자동 추가용"""
+    import os
+    try:
+        import dlvr_export as de
+        de.OFFLINE = True
+        de.CACHE_FILE = cache_path
+        rows = de.collect()
+    except Exception as e:
+        print(f"[feed] 납품 실패: {type(e).__name__}")
+        return
+    x = pd.DataFrame(rows).fillna("")
+    if x.empty:
+        return
+    x = x[x["prdctIdntNoNm"].astype(str).str.contains("에스티씨랩")]
+    x["_chg"] = pd.to_numeric(x.get("dlvrReqChgOrd", 0), errors="coerce").fillna(0)
+    x = x.sort_values("_chg", ascending=False).drop_duplicates(["dlvrReqNo", "prdctSno"])
+    out = pd.DataFrame({"수요기관": x["dminsttNm"], "지역": x["dminsttRgnNm"].map(_sido), "날짜": x["dlvrReqRcptDate"].astype(str).str.replace("-", ""),
+                        "수량": x["prdctQty"], "제품": x["prdctIdntNoNm"], "사업명": x["dlvrReqNm"]}).sort_values("날짜")
+    out.to_csv(os.path.join(out_dir, "own_dlvr.csv"), index=False, encoding="utf-8")
+    print(f"[feed] own_dlvr.csv: {len(out):,}건")
+
+
 def build(all_df):
     from openpyxl import Workbook
     from openpyxl.cell import WriteOnlyCell
@@ -333,6 +397,8 @@ def build(all_df):
     order = {"종료 임박": 0, "진행중": 1, "미상": 2, "종료": 3}
     d = d.assign(_o=d["종료"].map(order), _dd=d["_days"].fillna(10 ** 6))
     d = d.sort_values(["_o", "_dd"]).reset_index(drop=True)
+    global LAST_VIEW
+    LAST_VIEW = d
 
     wb = Workbook(write_only=True)
     navy = PatternFill("solid", fgColor="1B2A4A")
@@ -729,6 +795,11 @@ def main():
         return 1
     all_df = pd.concat(parts, ignore_index=True)
     data, meta = build(all_df)
+    try:
+        write_feed(LAST_VIEW)
+        write_own_dlvr(a.dlvr_cache)
+    except Exception as e:
+        print(f"[feed] 실패: {type(e).__name__}: {e}")
     open(a.out, "wb").write(data)
     import base64
     fname = f"공공IT_수주통합현황_{datetime.now().strftime('%Y%m%d')}.xlsx"
