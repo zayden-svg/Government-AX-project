@@ -148,38 +148,81 @@ def fetch_boannews(keywords=None, max_items: int = 15):
 #    (중복 정의되어 있던 두 번째 버전은 필드명이 달라 삭제, 이 버전만 유지)
 # ------------------------------------------------------------
 _ETNEWS_RSS_URL = "https://rss.etnews.com/Section901.xml"
+_ETNEWS_HEADERS = {"User-Agent": "Mozilla/5.0 (Gov-Tracker news collector)", "Accept": "application/rss+xml, application/xml, */*"}
+_ETNEWS_CACHE = {"at": 0.0, "items": []}     # 같은 실행 안에서 키워드마다 RSS를 다시 받지 않도록 10분 보관
+_ETNEWS_TTL = 600
+
+
+def _etnews_feed_items():
+    """전자신문 RSS(최신 기사 30건 안팎)를 한 번만 받아 보관. 실패하면 1번 더 시도.
+    (예전: 키워드마다 몇 초 간격으로 다시 요청 → 전자신문 서버가 거절하면 0건으로 저장되던 문제)"""
+    now = time.time()
+    if _ETNEWS_CACHE["items"] and now - _ETNEWS_CACHE["at"] < _ETNEWS_TTL:
+        return _ETNEWS_CACHE["items"], None
+    err = None
+    for attempt in range(2):
+        try:
+            resp = requests.get(_ETNEWS_RSS_URL, timeout=REQUEST_TIMEOUT + 4, headers=_ETNEWS_HEADERS)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.content)
+            items = []
+            for item in root.findall("./channel/item"):
+                items.append({
+                    "title": html.unescape(item.findtext("title", "") or "").strip(),
+                    "summary": _strip_html(item.findtext("description", ""))[:150],
+                    "url": item.findtext("link", ""),
+                    "pub_date": item.findtext("pubDate", ""),
+                    "source": "전자신문",
+                    "topic": "IT",
+                })
+            if items:
+                _ETNEWS_CACHE.update(at=now, items=items)
+                return items, None
+            err = "RSS 비어 있음"
+        except Exception as e:
+            err = str(e)
+        time.sleep(1.5 * (attempt + 1))
+    return _ETNEWS_CACHE["items"], err       # 실패 시 직전에 받아 둔 기사라도
+
+
+def _etnews_from_google(keyword, max_items):
+    """보조 경로: 구글 뉴스에서 전자신문(etnews.com) 기사만 검색 — 키워드 맞춤 기사를 더 넓게 찾음"""
+    found, err = fetch_google_news_rss(f"{keyword} site:etnews.com", max_items=max_items)
+    out = []
+    for it in found:
+        t = re.sub(r"\s+-\s*전자신문\s*$", "", str(it.get("title", ""))).strip()
+        out.append({**it, "title": t, "summary": "", "source": "전자신문", "topic": keyword})
+    return out, err
 
 
 def fetch_etnews_rss(keywords=None, max_items: int = 15):
-    try:
-        resp = requests.get(_ETNEWS_RSS_URL, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        root = ET.fromstring(resp.content)
-        results = []
-        for item in root.findall("./channel/item"):
-            title = item.findtext("title", "")
-            link = item.findtext("link", "")
-            pub_date = item.findtext("pubDate", "")
-            desc = _strip_html(item.findtext("description", ""))
-
-            if keywords:
-                haystack = f"{title} {desc}"
-                if not any(kw in haystack for kw in keywords):
-                    continue
-
-            results.append({
-                "title": title,
-                "summary": desc[:150],
-                "url": link,
-                "pub_date": pub_date,
-                "source": "전자신문",
-                "topic": "IT",
-            })
+    """전자신문 기사. 1) 전자신문 RSS를 키워드로 거름  2) 모자라면 구글 뉴스의 전자신문 기사로 채움.
+    keywords가 없으면 RSS 최신 기사를 그대로."""
+    feed, feed_err = _etnews_feed_items()
+    kws = [k for k in (keywords or []) if str(k).strip()]
+    if kws:
+        def _hit(txt):     # 'AI'처럼 짧은 영문은 대소문자 그대로(maintain 같은 단어에 걸리지 않게), 나머지는 대소문자 무시
+            return any((k in txt) if (len(k) <= 3 and k.isascii()) else (k.lower() in txt.lower()) for k in kws)
+        results = [it for it in feed if _hit(f"{it['title']} {it['summary']}")]
+    else:
+        results = list(feed)
+    results = results[:max_items]
+    if kws and len(results) < max_items:
+        seen = {re.sub(r"\s+", "", it["title"])[:30] for it in results}
+        for kw in kws:
+            extra, _ = _etnews_from_google(kw, max_items)
+            for it in extra:
+                key = re.sub(r"\s+", "", it["title"])[:30]
+                if key and key not in seen:
+                    seen.add(key)
+                    results.append(it)
+                if len(results) >= max_items:
+                    break
             if len(results) >= max_items:
                 break
+    if results:
         return results, None
-    except Exception as e:
-        return [], str(e)
+    return [], feed_err or "조건에 맞는 전자신문 기사 없음"
 
 
 # ------------------------------------------------------------
