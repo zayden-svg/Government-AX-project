@@ -543,9 +543,9 @@ st.markdown(
     .gt-legend {{ display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12.5px; color:{C['text_muted']}; margin:2px 0 8px; align-items:center; }}
     .gt-legend b {{ font-weight:700; }}
     /* 섹션 제목 — 모든 탭 같은 모양 (번호 · 제목 · 한 줄 설명) */
-    .gt-sec {{ display:flex; align-items:baseline; gap:10px; margin:22px 0 8px; padding-bottom:6px; border-bottom:2px solid {C['border']}; }}
-    .gt-sec-no {{ font-size:13px; font-weight:800; color:{C['accent_text']}; background:{C['accent']}; border-radius:6px; padding:1px 8px; }}
-    .gt-sec-title {{ font-size:18px; font-weight:800; color:{C['text']}; }}
+    .gt-sec {{ display:flex; align-items:baseline; gap:10px; margin:24px 0 8px; padding-bottom:6px; border-bottom:1px solid {C['border']}; }}
+    .gt-sec-bar {{ align-self:center; width:4px; height:18px; border-radius:2px; background:{C['accent']}; flex-shrink:0; }}
+    .gt-sec-title {{ font-size:18px; font-weight:800; color:{C['text']}; letter-spacing:-0.01em; }}
     .gt-sec-desc {{ font-size:13px; color:{C['text_muted']}; }}
     /* 지금 봐야 할 것 — 모든 탭 같은 목록 */
     .gt-focus {{ background:{C['surface']}; border:1px solid {C['border']}; border-radius:12px; overflow:hidden; }}
@@ -723,7 +723,7 @@ st.markdown(
         .gt-focus-title {{ flex: 1 1 70%; font-size: 14px; }}
         .gt-focus-meta {{ flex: 1 1 100%; white-space: normal; padding-left: 0; }}
         .gt-sec {{ flex-wrap: wrap; gap: 4px 8px; }}
-        .gt-sec-desc {{ flex: 1 1 100%; }}
+        .gt-sec-desc {{ flex: 1 1 100%; padding-left: 14px; }}
         .gt-page-head {{ flex-wrap: wrap; padding: 10px 14px; }}
         .gt-page-title {{ font-size: 18px; }}
         .gt-page-head-main {{ flex: 1 1 100%; }}
@@ -1238,7 +1238,7 @@ def page_header(tab_name, title, desc, when=None):
 
 def sec_title(no, title, desc=""):
     """섹션 제목 (5개 탭 공통): [번호] 제목 — 한 줄 설명"""
-    st.markdown(f'<div class="gt-sec"><span class="gt-sec-no">{escape(str(no))}</span><span class="gt-sec-title">{escape(title)}</span>'
+    st.markdown(f'<div class="gt-sec"><span class="gt-sec-bar"></span><span class="gt-sec-title">{escape(title)}</span>'
                 + (f'<span class="gt-sec-desc">{escape(desc)}</span>' if desc else "") + '</div>', unsafe_allow_html=True)
 
 
