@@ -1,0 +1,18 @@
+[계약번호] 새로 조회 15건 중 0건 완료 · 누적 API 24회
+계약 002150153 NetFUNNEL v3.0: 0건
+계약 002460509 NetFUNNEL v3.0: 0건
+계약 R26TA01343941 NetFUNNEL v4.0: 0건
+계약 R26TA01375633 API NetFUNNEL v4.0: 0건
+계약 002460506 MBUSTER v2.0: 0건
+계약 002461613 xQueue v1.0: 0건
+계약 002461139 DynaPath 3.1: 0건
+계약 R25TA00251499 에버세이프 웹 보안솔루션 V4.2.1: 0건
+계약 R25TA00145277 에버세이프 v2.0: 0건
+계약 002161010 에버세이프 v2.0: 0건
+계약 R25TA00466390 BotfenderAI V2.0: 0건
+계약 002162591 MESIM APIG v1.5: 0건
+계약 002462107 MESIM APIG v1.5: 0건
+계약 002261452 i-ONE API Gateway v1.2: 0건
+계약 R25TA01041570 Megaapim V1.0: 0건
+[중단] 접속 실패: HTTPSConnectionPool(host='apis.data.go.kr', port=443): Max retries exceeded with url: /1230000/at/ShoppingMallPrdctInfoService/getDlvrReqDtlInfoList?serviceKey=***&type=json&numOfRows=999&inqryDiv=3&cntrctNo=002460506&pageNo=1 (Caused by ConnectTimeoutError(<HTTPSConnection(host='apis.data.go.kr', port=443) at 0x7f23146b1710>, 'Connection to apis.data.go.kr timed out. (connect timeout=15)')) — 여기까지 모은 결과로 엑셀 생성 (다음 실행 때 이어서)
+[FAIL] 결과 없음 접속 실패: HTTPSConnectionPool(host='apis.data.go.kr', port=443): Max retries exceeded with url: /1230000/at/ShoppingMallPrdctInfoService/getDlvrReqDtlInfoList?serviceKey=***&type=json&numOfRows=999&inqryDiv=3&cntrctNo=002460506&pageNo=1 (Caused by ConnectTimeoutError(<HTTPSConnection(host='apis.data.go.kr', port=443) at 0x7f23146b1710>, 'Connection to apis.data.go.kr timed out. (connect timeout=15)')) · API 24회
