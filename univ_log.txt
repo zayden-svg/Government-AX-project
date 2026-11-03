@@ -1,0 +1,3 @@
+이비즈포유 항목 칸: asp_id, bid_expire_dt, bid_sub_typecd, bid_typecd, org_nm, reg_dt, rfq_no, ttl
+[OK] 이비즈포유: 현재 공고 328건 중 IT 관련 41건
+[OK] 대학 홈페이지 수집: 학교 388곳 중 성공 221곳 · IT 관련 1224건 (결과 123 · 계약공개 240 · 업체명 240 · 예산/금액 495 · 종료일 345)
