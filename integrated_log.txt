@@ -1,0 +1,54 @@
+[지역표] 수요기관 코드 69,759곳
+계약 002150153 NetFUNNEL v3.0: 73건
+계약 002460509 NetFUNNEL v3.0: 48건
+계약 R26TA01343941 NetFUNNEL v4.0: 12건
+계약 R26TA01375633 API NetFUNNEL v4.0: 2건
+계약 002460506 MBUSTER v2.0: 14건
+계약 002461613 xQueue v1.0: 1건
+계약 002461139 DynaPath 3.1: 13건
+계약 R25TA00251499 에버세이프 웹 보안솔루션 V4.2.1: 3건
+계약 R25TA00145277 에버세이프 v2.0: 2건
+계약 002161010 에버세이프 v2.0: 2건
+계약 R25TA00466390 BotfenderAI V2.0: 0건
+계약 002162591 MESIM APIG v1.5: 17건
+계약 002462107 MESIM APIG v1.5: 20건
+계약 002261452 i-ONE API Gateway v1.2: 40건
+계약 R25TA01041570 Megaapim V1.0: 0건
+제품명 에스티씨랩: 148건
+제품명 NetFUNNEL: 134건
+제품명 xQueue: 1건
+제품명 DynaPath: 13건
+제품명 에버세이프: 11건
+추가 계약 R26TA01446796: 3건
+추가 계약 R26TA02019117: 1건
+[feed] competitor.csv: 28건
+[feed] solution.csv: 3,007건
+[feed] univ.csv: 11,019건
+[feed] active.csv: 35,715건
+[feed] new7.csv: 928건
+[feed] 통합 내역 154,667건 → 8개 묶음
+[feed] region.csv·agency.csv: 65,954곳
+계약 002150153 NetFUNNEL v3.0: 73건
+계약 002460509 NetFUNNEL v3.0: 48건
+계약 R26TA01343941 NetFUNNEL v4.0: 12건
+계약 R26TA01375633 API NetFUNNEL v4.0: 2건
+계약 002460506 MBUSTER v2.0: 14건
+계약 002461613 xQueue v1.0: 1건
+계약 002461139 DynaPath 3.1: 13건
+계약 R25TA00251499 에버세이프 웹 보안솔루션 V4.2.1: 3건
+계약 R25TA00145277 에버세이프 v2.0: 2건
+계약 002161010 에버세이프 v2.0: 2건
+계약 R25TA00466390 BotfenderAI V2.0: 0건
+계약 002162591 MESIM APIG v1.5: 17건
+계약 002462107 MESIM APIG v1.5: 20건
+계약 002261452 i-ONE API Gateway v1.2: 40건
+계약 R25TA01041570 Megaapim V1.0: 0건
+제품명 에스티씨랩: 148건
+제품명 NetFUNNEL: 134건
+제품명 xQueue: 1건
+제품명 DynaPath: 13건
+제품명 에버세이프: 11건
+추가 계약 R26TA01446796: 3건
+추가 계약 R26TA02019117: 1건
+[feed] own_dlvr.csv: 148건
+[OK] 통합 엑셀: 36.0MB · {"rows": 154667, "by_source": {"계약": 140052, "낙찰": 12283, "대학 홈페이지": 2089, "쇼핑몰 납품": 243}, "companies": 22781, "univ_rows": 11019, "univ_private": 4086, "competitor_rows": 23, "solution_rows": 3007}
